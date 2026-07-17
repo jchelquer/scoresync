@@ -1,0 +1,291 @@
+{% load static %}
+{% load i18n %}
+{% load i18n_extras %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ScoreSync{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    html { font-size: 80%; }
+    :root {
+      /* Paleta placeholder — a definir junto con el logo cuando conozcamos el dominio del producto. */
+      --ss-primary:      #1f3d3b;
+      --ss-surface:      #2c5350;
+      --ss-muted:        #3d6f6b;
+      --ss-accent:       #37b6a3;
+      --ss-accent-hover: #2c9384;
+      --ss-text:         #eef6f4;
+      --ss-text-muted:   #b7d6d0;
+      --ss-text-bright:  #ffffff;
+    }
+    body { background: var(--ss-primary); color: var(--ss-text); }
+    .navbar { background: var(--ss-surface) !important; }
+    .navbar-brand { color: var(--ss-accent) !important; font-weight: 700; letter-spacing: 2px; }
+    .nav-link { color: var(--ss-text-muted) !important; }
+    .nav-link:hover { color: var(--ss-text-bright) !important; }
+    .btn-ss { background: var(--ss-accent); color: var(--ss-text-bright); border: none; }
+    .btn-ss:hover { background: var(--ss-accent-hover); color: var(--ss-text-bright); }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{% url 'home' %}">SCORESYNC</a>
+      <div class="collapse navbar-collapse">
+        <ul class="navbar-nav ms-auto">
+          {% if user.is_authenticated %}
+            {% if user.es_admin or user.is_staff %}
+            <li class="nav-item">
+              <a class="nav-link position-relative" href="{% url 'admin:usuarios_solicitudacceso_changelist' %}">
+                {% translate "Solicitudes" %}
+                {% if solicitudes_pendientes %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                  {{ solicitudes_pendientes }}
+                </span>
+                {% endif %}
+              </a>
+            </li>
+            {% endif %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                {{ user.get_full_name|default:user.username }}
+              </a>
+              <ul class="dropdown-menu dropdown-menu-end" style="background:#193331; border-color:#2a4a47; min-width:200px">
+                {% if SSO_AFINACION or SSO_TEMPO or SSO_ENSAYOS %}
+                <li class="dropdown-header" style="color:var(--ss-text-muted); font-size:0.75rem;">{% translate "Otras apps" %}</li>
+                {% if SSO_AFINACION %}<li><a class="dropdown-item" href="{{ SSO_AFINACION }}" style="color:var(--ss-text-muted); font-size:0.85rem">Afinación</a></li>{% endif %}
+                {% if SSO_TEMPO %}<li><a class="dropdown-item" href="{{ SSO_TEMPO }}" style="color:var(--ss-text-muted); font-size:0.85rem">Tempo</a></li>{% endif %}
+                {% if SSO_ENSAYOS %}<li><a class="dropdown-item" href="{{ SSO_ENSAYOS }}" style="color:var(--ss-text-muted); font-size:0.85rem">Ensayos</a></li>{% endif %}
+                <li><hr class="dropdown-divider" style="border-color:#2a4a47"></li>
+                {% endif %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'cambiar_password' %}"
+                     style="color:var(--ss-text-muted); font-size:0.85rem">
+                    <i class="bi bi-key me-2"></i>{% translate "Cambiar contraseña" %}
+                  </a>
+                </li>
+                <li><hr class="dropdown-divider" style="border-color:#2a4a47"></li>
+                <li>
+                  <div class="dropdown-item-text d-flex align-items-center gap-2 py-1">
+                    <i class="bi bi-translate"></i>
+                    <form method="post" action="{% url 'cambiar_idioma' %}" class="d-flex gap-1">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" name="language" value="es-ar" class="btn btn-sm {% if LANGUAGE_CODE == 'es-ar' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">ES</button>
+                      <button type="submit" name="language" value="en" class="btn btn-sm {% if LANGUAGE_CODE == 'en' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">EN</button>
+                    </form>
+                  </div>
+                </li>
+                <li><hr class="dropdown-divider" style="border-color:#2a4a47"></li>
+                <li>
+                  <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item"
+                            style="color:var(--ss-text-muted); font-size:0.85rem">
+                      <i class="bi bi-box-arrow-right me-2"></i>{% translate "Salir" %}
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'login' %}">{% translate "Ingresar" %}</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    {% if messages %}
+      {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+    {% block content %}{% endblock %}
+  </div>
+
+  <footer style="border-top: 1px solid #2a4a47; margin-top: 3rem; padding: 1rem 0; color: var(--ss-text-muted); font-size: 0.95rem;">
+    <div class="container">
+      <div class="d-flex justify-content-end align-items-center">
+        {% if user.is_authenticated %}
+        <span>
+          v{{ VERSION_ACTUAL }}
+          &nbsp;·&nbsp;
+          <a href="#" data-bs-toggle="modal" data-bs-target="#modal-novedades" style="color:var(--ss-text-muted);">{% translate "Novedades" %}</a>
+          {% if PUEDE_COMENTAR %}
+          &nbsp;·&nbsp;
+          <a href="#" data-bs-toggle="modal" data-bs-target="#modal-comentario" style="color:var(--ss-text-muted);">{% translate "Enviar comentario" %}</a>
+          {% endif %}
+        </span>
+        {% else %}
+        <span>Django · PostgreSQL</span>
+        {% endif %}
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal novedades -->
+  <div class="modal fade" id="modal-novedades" tabindex="-1" aria-labelledby="modal-novedades-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content" style="background:#12201f; color:#ccc; border:1px solid #2a4a47;">
+        <div class="modal-header" style="border-color:#2a4a47;">
+          <h5 class="modal-title" id="modal-novedades-titulo" style="color:#e0e0e0;">
+            <i class="bi bi-stars me-2"></i>{% translate "Novedades" %}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter:invert(1) grayscale(1) brightness(1.5);"></button>
+        </div>
+        <div class="modal-body" style="font-size:0.88rem;">
+          {% for entrada in CHANGELOG %}
+          <div class="mb-3">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="fw-semibold" style="color:#e0e0e0;">v{{ entrada.version }}</span>
+              <span style="color:#567;">{{ entrada.date }}</span>
+              {% if entrada.version in NOVEDADES_VERSIONES %}
+              <span class="badge bg-primary" style="font-size:.65rem;">Nuevo</span>
+              {% endif %}
+            </div>
+            <ul class="list-unstyled mb-0">
+              {% for cambio in entrada.changes %}
+              <li class="mb-1">
+                {% if cambio.type == 'nuevo' %}<span style="color:#5a9940;">🆕</span>
+                {% elif cambio.type == 'mejorado' %}<span style="color:#d4a800;">⚡</span>
+                {% elif cambio.type == 'corregido' %}<span style="color:#37b6a3;">🐞</span>
+                {% else %}<span>·</span>{% endif %}
+                &nbsp;{{ cambio.text }}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% if not forloop.last %}<hr style="border-color:#2a4a47;">{% endif %}
+          {% endfor %}
+        </div>
+        <div class="modal-footer" style="border-color:#2a4a47;">
+          <button type="button" class="btn-nav" data-bs-dismiss="modal" style="padding: 0.3rem 0.9rem; border-radius: 6px; border: 1px solid #333; background: #12201f; color: #888; font-size: 0.78rem;">{% translate "Cerrar" %}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if PUEDE_COMENTAR %}
+  <!-- Modal comentario -->
+  <div class="modal fade" id="modal-comentario" tabindex="-1" aria-labelledby="modal-comentario-titulo" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content" style="background:#12201f; color:#ccc; border:1px solid #2a4a47;">
+        <div class="modal-header" style="border-color:#2a4a47;">
+          <h5 class="modal-title" id="modal-comentario-titulo" style="color:#e0e0e0;">
+            <i class="bi bi-chat-dots me-2"></i>{% translate "Enviar comentario" %}
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" style="filter:invert(1) grayscale(1) brightness(1.5);"></button>
+        </div>
+        <div class="modal-body">
+          <div id="comentario-ok" class="alert alert-success d-none">
+            <i class="bi bi-check-circle me-2"></i>{% translate "¡Gracias! Tu comentario fue enviado." %}
+          </div>
+          <div id="comentario-error" class="alert alert-danger d-none"></div>
+          <form id="form-comentario" novalidate>
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label small" style="color:#8ad6c8;">{% translate "Tipo (opcional)" %}</label>
+              <select id="comentario-tipo" name="tipo" class="form-select form-select-sm" style="background:#0f1c1b; color:#ccc; border-color:#2a4a47;">
+                <option value="">{% translate "— seleccioná —" %}</option>
+                <option value="error">🐞 {% translate "Error" %}</option>
+                <option value="idea">💡 {% translate "Idea" %}</option>
+                <option value="duda">❓ {% translate "Duda" %}</option>
+                <option value="comentario">💬 {% translate "Comentario" %}</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small" style="color:#8ad6c8;">{% translate "Comentario" %} <span class="text-danger">*</span></label>
+              <textarea id="comentario-texto" name="texto" class="form-control" rows="4"
+                        placeholder="{% translate 'Contanos qué encontraste o qué se te ocurre…' %}"
+                        style="background:#0f1c1b; color:#ccc; border-color:#2a4a47;" required></textarea>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer" style="border-color:#2a4a47;">
+          <button type="button" class="btn-nav" data-bs-dismiss="modal" style="padding: 0.3rem 0.9rem; border-radius: 6px; border: 1px solid #333; background: #12201f; color: #888; font-size: 0.78rem;">{% translate "Cancelar" %}</button>
+          <button type="button" class="btn btn-ss btn-sm" id="btn-enviar-comentario">
+            <i class="bi bi-send me-1"></i>{% translate "Enviar" %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  {% if MOSTRAR_NOVEDADES %}
+  document.addEventListener('DOMContentLoaded', function () {
+    new bootstrap.Modal(document.getElementById('modal-novedades')).show();
+  });
+  {% endif %}
+
+  {% if PUEDE_COMENTAR %}
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('btn-enviar-comentario')?.addEventListener('click', function () {
+      const texto = document.getElementById('comentario-texto').value.trim();
+      const tipo  = document.getElementById('comentario-tipo').value;
+      const okDiv  = document.getElementById('comentario-ok');
+      const errDiv = document.getElementById('comentario-error');
+
+      okDiv.classList.add('d-none');
+      errDiv.classList.add('d-none');
+
+      if (!texto) {
+        errDiv.textContent = '{% trans_js "Por favor escribí tu comentario antes de enviar." %}';
+        errDiv.classList.remove('d-none');
+        return;
+      }
+
+      const metadata = {
+        navegador: navigator.userAgent,
+        pantalla: `${screen.width}×${screen.height}`,
+        idioma: navigator.language,
+        url: location.pathname,
+      };
+
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+      const form = new FormData();
+      form.append('texto', texto);
+      form.append('tipo', tipo);
+      form.append('metadata', JSON.stringify(metadata));
+
+      fetch('{% url "versiones:comentario" %}', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken },
+        body: form,
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          document.getElementById('comentario-texto').value = '';
+          document.getElementById('comentario-tipo').value = '';
+          okDiv.classList.remove('d-none');
+        } else {
+          errDiv.textContent = data.error || '{% trans_js "Error al enviar. Intentá de nuevo." %}';
+          errDiv.classList.remove('d-none');
+        }
+      })
+      .catch(() => {
+        errDiv.textContent = '{% trans_js "No se pudo conectar con el servidor." %}';
+        errDiv.classList.remove('d-none');
+      });
+    });
+  });
+  {% endif %}
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

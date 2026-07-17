@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Solicitud recibida" %} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-4 text-center">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-5">
+        <div class="mb-3" style="font-size: 3rem; color: var(--ss-accent)">
+          <i class="bi bi-check-circle-fill"></i>
+        </div>
+        <h4 class="mb-2" style="color: var(--ss-text-bright)">{% translate "¡Solicitud recibida!" %}</h4>
+        <p class="mb-4" style="color: var(--ss-text-muted)">
+          {% translate "Vamos a revisar tu solicitud y te contactamos por email cuando tu cuenta esté lista." %}
+        </p>
+        <a href="{% url 'login' %}" class="btn btn-ss">{% translate "Volver al inicio" %}</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

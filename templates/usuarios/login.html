@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Ingresar" %} — ScoreSync{% endblock %}
+
+{% block extra_head %}
+<style>
+  .login-field input {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid #3d6f6b;
+    background: #2c5350 !important;
+    color: var(--ss-text) !important;
+    font-size: 0.95rem;
+    outline: none;
+    color-scheme: dark;
+    -webkit-box-shadow: 0 0 0 100px #2c5350 inset !important;
+    -webkit-text-fill-color: var(--ss-text) !important;
+  }
+  .login-field input:focus {
+    border-color: var(--ss-text-muted);
+    -webkit-box-shadow: 0 0 0 100px #345a56 inset !important;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-4">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4 text-center">{% translate "Ingresar" %}</h4>
+        <form method="post">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3 login-field">
+              <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-ss w-100 mt-2">{% translate "Ingresar" %}</button>
+        </form>
+        <hr style="border-color: var(--ss-muted); opacity: 0.4;" class="my-3">
+        <p class="text-center small mb-1" style="color: var(--ss-text-muted)">
+          <a href="{% url 'password_reset' %}" style="color: var(--ss-text-muted); text-decoration: underline;">{% translate "¿Olvidaste tu contraseña?" %}</a>
+        </p>
+        <p class="text-center small mb-0" style="color: var(--ss-text-muted)">
+          {% translate "¿No tenés acceso?" %}
+          <a href="{% url 'solicitar_acceso' %}" style="color: var(--ss-text-muted); text-decoration: underline;">{% translate "Solicitarlo" %}</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

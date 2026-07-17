@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Solicitar acceso" %} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-5">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-1" style="color: var(--ss-text-bright)">{% translate "Solicitar acceso" %}</h4>
+        <p class="small mb-4" style="color: var(--ss-text-muted)">
+          {% translate "Completá el formulario y te avisamos cuando tu cuenta esté lista." %}
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.nombre.label }}</label>
+            {{ form.nombre }}
+            {% if form.nombre.errors %}<div class="text-danger small mt-1">{{ form.nombre.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.apellido.label }}</label>
+            {{ form.apellido }}
+            {% if form.apellido.errors %}<div class="text-danger small mt-1">{{ form.apellido.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.email.label }}</label>
+            {{ form.email }}
+            {% if form.email.errors %}<div class="text-danger small mt-1">{{ form.email.errors.0 }}</div>{% endif %}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.celular.label }} <span style="color: var(--ss-text-muted)">({% translate "opcional" %})</span></label>
+            {{ form.celular }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.instrumento.label }} <span style="color: var(--ss-text-muted)">({% translate "opcional" %})</span></label>
+            {{ form.instrumento }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{{ form.mensaje.label }} <span style="color: var(--ss-text-muted)">({% translate "opcional" %})</span></label>
+            {{ form.mensaje }}
+          </div>
+          <button type="submit" class="btn btn-ss w-100 mt-2">{% translate "Enviar solicitud" %}</button>
+        </form>
+        <p class="text-center small mt-3 mb-0" style="color: var(--ss-text-muted)">
+          <a href="{% url 'login' %}" style="color: var(--ss-text-muted)">← {% translate "Volver al inicio" %}</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

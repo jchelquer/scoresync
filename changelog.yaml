@@ -1,0 +1,9 @@
+# Changelog de ScoreSync
+# El primero de la lista es la versión actual.
+# Tipos: nuevo | mejorado | corregido
+
+- version: "0.1.0"
+  date: "2026-07-17"
+  changes:
+    - type: nuevo
+      text: "Base del proyecto: login compartido con afinación/ensayos/tempo, idioma, novedades y solicitud de acceso"

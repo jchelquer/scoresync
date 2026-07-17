@@ -1,0 +1,13 @@
+venv/
+.claude/
+__pycache__/
+.vscode
+*.pyc
+.env
+db.sqlite3
+*.zip
+media/
+cache/
+*.sql
+doc/
+venv_broken_backup/

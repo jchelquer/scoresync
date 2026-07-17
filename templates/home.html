@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{% translate "Inicio" %} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="py-5 text-center">
+  <h2 style="color: var(--ss-text-bright)">{% translate "¡Bienvenido a ScoreSync!" %}</h2>
+  <p style="color: var(--ss-text-muted)">
+    {% translate "Sesión iniciada correctamente. Todavía no hay funcionalidad propia — esto es la base compartida (login, idioma, novedades) lista para construir sobre ella." %}
+  </p>
+</div>
+{% endblock %}
