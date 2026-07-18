@@ -4,9 +4,12 @@ charset-normalizer==3.4.9
 Django==6.0.6
 django-anymail==15.0
 idna==3.18
+numpy==2.5.1
+opencv-python-headless==5.0.0.93
 packaging==26.2
 polib==1.2.0
 psycopg2-binary==2.9.12
+pymupdf==1.28.0
 python-dotenv==1.2.2
 PyYAML==6.0.3
 requests==2.34.2

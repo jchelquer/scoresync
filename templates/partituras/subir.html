@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Subir partitura — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">Subir partitura</h4>
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <button type="submit" class="btn btn-ss w-100 mt-2">Subir</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

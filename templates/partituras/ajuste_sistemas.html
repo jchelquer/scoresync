@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Ajustar sistemas — {{ partitura.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lienzo { position: relative; width: 100%; background: #222; user-select: none; }
+  .lienzo img { display: block; width: 100%; height: auto; pointer-events: none; }
+  .banda {
+    position: absolute; left: 0; right: 0;
+    background: rgba(55, 182, 163, 0.22);
+    border-top: 2px solid var(--ss-accent);
+    border-bottom: 2px solid var(--ss-accent);
+    box-sizing: border-box;
+  }
+  .banda.manual { border-color: #ffb347; background: rgba(255, 179, 71, 0.22); }
+  .asa { position: absolute; left: 0; right: 0; height: 10px; cursor: ns-resize; }
+  .asa-top { top: -5px; }
+  .asa-bottom { bottom: -5px; }
+  .banda-borrar {
+    position: absolute; right: 4px; top: 2px; z-index: 5;
+    background: #c0392b; color: #fff; border: none; border-radius: 4px;
+    width: 22px; height: 22px; line-height: 1; font-size: 0.9rem; cursor: pointer;
+  }
+  .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
+
+  .lienzo-wrapper { overflow: auto; }
+  .lienzo-wrapper.zoom-activo {
+    border: 1px solid #2a4a47;
+    border-radius: 4px;
+    cursor: grab;
+  }
+  .lienzo.zoom-activo { transform-origin: top left; }
+
+  .controles-zoom {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-zoom-flotante {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-accent); color: #fff; border: none;
+    font-size: 1.3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .btn-zoom-nivel {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-surface); color: #fff;
+    border: 1px solid #2a4a47;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Ajustar sistemas" %} — {{ partitura.titulo }}
+    <span class="small" style="color: var(--ss-text-muted)">({{ pagina.numero }}/{{ total }})</span>
+  </h5>
+  <div class="d-flex gap-2">
+    {% if pagina.numero > 1 %}
+    <a href="{% url 'partituras:ajuste_sistemas' partitura.pk pagina.numero|add:'-1' %}" class="btn btn-outline-light btn-sm">← {% translate "Anterior" %}</a>
+    {% endif %}
+    {% if pagina.numero < total %}
+    <a href="{% url 'partituras:ajuste_sistemas' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
+    {% endif %}
+    <a href="{% url 'partituras:detalle' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
+  </div>
+</div>
+<div class="d-flex flex-wrap gap-1 mb-3">
+  {% for p in partitura.paginas.all %}
+  <a href="{% url 'partituras:ajuste_sistemas' partitura.pk p.numero %}"
+     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.sistemas_confirmados %}btn-outline-success{% else %}btn-outline-light{% endif %}"
+     title="{% if p.sistemas_confirmados %}{% translate 'Confirmada' %}{% else %}{% translate 'Pendiente' %}{% endif %}">
+    {{ p.numero }}{% if p.sistemas_confirmados %} <i class="bi bi-check"></i>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-9">
+    <div class="lienzo-wrapper" id="lienzo-wrapper">
+      <div class="lienzo" id="lienzo">
+        <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}" alt="Página {{ pagina.numero }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="panel-control">
+      <p class="small" style="color: var(--ss-text-muted)">
+        {% translate "Arrastrá los bordes de cada sistema para ajustarlo. Usá los botones para agregar o quitar." %}
+      </p>
+      <button type="button" id="btn-agregar" class="btn btn-outline-light w-100 mb-3">
+        <i class="bi bi-plus-lg"></i> {% translate "Agregar sistema" %}
+      </button>
+      <form method="post" id="form-confirmar">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="confirmar">
+        <input type="hidden" name="sistemas" id="input-sistemas">
+        <button type="submit" class="btn btn-ss w-100">
+          {% translate "Confirmar esta página" %}
+          {% if pagina.numero < total %}→{% endif %}
+        </button>
+      </form>
+      <hr style="border-color: #2a4a47;">
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
+          <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
+        </button>
+        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">
+          {% translate "Por si entraste acá sin haber corrido 'Detectar sistemas' antes, o para descartar los cambios manuales y probar la detección automática de nuevo." %}
+        </p>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="controles-zoom" id="controles-zoom">
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-mas" title="{% translate 'Acercar' %}"><i class="bi bi-plus-lg"></i></button>
+  <button type="button" class="btn-zoom-flotante" id="btn-zoom" title="{% translate 'Zoom' %}"><i class="bi bi-zoom-in"></i></button>
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-menos" title="{% translate 'Alejar' %}"><i class="bi bi-dash-lg"></i></button>
+</div>
+
+<script>
+const lienzo = document.getElementById('lienzo');
+const imagen = document.getElementById('imagen-pagina');
+let sistemas = {{ sistemas_json|safe }}.map(s => ({...s, _key: s.id ?? 'nuevo-' + Math.random()}));
+
+function render() {
+  lienzo.querySelectorAll('.banda').forEach(el => el.remove());
+  sistemas.forEach(s => {
+    const banda = document.createElement('div');
+    banda.className = 'banda' + (s.id ? '' : ' manual');
+    banda.style.top = (s.y * 100) + '%';
+    banda.style.height = (s.height * 100) + '%';
+    banda.dataset.key = s._key;
+
+    const asaTop = document.createElement('div');
+    asaTop.className = 'asa asa-top';
+    asaTop.addEventListener('mousedown', e => iniciarArrastre(e, s, 'top'));
+
+    const asaBottom = document.createElement('div');
+    asaBottom.className = 'asa asa-bottom';
+    asaBottom.addEventListener('mousedown', e => iniciarArrastre(e, s, 'bottom'));
+
+    const borrar = document.createElement('button');
+    borrar.type = 'button';
+    borrar.className = 'banda-borrar';
+    borrar.textContent = '×';
+    borrar.addEventListener('click', () => {
+      sistemas = sistemas.filter(x => x._key !== s._key);
+      render();
+    });
+
+    banda.appendChild(asaTop);
+    banda.appendChild(asaBottom);
+    banda.appendChild(borrar);
+    lienzo.appendChild(banda);
+  });
+}
+
+function iniciarArrastre(e, sistema, borde) {
+  e.preventDefault();
+  const alturaLienzo = lienzo.getBoundingClientRect().height;
+
+  function mover(ev) {
+    const y = ev.clientY - lienzo.getBoundingClientRect().top;
+    const frac = Math.min(Math.max(y / alturaLienzo, 0), 1);
+    if (borde === 'top') {
+      const nuevoY = Math.min(frac, sistema.y + sistema.height - 0.005);
+      sistema.height = sistema.y + sistema.height - nuevoY;
+      sistema.y = nuevoY;
+    } else {
+      sistema.height = Math.max(frac - sistema.y, 0.005);
+    }
+    render();
+  }
+  function soltar() {
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+}
+
+document.getElementById('btn-agregar').addEventListener('click', () => {
+  const ultimo = sistemas[sistemas.length - 1];
+  const y = ultimo ? Math.min(ultimo.y + ultimo.height + 0.02, 0.9) : 0.05;
+  sistemas.push({ id: null, y, height: 0.08, _key: 'nuevo-' + Math.random() });
+  render();
+});
+
+document.getElementById('form-confirmar').addEventListener('submit', () => {
+  const payload = sistemas.map(s => ({ id: s.id, y: s.y, height: s.height }));
+  document.getElementById('input-sistemas').value = JSON.stringify(payload);
+});
+
+imagen.addEventListener('load', render);
+if (imagen.complete) render();
+
+// ── Zoom flotante (ver ajuste_ancla.html para la explicación completa) ─────
+const lienzoWrapper = document.getElementById('lienzo-wrapper');
+const btnZoom = document.getElementById('btn-zoom');
+const btnZoomMas = document.getElementById('btn-zoom-mas');
+const btnZoomMenos = document.getElementById('btn-zoom-menos');
+let zoomActivo = false;
+let nivelZoom = 1.6;
+const ZOOM_MIN = 1.2, ZOOM_MAX = 4;
+
+function aplicarZoom() {
+  lienzo.style.transform = zoomActivo ? `scale(${nivelZoom})` : '';
+}
+
+function alternarZoom() {
+  zoomActivo = !zoomActivo;
+  lienzoWrapper.classList.toggle('zoom-activo', zoomActivo);
+  lienzo.classList.toggle('zoom-activo', zoomActivo);
+  btnZoom.innerHTML = zoomActivo ? '<i class="bi bi-zoom-out"></i>' : '<i class="bi bi-zoom-in"></i>';
+  btnZoomMas.classList.toggle('d-none', !zoomActivo);
+  btnZoomMenos.classList.toggle('d-none', !zoomActivo);
+  aplicarZoom();
+}
+
+btnZoom.addEventListener('click', alternarZoom);
+btnZoomMas.addEventListener('click', () => {
+  nivelZoom = Math.min(ZOOM_MAX, nivelZoom + 0.3);
+  aplicarZoom();
+});
+btnZoomMenos.addEventListener('click', () => {
+  nivelZoom = Math.max(ZOOM_MIN, nivelZoom - 0.3);
+  aplicarZoom();
+});
+
+lienzo.addEventListener('mousedown', e => {
+  if (!zoomActivo || e.target !== lienzo) return;
+  e.preventDefault();
+  lienzoWrapper.style.cursor = 'grabbing';
+  const inicioX = e.clientX, inicioY = e.clientY;
+  const scrollInicioX = lienzoWrapper.scrollLeft, scrollInicioY = lienzoWrapper.scrollTop;
+  function mover(ev) {
+    lienzoWrapper.scrollLeft = scrollInicioX - (ev.clientX - inicioX);
+    lienzoWrapper.scrollTop = scrollInicioY - (ev.clientY - inicioY);
+  }
+  function soltar() {
+    lienzoWrapper.style.cursor = '';
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+});
+</script>
+{% endblock %}

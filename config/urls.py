@@ -12,6 +12,7 @@ urlpatterns = [
     path("", login_required(TemplateView.as_view(template_name="home.html")), name="home"),
     path("jsi18n/", JavaScriptCatalog.as_view(domain="django"), name="javascript-catalog"),
     path("usuarios/", include("usuarios.urls")),
+    path("partituras/", include("partituras.urls", namespace="partituras")),
     path("versiones/", include("sc_versiones.urls", namespace="versiones")),
     path("sso/", include("sso.urls", namespace="sso")),
     path("accounts/password-reset/", auth_views.PasswordResetView.as_view(

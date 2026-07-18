@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}{{ partitura.titulo }} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-1" style="color: var(--ss-text-bright)">{{ partitura.titulo }}</h4>
+        <p class="small mb-3" style="color: var(--ss-text-muted)">
+          {{ partitura.compositor|default:"—" }}
+          {% if partitura.instrumento %} · {{ partitura.instrumento }}{% endif %}
+          {% if partitura.parte %} · {{ partitura.parte }}{% endif %}
+        </p>
+        <p style="color: var(--ss-text-muted)">
+          Normalización: <strong>{{ partitura.get_estado_normalizacion_display }}</strong><br>
+          Análisis: <strong>{{ partitura.get_estado_analisis_display }}</strong>
+        </p>
+
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{{ partitura.archivo_original.url }}" target="_blank" class="btn btn-outline-light">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Ver PDF original
+          </a>
+
+          {% if partitura.estado_normalizacion == 'pendiente' %}
+          <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-ss" data-texto-procesando="Analizando PDF…">Enderezar PDF</button>
+          </form>
+          {% elif partitura.estado_normalizacion == 'propuesta' %}
+          <a href="{% url 'partituras:ajuste_orientacion' partitura.pk 1 %}" class="btn btn-ss">Continuar ajuste de orientación</a>
+          {% else %}
+          <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Analizando PDF…">Re-enderezar PDF</button>
+          </form>
+          {% endif %}
+
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+          <form method="post" action="{% url 'partituras:iniciar_deteccion_margenes' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando márgenes…">Detectar márgenes</button>
+          </form>
+          <a href="{% url 'partituras:ajuste_margenes' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar márgenes</a>
+          {% endif %}
+
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+            {% if partitura.estado_analisis == 'pendiente' %}
+            <form method="post" action="{% url 'partituras:iniciar_deteccion_sistemas' partitura.pk %}" class="form-procesando">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-ss" data-texto-procesando="Detectando sistemas…">Detectar sistemas</button>
+            </form>
+            {% elif partitura.estado_analisis == 'propuesto' %}
+            <a href="{% url 'partituras:ajuste_sistemas' partitura.pk 1 %}" class="btn btn-ss">Continuar ajuste de sistemas</a>
+            {% else %}
+            <form method="post" action="{% url 'partituras:iniciar_deteccion_sistemas' partitura.pk %}" class="form-procesando">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando sistemas…">Re-detectar sistemas</button>
+            </form>
+            {% endif %}
+          {% endif %}
+
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+          <form method="post" action="{% url 'partituras:iniciar_deteccion_ancla' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Buscando ancla…">Detectar ancla (experimental)</button>
+          </form>
+          <a href="{% url 'partituras:ajuste_ancla' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar ancla</a>
+          {% endif %}
+
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+          <form method="post" action="{% url 'partituras:iniciar_deteccion_barras' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando barras…">Detectar barras</button>
+          </form>
+          <a href="{% url 'partituras:ajuste_barras' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar barras</a>
+          {% endif %}
+        </div>
+
+        <a href="{% url 'partituras:biblioteca' %}" class="btn btn-outline-light">← Volver a la biblioteca</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if partitura.paginas.exists %}
+<div class="row justify-content-center mt-4">
+  <div class="col-md-10">
+    <h6 style="color: var(--ss-text-bright)">{% translate "Estado por página" %}</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-borderless align-middle" style="color: var(--ss-text-muted)">
+        <thead>
+          <tr>
+            <th>{% translate "Página" %}</th>
+            <th>{% translate "Orientación" %}</th>
+            <th>{% translate "Márgenes" %}</th>
+            <th>{% translate "Sistemas" %}</th>
+            <th>{% translate "Ancla" %}</th>
+            <th>{% translate "Barras" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pagina in partitura.paginas.all %}
+          <tr{% if pagina.ignorada %} class="opacity-50"{% endif %}>
+            <td>
+              {{ pagina.numero }}
+              {% if pagina.ignorada %}<i class="bi bi-eye-slash ms-1" title="{% translate 'Ignorada' %}"></i>{% endif %}
+            </td>
+            <td>
+              <a href="{% url 'partituras:ajuste_orientacion' partitura.pk pagina.numero %}"
+                 class="btn btn-sm {% if pagina.confirmada %}btn-outline-success{% else %}btn-outline-light{% endif %}">
+                {% if pagina.confirmada %}<i class="bi bi-check"></i>{% else %}…{% endif %}
+              </a>
+            </td>
+            <td>
+              <a href="{% url 'partituras:ajuste_margenes' partitura.pk pagina.numero %}"
+                 class="btn btn-sm {% if pagina.margen_confirmado %}btn-outline-success{% elif pagina.tiene_margen_detectado %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+                 title="{% if pagina.margen_confirmado %}{% translate 'Confirmada' %}{% elif pagina.tiene_margen_detectado %}{% translate 'Detectada, falta confirmar' %}{% else %}{% translate 'Todavía no se corrió la detección' %}{% endif %}">
+                {% if pagina.margen_confirmado %}<i class="bi bi-check"></i>{% elif pagina.tiene_margen_detectado %}…{% else %}<i class="bi bi-dash"></i>{% endif %}
+              </a>
+            </td>
+            <td>
+              <a href="{% url 'partituras:ajuste_sistemas' partitura.pk pagina.numero %}"
+                 class="btn btn-sm {% if pagina.sistemas_confirmados %}btn-outline-success{% elif pagina.tiene_sistemas %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+                 title="{% if pagina.sistemas_confirmados %}{% translate 'Confirmada' %}{% elif pagina.tiene_sistemas %}{% translate 'Detectados, falta confirmar' %}{% else %}{% translate 'Todavía no se corrió la detección' %}{% endif %}">
+                {% if pagina.sistemas_confirmados %}<i class="bi bi-check"></i>{% elif pagina.tiene_sistemas %}…{% else %}<i class="bi bi-dash"></i>{% endif %}
+              </a>
+            </td>
+            <td>
+              <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina.numero %}"
+                 class="btn btn-sm {% if pagina.ancla_confirmada %}btn-outline-success{% elif pagina.tiene_ancla_detectada %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+                 title="{% if pagina.ancla_confirmada %}{% translate 'Confirmada' %}{% elif pagina.tiene_ancla_detectada %}{% translate 'Detectada, falta confirmar' %}{% else %}{% translate 'Todavía no se corrió la detección' %}{% endif %}">
+                {% if pagina.ancla_confirmada %}<i class="bi bi-check"></i>{% elif pagina.tiene_ancla_detectada %}…{% else %}<i class="bi bi-dash"></i>{% endif %}
+              </a>
+            </td>
+            <td>
+              <a href="{% url 'partituras:ajuste_barras' partitura.pk pagina.numero %}"
+                 class="btn btn-sm {% if pagina.barras_confirmadas %}btn-outline-success{% elif pagina.tiene_barras_detectadas %}btn-outline-light{% else %}btn-outline-secondary{% endif %}"
+                 title="{% if pagina.barras_confirmadas %}{% translate 'Confirmada' %}{% elif pagina.tiene_barras_detectadas %}{% translate 'Detectadas, falta confirmar' %}{% else %}{% translate 'Todavía no se corrió la detección' %}{% endif %}">
+                {% if pagina.barras_confirmadas %}<i class="bi bi-check"></i>{% elif pagina.tiene_barras_detectadas %}…{% else %}<i class="bi bi-dash"></i>{% endif %}
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="small" style="color: var(--ss-text-muted)">
+      {% translate "Cada celda lleva directo a esa etapa en esa página." %}
+      <i class="bi bi-dash mx-1" style="color: var(--ss-text-muted)"></i>{% translate "sin detectar" %} ·
+      <span class="mx-1">…</span>{% translate "detectado, falta confirmar" %} ·
+      <i class="bi bi-check mx-1" style="color: #2ecc71"></i>{% translate "confirmado" %}
+    </p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.form-procesando').forEach(form => {
+  form.addEventListener('submit', () => {
+    const btn = form.querySelector('button[type="submit"]');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + btn.dataset.textoProcesando;
+  });
+});
+</script>
+{% endblock %}

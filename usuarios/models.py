@@ -8,7 +8,7 @@ class Usuario(AbstractUser):
     Espejo de la tabla usuarios_usuario del proyecto ensayos (misma BD Postgres
     compartida entre afinacion, ensayos, tempo y scoresync).
     managed = False: Django lee la tabla existente sin crearla ni modificarla.
-    No se incluye instrumento_principal ni grupo (FKs a apps externas).
+    No se incluye grupo (FK a app externa que scoresync no necesita).
     """
 
     ROL_PROFESOR = 'profesor'
@@ -23,6 +23,13 @@ class Usuario(AbstractUser):
 
     rol = models.CharField(max_length=10, choices=ROLES, default=ROL_ALUMNO)
     suscripcion = models.CharField(max_length=10, null=True, blank=True)
+    instrumento_principal = models.ForeignKey(
+        'actividades.Instrumento',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        db_constraint=False,
+        related_name='usuarios',
+    )
     celular = models.CharField(max_length=30, blank=True)
     telefono = models.CharField(max_length=30, blank=True)
     direccion = models.CharField(max_length=255, blank=True)

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Biblioteca — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 style="color: var(--ss-text-bright)">Biblioteca de partituras</h4>
+  <a href="{% url 'partituras:subir' %}" class="btn btn-ss"><i class="bi bi-upload me-1"></i>Subir PDF</a>
+</div>
+
+{% if partituras %}
+<div class="row g-3">
+  {% for p in partituras %}
+  <div class="col-md-4">
+    <a href="{% url 'partituras:detalle' p.pk %}" class="text-decoration-none">
+      <div class="card border-0 h-100" style="background: var(--ss-surface)">
+        <div class="card-body">
+          <h6 class="card-title" style="color: var(--ss-text-bright)"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.titulo }}</h6>
+          <p class="small mb-1" style="color: var(--ss-text-muted)">{{ p.compositor|default:"—" }}</p>
+          <p class="small mb-0" style="color: var(--ss-text-muted)">{{ p.instrumento|default:"—" }}{% if p.parte %} · {{ p.parte }}{% endif %}</p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p style="color: var(--ss-text-muted)">Todavía no subiste ninguna partitura.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Ajustar orientación — {{ partitura.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lienzo { position: relative; display: inline-block; max-width: 100%; background: #222; }
+  .lienzo img { display: block; max-width: 100%; height: auto; pointer-events: none; }
+  .guia-h, .guia-v { pointer-events: none; }
+  .guia-linea { position: absolute; background: rgba(255, 60, 60, 0.55); pointer-events: none; }
+  .guia-h .guia-linea { left: 0; right: 0; height: 1px; }
+  .guia-v .guia-linea { top: 0; bottom: 0; width: 1px; }
+  .guia-asa { position: absolute; background: transparent; pointer-events: auto; }
+  .guia-h .guia-asa { left: 0; right: 0; height: 14px; margin-top: -7px; cursor: ns-resize; }
+  .guia-v .guia-asa { top: 0; bottom: 0; width: 14px; margin-left: -7px; cursor: ew-resize; }
+  .lienzo.trazando { cursor: crosshair; }
+  .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
+
+  .lienzo-wrapper { overflow: auto; }
+  .lienzo-wrapper.zoom-activo {
+    border: 1px solid #2a4a47;
+    border-radius: 4px;
+    cursor: grab;
+  }
+  .lienzo.zoom-activo { transform-origin: top left; }
+
+  .controles-zoom {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-zoom-flotante {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-accent); color: #fff; border: none;
+    font-size: 1.3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .btn-zoom-nivel {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-surface); color: #fff;
+    border: 1px solid #2a4a47;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Ajustar orientación" %} — {{ partitura.titulo }}
+    <span class="small" style="color: var(--ss-text-muted)">({{ pagina.numero }}/{{ total }})</span>
+  </h5>
+  <div class="d-flex gap-2">
+    {% if pagina.numero > 1 %}
+    <a href="{% url 'partituras:ajuste_orientacion' partitura.pk pagina.numero|add:'-1' %}" class="btn btn-outline-light btn-sm">← {% translate "Anterior" %}</a>
+    {% endif %}
+    {% if pagina.numero < total %}
+    <a href="{% url 'partituras:ajuste_orientacion' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
+    {% endif %}
+    <a href="{% url 'partituras:detalle' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
+  </div>
+</div>
+<div class="d-flex flex-wrap gap-1 mb-3">
+  {% for p in partitura.paginas.all %}
+  <a href="{% url 'partituras:ajuste_orientacion' partitura.pk p.numero %}"
+     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.confirmada %}btn-outline-success{% else %}btn-outline-light{% endif %}"
+     title="{% if p.confirmada %}{% translate 'Confirmada' %}{% else %}{% translate 'Pendiente' %}{% endif %}">
+    {{ p.numero }}{% if p.confirmada %} <i class="bi bi-check"></i>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-8 text-center">
+    <div class="lienzo-wrapper" id="lienzo-wrapper">
+      <div class="lienzo" id="lienzo">
+        <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}?v={{ pagina.rotacion_aplicada }}-{{ pagina.angulo_deskew_aplicado }}" alt="Página {{ pagina.numero }}">
+        <svg id="svg-trazo" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="panel-control">
+      <h6 style="color: var(--ss-text-bright)" class="d-flex align-items-center gap-1">
+        {% translate "Rotación" %}
+        <i class="bi bi-question-circle small" style="cursor:help; color: var(--ss-text-muted)" tabindex="0"
+           data-bs-toggle="popover" data-bs-trigger="focus" data-bs-placement="right"
+           data-bs-content="{% translate 'Las guías rojas sobre la imagen se pueden arrastrar — movelas a donde te sirva para chequear si el pentagrama quedó horizontal.' %}"></i>
+      </h6>
+      <form method="post" class="d-flex gap-2 mb-3">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="rotar_izq" class="btn btn-outline-light flex-fill">
+          <i class="bi bi-arrow-counterclockwise"></i> 90°
+        </button>
+        <button type="submit" name="accion" value="rotar_der" class="btn btn-outline-light flex-fill">
+          <i class="bi bi-arrow-clockwise"></i> 90°
+        </button>
+      </form>
+      <p class="small mb-3" style="color: var(--ss-text-muted)">
+        {% translate "Rotación actual" %}: {{ pagina.rotacion_aplicada }}°
+      </p>
+
+      <h6 style="color: var(--ss-text-bright)" class="d-flex align-items-center gap-1">
+        {% translate "Desalineado fino" %}
+        <i class="bi bi-question-circle small" style="cursor:help; color: var(--ss-text-muted)" tabindex="0"
+           data-bs-toggle="popover" data-bs-trigger="focus" data-bs-placement="right"
+           data-bs-content="{% translate 'Hacé clic en «Trazar línea horizontal» y después marcá con el mouse, sobre la imagen, algo que debería quedar horizontal (por ejemplo una línea del pentagrama) — el ángulo se calcula solo. También podés escribirlo directamente.' %}"></i>
+      </h6>
+      <button type="button" id="btn-trazar" class="btn btn-outline-light w-100 mb-2">
+        <i class="bi bi-pencil"></i> {% translate "Trazar línea horizontal" %}
+      </button>
+      <form method="post" class="d-flex gap-2 mb-3">
+        {% csrf_token %}
+        <input type="number" step="0.01" name="angulo" id="input-angulo" value="{{ pagina.angulo_deskew_aplicado|floatformat:2 }}"
+               class="form-control" style="max-width: 8rem;">
+        <button type="submit" name="accion" value="ajustar_angulo" class="btn btn-outline-light">
+          {% translate "Aplicar" %}
+        </button>
+      </form>
+
+      <hr style="border-color: #2a4a47;">
+
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="confirmar" class="btn btn-ss w-100">
+          {% translate "Confirmar esta página" %}
+          {% if pagina.numero < total %}→{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="controles-zoom" id="controles-zoom">
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-mas" title="{% translate 'Acercar' %}"><i class="bi bi-plus-lg"></i></button>
+  <button type="button" class="btn-zoom-flotante" id="btn-zoom" title="{% translate 'Zoom' %}"><i class="bi bi-zoom-in"></i></button>
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-menos" title="{% translate 'Alejar' %}"><i class="bi bi-dash-lg"></i></button>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => new bootstrap.Popover(el));
+
+const lienzo = document.getElementById('lienzo');
+const svg = document.getElementById('svg-trazo');
+const anguloActual = parseFloat("{{ pagina.angulo_deskew_aplicado|default:0 }}");
+
+// ── Guías arrastrables, con posición recordada entre páginas/recargas ──────
+const GUIAS_KEY = 'scoresync_guias_orientacion';
+function posicionesGuiasPorDefecto() {
+  return [
+    { tipo: 'h', pos: 0.25 }, { tipo: 'h', pos: 0.5 }, { tipo: 'h', pos: 0.75 },
+    { tipo: 'v', pos: 0.5 },
+  ];
+}
+function cargarGuias() {
+  try {
+    const guardadas = JSON.parse(localStorage.getItem(GUIAS_KEY));
+    if (Array.isArray(guardadas) && guardadas.length) return guardadas;
+  } catch (e) {}
+  return posicionesGuiasPorDefecto();
+}
+function guardarGuias() {
+  localStorage.setItem(GUIAS_KEY, JSON.stringify(guias));
+}
+
+let guias = cargarGuias();
+
+function renderGuias() {
+  lienzo.querySelectorAll('.guia-h, .guia-v').forEach(el => el.remove());
+  guias.forEach((g, i) => {
+    const cont = document.createElement('div');
+    cont.className = g.tipo === 'h' ? 'guia-h' : 'guia-v';
+    cont.style.position = 'absolute';
+    cont.style.top = '0'; cont.style.left = '0'; cont.style.right = '0'; cont.style.bottom = '0';
+
+    const linea = document.createElement('div');
+    linea.className = 'guia-linea';
+    const asa = document.createElement('div');
+    asa.className = 'guia-asa';
+
+    if (g.tipo === 'h') {
+      linea.style.top = (g.pos * 100) + '%';
+      asa.style.top = (g.pos * 100) + '%';
+    } else {
+      linea.style.left = (g.pos * 100) + '%';
+      asa.style.left = (g.pos * 100) + '%';
+    }
+
+    asa.addEventListener('mousedown', e => {
+      e.preventDefault();
+      function mover(ev) {
+        const rect = lienzo.getBoundingClientRect();
+        const frac = g.tipo === 'h'
+          ? (ev.clientY - rect.top) / rect.height
+          : (ev.clientX - rect.left) / rect.width;
+        guias[i].pos = Math.min(Math.max(frac, 0), 1);
+        renderGuias();
+      }
+      function soltar() {
+        document.removeEventListener('mousemove', mover);
+        document.removeEventListener('mouseup', soltar);
+        guardarGuias();
+      }
+      document.addEventListener('mousemove', mover);
+      document.addEventListener('mouseup', soltar);
+    });
+
+    cont.appendChild(linea);
+    cont.appendChild(asa);
+    lienzo.appendChild(cont);
+  });
+}
+renderGuias();
+
+// ── Trazar una línea que debería quedar horizontal, para fijar el ángulo ───
+const btnTrazar = document.getElementById('btn-trazar');
+let trazando = false;
+
+btnTrazar.addEventListener('click', () => {
+  trazando = !trazando;
+  lienzo.classList.toggle('trazando', trazando);
+  btnTrazar.textContent = trazando ? '{% translate "Cancelar trazo" %}' : '{% translate "Trazar línea horizontal" %}';
+});
+
+lienzo.addEventListener('mousedown', e => {
+  if (!trazando || e.target.closest('.guia-asa')) return;
+  const rect = lienzo.getBoundingClientRect();
+  const x1 = e.clientX - rect.left, y1 = e.clientY - rect.top;
+  const linea = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  linea.setAttribute('x1', x1); linea.setAttribute('y1', y1);
+  linea.setAttribute('x2', x1); linea.setAttribute('y2', y1);
+  linea.setAttribute('stroke', '#ffb347');
+  linea.setAttribute('stroke-width', '2');
+  svg.appendChild(linea);
+
+  function mover(ev) {
+    const x2 = ev.clientX - rect.left, y2 = ev.clientY - rect.top;
+    linea.setAttribute('x2', x2);
+    linea.setAttribute('y2', y2);
+  }
+  function soltar(ev) {
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+    const x2 = ev.clientX - rect.left, y2 = ev.clientY - rect.top;
+    const anguloTrazo = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+    // Se suma al ángulo ya aplicado en la vista previa: el trazo mide la
+    // inclinación que TODAVÍA falta corregir sobre lo que se ve ahora.
+    const nuevoAngulo = anguloActual + anguloTrazo;
+    document.getElementById('input-angulo').value = nuevoAngulo.toFixed(2);
+    trazando = false;
+    lienzo.classList.remove('trazando');
+    btnTrazar.textContent = '{% translate "Trazar línea horizontal" %}';
+    setTimeout(() => svg.removeChild(linea), 1500);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+});
+
+// ── Zoom flotante (ver ajuste_ancla.html para la explicación completa) ─────
+const lienzoWrapper = document.getElementById('lienzo-wrapper');
+const btnZoom = document.getElementById('btn-zoom');
+const btnZoomMas = document.getElementById('btn-zoom-mas');
+const btnZoomMenos = document.getElementById('btn-zoom-menos');
+let zoomActivo = false;
+let nivelZoom = 1.6;
+const ZOOM_MIN = 1.2, ZOOM_MAX = 4;
+
+function aplicarZoom() {
+  lienzo.style.transform = zoomActivo ? `scale(${nivelZoom})` : '';
+}
+
+function alternarZoom() {
+  zoomActivo = !zoomActivo;
+  lienzoWrapper.classList.toggle('zoom-activo', zoomActivo);
+  lienzo.classList.toggle('zoom-activo', zoomActivo);
+  btnZoom.innerHTML = zoomActivo ? '<i class="bi bi-zoom-out"></i>' : '<i class="bi bi-zoom-in"></i>';
+  btnZoomMas.classList.toggle('d-none', !zoomActivo);
+  btnZoomMenos.classList.toggle('d-none', !zoomActivo);
+  aplicarZoom();
+}
+
+btnZoom.addEventListener('click', alternarZoom);
+btnZoomMas.addEventListener('click', () => {
+  nivelZoom = Math.min(ZOOM_MAX, nivelZoom + 0.3);
+  aplicarZoom();
+});
+btnZoomMenos.addEventListener('click', () => {
+  nivelZoom = Math.max(ZOOM_MIN, nivelZoom - 0.3);
+  aplicarZoom();
+});
+
+lienzo.addEventListener('mousedown', e => {
+  if (!zoomActivo || trazando || e.target !== lienzo) return;
+  e.preventDefault();
+  lienzoWrapper.style.cursor = 'grabbing';
+  const inicioX = e.clientX, inicioY = e.clientY;
+  const scrollInicioX = lienzoWrapper.scrollLeft, scrollInicioY = lienzoWrapper.scrollTop;
+  function mover(ev) {
+    lienzoWrapper.scrollLeft = scrollInicioX - (ev.clientX - inicioX);
+    lienzoWrapper.scrollTop = scrollInicioY - (ev.clientY - inicioY);
+  }
+  function soltar() {
+    lienzoWrapper.style.cursor = '';
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+});
+</script>
+{% endblock %}

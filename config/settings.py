@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "usuarios",
+    "actividades",
+    "partituras",
     "sc_versiones",
     "sso",
     "anymail",

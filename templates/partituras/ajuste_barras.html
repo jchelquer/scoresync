@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Ajustar barras — {{ partitura.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lienzo { position: relative; width: 100%; background: #222; user-select: none; }
+  .lienzo img { display: block; width: 100%; height: auto; pointer-events: none; }
+  .banda-sistema {
+    position: absolute; left: 0; right: 0;
+    cursor: crosshair;
+  }
+  .linea-barra {
+    position: absolute;
+    width: 6px;
+    margin-left: -3px;
+    cursor: pointer;
+    box-shadow: 0 0 2px #000;
+  }
+  .linea-barra.aceptada { background: rgba(46, 204, 113, 0.35); }
+  .linea-barra.dudosa { background: rgba(231, 76, 60, 0.35); }
+  .linea-barra:hover { background: rgba(255, 255, 255, 0.5); }
+  .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
+  .leyenda-punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
+
+  .lienzo-wrapper { overflow: auto; }
+  .lienzo-wrapper.zoom-activo {
+    border: 1px solid #2a4a47;
+    border-radius: 4px;
+    cursor: grab;
+  }
+  .lienzo.zoom-activo { transform-origin: top left; }
+
+  .controles-zoom {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-zoom-flotante {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-accent); color: #fff; border: none;
+    font-size: 1.3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .btn-zoom-nivel {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-surface); color: #fff;
+    border: 1px solid #2a4a47;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Ajustar barras de compás" %} — {{ partitura.titulo }}
+    <span class="small" style="color: var(--ss-text-muted)">({{ pagina.numero }}/{{ total }})</span>
+  </h5>
+  <div class="d-flex gap-2">
+    {% if pagina.numero > 1 %}
+    <a href="{% url 'partituras:ajuste_barras' partitura.pk pagina.numero|add:'-1' %}" class="btn btn-outline-light btn-sm">← {% translate "Anterior" %}</a>
+    {% endif %}
+    {% if pagina.numero < total %}
+    <a href="{% url 'partituras:ajuste_barras' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
+    {% endif %}
+    <a href="{% url 'partituras:detalle' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
+  </div>
+</div>
+<div class="d-flex flex-wrap gap-1 mb-3">
+  {% for p in partitura.paginas.all %}
+  <a href="{% url 'partituras:ajuste_barras' partitura.pk p.numero %}"
+     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.ignorada %}btn-outline-secondary{% elif p.barras_confirmadas %}btn-outline-success{% else %}btn-outline-light{% endif %}"
+     title="{% if p.ignorada %}{% translate 'Ignorada' %}{% elif p.barras_confirmadas %}{% translate 'Confirmada' %}{% else %}{% translate 'Pendiente' %}{% endif %}">
+    {{ p.numero }}{% if p.barras_confirmadas %} <i class="bi bi-check"></i>{% elif p.ignorada %} <i class="bi bi-eye-slash"></i>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-9">
+    <div class="lienzo-wrapper" id="lienzo-wrapper">
+      <div class="lienzo" id="lienzo">
+        <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}" alt="Página {{ pagina.numero }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3">
+    <div class="panel-control">
+      <p class="small mb-2" style="color: var(--ss-text-muted)">
+        <span class="leyenda-punto" style="background: #2ecc71"></span>{% translate "Aceptada" %}
+        &nbsp;
+        <span class="leyenda-punto" style="background: #e74c3c"></span>{% translate "Dudosa" %}
+      </p>
+      <p class="small" style="color: var(--ss-text-muted)">
+        {% translate "Clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí." %}
+      </p>
+      <form method="post" id="form-barras">
+        {% csrf_token %}
+        <input type="hidden" name="barras" id="input-barras">
+        <button type="submit" name="accion" value="confirmar" class="btn btn-ss w-100 mb-2">
+          {% translate "Confirmar" %}
+          {% if pagina.numero < total %}→{% endif %}
+        </button>
+      </form>
+      <hr style="border-color: #2a4a47;">
+      <form method="post" class="mb-2">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
+          <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
+        </button>
+      </form>
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="ignorar" class="btn btn-outline-light w-100">
+          {% translate "Ignorar esta página" %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="controles-zoom" id="controles-zoom">
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-mas" title="{% translate 'Acercar' %}"><i class="bi bi-plus-lg"></i></button>
+  <button type="button" class="btn-zoom-flotante" id="btn-zoom" title="{% translate 'Zoom' %}"><i class="bi bi-zoom-in"></i></button>
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-menos" title="{% translate 'Alejar' %}"><i class="bi bi-dash-lg"></i></button>
+</div>
+
+<script>
+const lienzo = document.getElementById('lienzo');
+const imagen = document.getElementById('imagen-pagina');
+const sistemas = {{ sistemas_json|safe }};
+let barras = {{ barras_json|safe }}.map(b => ({...b, _key: b.id ?? ('nuevo-' + Math.random())}));
+
+function sistemaDe(sistemaId) {
+  return sistemas.find(s => s.id === sistemaId);
+}
+
+function render() {
+  lienzo.querySelectorAll('.banda-sistema, .linea-barra').forEach(el => el.remove());
+
+  sistemas.forEach(s => {
+    const banda = document.createElement('div');
+    banda.className = 'banda-sistema';
+    banda.style.top = (s.y * 100) + '%';
+    banda.style.height = (s.height * 100) + '%';
+    banda.addEventListener('click', e => {
+      if (e.target !== banda) return;  // una línea hija maneja su propio clic
+      const r = lienzo.getBoundingClientRect();
+      const fracX = (e.clientX - r.left) / r.width;
+      barras.push({ id: null, sistema_id: s.id, x: fracX, estado: 'aceptada', origen: 'manual', _key: 'nuevo-' + Math.random() });
+      render();
+    });
+    lienzo.appendChild(banda);
+  });
+
+  barras.forEach(b => {
+    const s = sistemaDe(b.sistema_id);
+    if (!s) return;
+    const linea = document.createElement('div');
+    linea.className = 'linea-barra ' + (b.estado === 'aceptada' ? 'aceptada' : 'dudosa');
+    linea.style.left = (b.x * 100) + '%';
+    linea.style.top = (s.y * 100) + '%';
+    linea.style.height = (s.height * 100) + '%';
+    linea.title = b.estado === 'aceptada'
+      ? '{% translate "Aceptada — clic para marcar dudosa, doble clic para borrar" %}'
+      : '{% translate "Dudosa — clic para aceptar, doble clic para borrar" %}';
+    linea.addEventListener('click', e => {
+      e.stopPropagation();
+      b.estado = b.estado === 'aceptada' ? 'dudosa' : 'aceptada';
+      render();
+    });
+    linea.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      barras = barras.filter(x => x._key !== b._key);
+      render();
+    });
+    lienzo.appendChild(linea);
+  });
+}
+
+document.getElementById('form-barras').addEventListener('submit', () => {
+  const payload = barras.map(b => ({ id: b.id, sistema_id: b.sistema_id, x: b.x, estado: b.estado }));
+  document.getElementById('input-barras').value = JSON.stringify(payload);
+});
+
+imagen.addEventListener('load', render);
+if (imagen.complete) render();
+
+// ── Zoom flotante (ver ajuste_ancla.html para la explicación completa) ─────
+const lienzoWrapper = document.getElementById('lienzo-wrapper');
+const btnZoom = document.getElementById('btn-zoom');
+const btnZoomMas = document.getElementById('btn-zoom-mas');
+const btnZoomMenos = document.getElementById('btn-zoom-menos');
+let zoomActivo = false;
+let nivelZoom = 1.6;
+const ZOOM_MIN = 1.2, ZOOM_MAX = 4;
+
+function aplicarZoom() {
+  lienzo.style.transform = zoomActivo ? `scale(${nivelZoom})` : '';
+}
+
+function alternarZoom() {
+  zoomActivo = !zoomActivo;
+  lienzoWrapper.classList.toggle('zoom-activo', zoomActivo);
+  lienzo.classList.toggle('zoom-activo', zoomActivo);
+  btnZoom.innerHTML = zoomActivo ? '<i class="bi bi-zoom-out"></i>' : '<i class="bi bi-zoom-in"></i>';
+  btnZoomMas.classList.toggle('d-none', !zoomActivo);
+  btnZoomMenos.classList.toggle('d-none', !zoomActivo);
+  aplicarZoom();
+}
+
+btnZoom.addEventListener('click', alternarZoom);
+btnZoomMas.addEventListener('click', () => {
+  nivelZoom = Math.min(ZOOM_MAX, nivelZoom + 0.3);
+  aplicarZoom();
+});
+btnZoomMenos.addEventListener('click', () => {
+  nivelZoom = Math.max(ZOOM_MIN, nivelZoom - 0.3);
+  aplicarZoom();
+});
+
+// Sólo arranca a paneard si el clic empieza fuera de cualquier banda de
+// sistema (que ya usan su propio clic para agregar una barra) — panear
+// dentro de una banda seguiría disparando ese agregado accidentalmente.
+lienzo.addEventListener('mousedown', e => {
+  if (!zoomActivo || e.target !== lienzo) return;
+  e.preventDefault();
+  lienzoWrapper.style.cursor = 'grabbing';
+  const inicioX = e.clientX, inicioY = e.clientY;
+  const scrollInicioX = lienzoWrapper.scrollLeft, scrollInicioY = lienzoWrapper.scrollTop;
+  function mover(ev) {
+    lienzoWrapper.scrollLeft = scrollInicioX - (ev.clientX - inicioX);
+    lienzoWrapper.scrollTop = scrollInicioY - (ev.clientY - inicioY);
+  }
+  function soltar() {
+    lienzoWrapper.style.cursor = '';
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+});
+</script>
+{% endblock %}

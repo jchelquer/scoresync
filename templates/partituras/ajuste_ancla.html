@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Ajustar ancla — {{ partitura.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .lienzo { position: relative; width: 100%; background: #222; user-select: none; }
+  .lienzo img { display: block; width: 100%; height: auto; pointer-events: none; }
+  .rect-ancla {
+    position: absolute;
+    border: 2px solid var(--ss-accent);
+    background: rgba(55, 182, 163, 0.15);
+    box-sizing: border-box;
+    cursor: move;
+  }
+  .asa { position: absolute; background: transparent; }
+  .asa-n, .asa-s { left: 0; right: 0; height: 14px; cursor: ns-resize; }
+  .asa-n { top: -7px; } .asa-s { bottom: -7px; }
+  .asa-e, .asa-w { top: 0; bottom: 0; width: 14px; cursor: ew-resize; }
+  .asa-w { left: -7px; } .asa-e { right: -7px; }
+  .linea-detectada {
+    position: absolute;
+    width: 3px;
+    background: #ff3c3c;
+    pointer-events: none;
+    box-shadow: 0 0 2px #000;
+  }
+  .tilde-confirmada {
+    position: absolute;
+    top: -9px; right: -9px;
+    width: 16px; height: 16px;
+    background: #2ecc71;
+    border-radius: 50%;
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem;
+    pointer-events: none;
+    box-shadow: 0 0 2px #000;
+  }
+  .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
+
+  .lienzo-wrapper { overflow: auto; }
+  .lienzo-wrapper.zoom-activo {
+    border: 1px solid #2a4a47;
+    border-radius: 4px;
+    cursor: grab;
+  }
+  .lienzo.zoom-activo { transform-origin: top left; }
+
+  .controles-zoom {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-zoom-flotante {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-accent); color: #fff; border: none;
+    font-size: 1.3rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+  }
+  .btn-zoom-nivel {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--ss-surface); color: #fff;
+    border: 1px solid #2a4a47;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Ajustar ancla (barra de referencia)" %} — {{ partitura.titulo }}
+    <span class="small" style="color: var(--ss-text-muted)">({{ pagina.numero }}/{{ total }})</span>
+  </h5>
+  <div class="d-flex gap-2">
+    {% if pagina.numero > 1 %}
+    <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina.numero|add:'-1' %}" class="btn btn-outline-light btn-sm">← {% translate "Anterior" %}</a>
+    {% endif %}
+    {% if pagina.numero < total %}
+    <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
+    {% endif %}
+    <a href="{% url 'partituras:detalle' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
+  </div>
+</div>
+<div class="d-flex flex-wrap gap-1 mb-3">
+  {% for p in partitura.paginas.all %}
+  <a href="{% url 'partituras:ajuste_ancla' partitura.pk p.numero %}"
+     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.ignorada %}btn-outline-secondary{% elif p.ancla_confirmada %}btn-outline-success{% else %}btn-outline-light{% endif %}"
+     title="{% if p.ignorada %}{% translate 'Ignorada' %}{% elif p.ancla_confirmada %}{% translate 'Confirmada' %}{% else %}{% translate 'Pendiente' %}{% endif %}">
+    {{ p.numero }}{% if p.ancla_confirmada %} <i class="bi bi-check"></i>{% elif p.ignorada %} <i class="bi bi-eye-slash"></i>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="row g-4" id="fila-principal">
+  <div class="col-lg-9" id="col-lienzo">
+    <div class="lienzo-wrapper" id="lienzo-wrapper">
+      <div class="lienzo" id="lienzo">
+        <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}" alt="Página {{ pagina.numero }}">
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-3" id="col-panel">
+    <div class="panel-control">
+      <p class="small" style="color: var(--ss-text-muted)">
+        {% translate "El rectángulo debería rodear una barra de compás. Si no es así, movelo o redimensionalo y pedí que busque adentro — no hace falta precisión." %}
+      </p>
+      <form method="post" id="form-ancla">
+        {% csrf_token %}
+        <input type="hidden" name="x0" id="input-x0">
+        <input type="hidden" name="y0" id="input-y0">
+        <input type="hidden" name="x1" id="input-x1">
+        <input type="hidden" name="y1" id="input-y1">
+        <input type="hidden" name="linea_x" id="input-linea-x">
+        <input type="hidden" name="linea_y0" id="input-linea-y0">
+        <input type="hidden" name="linea_y1" id="input-linea-y1">
+        <button type="submit" name="accion" value="buscar" class="btn btn-outline-light w-100 mb-2">
+          <i class="bi bi-search"></i> {% translate "Buscar en este rectángulo" %}
+        </button>
+        <button type="submit" name="accion" value="confirmar" class="btn btn-ss w-100 mb-2">
+          {% translate "Confirmar" %}
+          {% if pagina.numero < total %}→{% endif %}
+        </button>
+      </form>
+      <hr style="border-color: #2a4a47;">
+      <form method="post" class="mb-2">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
+          <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
+        </button>
+        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">
+          {% translate "Ignora el rectángulo actual (confirmado o no) y prueba la detección automática desde el principio." %}
+        </p>
+      </form>
+      <form method="post">
+        {% csrf_token %}
+        <button type="submit" name="accion" value="ignorar" class="btn btn-outline-light w-100">
+          {% translate "Ignorar esta página" %}
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="controles-zoom" id="controles-zoom">
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-mas" title="{% translate 'Acercar' %}"><i class="bi bi-plus-lg"></i></button>
+  <button type="button" class="btn-zoom-flotante" id="btn-zoom" title="{% translate 'Zoom' %}"><i class="bi bi-zoom-in"></i></button>
+  <button type="button" class="btn-zoom-nivel d-none" id="btn-zoom-menos" title="{% translate 'Alejar' %}"><i class="bi bi-dash-lg"></i></button>
+</div>
+
+<script>
+const lienzo = document.getElementById('lienzo');
+const imagen = document.getElementById('imagen-pagina');
+let confirmada = {{ pagina.ancla_confirmada|yesno:"true,false" }};
+
+let rect = {
+  x0: {{ pagina.ancla_x0|default:0.3 }}, y0: {{ pagina.ancla_y0|default:0.3 }},
+  x1: {{ pagina.ancla_x1|default:0.4 }}, y1: {{ pagina.ancla_y1|default:0.4 }},
+};
+
+const linea = {
+  x: {{ pagina.ancla_linea_x|default_if_none:"null" }},
+  y0: {{ pagina.ancla_linea_y0|default_if_none:"null" }},
+  y1: {{ pagina.ancla_linea_y1|default_if_none:"null" }},
+};
+
+function render() {
+  lienzo.querySelectorAll('.rect-ancla, .linea-detectada').forEach(el => el.remove());
+
+  if (linea.x !== null) {
+    const l = document.createElement('div');
+    l.className = 'linea-detectada';
+    l.style.left = 'calc(' + (linea.x * 100) + '% - 1.5px)';
+    l.style.top = (linea.y0 * 100) + '%';
+    l.style.height = ((linea.y1 - linea.y0) * 100) + '%';
+    lienzo.appendChild(l);
+  }
+
+  const div = document.createElement('div');
+  div.className = 'rect-ancla';
+  div.style.left = (rect.x0 * 100) + '%';
+  div.style.top = (rect.y0 * 100) + '%';
+  div.style.width = ((rect.x1 - rect.x0) * 100) + '%';
+  div.style.height = ((rect.y1 - rect.y0) * 100) + '%';
+
+  if (confirmada) {
+    const tilde = document.createElement('div');
+    tilde.className = 'tilde-confirmada';
+    tilde.innerHTML = '<i class="bi bi-check-lg"></i>';
+    tilde.title = '{% translate "Ancla confirmada — podés seguir ajustándola" %}';
+    div.appendChild(tilde);
+  }
+
+  // Arrastrar el cuerpo completo del rectángulo lo mueve como unidad — la
+  // línea detectada se mueve con él (misma referencia visual), a diferencia
+  // de redimensionar un borde, donde la línea se queda donde se encontró.
+  div.addEventListener('mousedown', e => {
+    if (e.target !== div) return;  // un asa hija maneja su propio mousedown
+    e.preventDefault();
+    const r = lienzo.getBoundingClientRect();
+    const inicioFracX = (e.clientX - r.left) / r.width;
+    const inicioFracY = (e.clientY - r.top) / r.height;
+    const { x0, y0, x1, y1 } = rect;
+    const anchoR = x1 - x0, altoR = y1 - y0;
+    const lineaInicio = linea.x !== null ? { x: linea.x, y0: linea.y0, y1: linea.y1 } : null;
+    function mover(ev) {
+      const dx = (ev.clientX - r.left) / r.width - inicioFracX;
+      const dy = (ev.clientY - r.top) / r.height - inicioFracY;
+      let nx0 = Math.min(Math.max(x0 + dx, 0), 1 - anchoR);
+      let ny0 = Math.min(Math.max(y0 + dy, 0), 1 - altoR);
+      const dxAplicado = nx0 - x0, dyAplicado = ny0 - y0;
+      rect.x0 = nx0; rect.x1 = nx0 + anchoR;
+      rect.y0 = ny0; rect.y1 = ny0 + altoR;
+      if (lineaInicio) {
+        linea.x = lineaInicio.x + dxAplicado;
+        linea.y0 = lineaInicio.y0 + dyAplicado;
+        linea.y1 = lineaInicio.y1 + dyAplicado;
+      }
+      confirmada = false;  // si lo estás moviendo, ya no querés darlo por confirmado tal cual está
+      render();
+    }
+    function soltar() {
+      document.removeEventListener('mousemove', mover);
+      document.removeEventListener('mouseup', soltar);
+    }
+    document.addEventListener('mousemove', mover);
+    document.addEventListener('mouseup', soltar);
+  });
+
+  const bordes = [
+    ['n', 'asa-n', (frac) => { rect.y0 = Math.min(frac, rect.y1 - 0.005); }],
+    ['s', 'asa-s', (frac) => { rect.y1 = Math.max(frac, rect.y0 + 0.005); }],
+    ['w', 'asa-w', (frac) => { rect.x0 = Math.min(frac, rect.x1 - 0.005); }],
+    ['e', 'asa-e', (frac) => { rect.x1 = Math.max(frac, rect.x0 + 0.005); }],
+  ];
+  bordes.forEach(([nombre, clase, aplicar]) => {
+    const asa = document.createElement('div');
+    asa.className = 'asa ' + clase;
+    const esVertical = nombre === 'n' || nombre === 's';
+    asa.addEventListener('mousedown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      function mover(ev) {
+        const r = lienzo.getBoundingClientRect();
+        const frac = esVertical ? (ev.clientY - r.top) / r.height : (ev.clientX - r.left) / r.width;
+        aplicar(Math.min(Math.max(frac, 0), 1));
+        confirmada = false;
+        render();
+      }
+      function soltar() {
+        document.removeEventListener('mousemove', mover);
+        document.removeEventListener('mouseup', soltar);
+      }
+      document.addEventListener('mousemove', mover);
+      document.addEventListener('mouseup', soltar);
+    });
+    div.appendChild(asa);
+  });
+
+  lienzo.appendChild(div);
+}
+
+document.getElementById('form-ancla').addEventListener('submit', () => {
+  document.getElementById('input-x0').value = rect.x0;
+  document.getElementById('input-y0').value = rect.y0;
+  document.getElementById('input-x1').value = rect.x1;
+  document.getElementById('input-y1').value = rect.y1;
+  document.getElementById('input-linea-x').value = linea.x !== null ? linea.x : '';
+  document.getElementById('input-linea-y0').value = linea.y0 !== null ? linea.y0 : '';
+  document.getElementById('input-linea-y1').value = linea.y1 !== null ? linea.y1 : '';
+});
+
+imagen.addEventListener('load', render);
+if (imagen.complete) render();
+
+// Zoom flotante: escala visualmente el lienzo con transform:scale, sin tocar
+// su tamaño de layout — el wrapper mantiene su alto/ancho normal (el que
+// tenía sin zoom) y con overflow:auto se convierte en una "ventana" que se
+// puede recorrer con scroll sobre la imagen agrandada, sin invadir el resto
+// de la pantalla. Las posiciones de rect/línea siguen en % del propio lienzo
+// y los arrastres miden con getBoundingClientRect() (que refleja el tamaño
+// ya escalado), así que el sistema de coordenadas no se ve afectado.
+const lienzoWrapper = document.getElementById('lienzo-wrapper');
+const btnZoom = document.getElementById('btn-zoom');
+const btnZoomMas = document.getElementById('btn-zoom-mas');
+const btnZoomMenos = document.getElementById('btn-zoom-menos');
+let zoomActivo = false;
+let nivelZoom = 1.6;
+const ZOOM_MIN = 1.2, ZOOM_MAX = 4;
+
+function aplicarZoom() {
+  lienzo.style.transform = zoomActivo ? `scale(${nivelZoom})` : '';
+}
+
+function alternarZoom() {
+  zoomActivo = !zoomActivo;
+  lienzoWrapper.classList.toggle('zoom-activo', zoomActivo);
+  lienzo.classList.toggle('zoom-activo', zoomActivo);
+  btnZoom.innerHTML = zoomActivo ? '<i class="bi bi-zoom-out"></i>' : '<i class="bi bi-zoom-in"></i>';
+  btnZoomMas.classList.toggle('d-none', !zoomActivo);
+  btnZoomMenos.classList.toggle('d-none', !zoomActivo);
+  aplicarZoom();
+}
+
+btnZoom.addEventListener('click', alternarZoom);
+btnZoomMas.addEventListener('click', () => {
+  nivelZoom = Math.min(ZOOM_MAX, nivelZoom + 0.3);
+  aplicarZoom();
+});
+btnZoomMenos.addEventListener('click', () => {
+  nivelZoom = Math.max(ZOOM_MIN, nivelZoom - 0.3);
+  aplicarZoom();
+});
+
+// Arrastrar con el mouse para recorrer la imagen ampliada (además del
+// scroll). Sólo arranca si el clic empieza sobre el fondo del lienzo, no
+// sobre el rectángulo/asas (que tienen su propio arrastre para reubicarse).
+lienzo.addEventListener('mousedown', e => {
+  if (!zoomActivo || e.target !== lienzo) return;
+  e.preventDefault();
+  lienzoWrapper.style.cursor = 'grabbing';
+  const inicioX = e.clientX, inicioY = e.clientY;
+  const scrollInicioX = lienzoWrapper.scrollLeft, scrollInicioY = lienzoWrapper.scrollTop;
+  function mover(ev) {
+    lienzoWrapper.scrollLeft = scrollInicioX - (ev.clientX - inicioX);
+    lienzoWrapper.scrollTop = scrollInicioY - (ev.clientY - inicioY);
+  }
+  function soltar() {
+    lienzoWrapper.style.cursor = '';
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+});
+</script>
+{% endblock %}

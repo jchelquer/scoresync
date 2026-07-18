@@ -39,6 +39,9 @@
       <div class="collapse navbar-collapse">
         <ul class="navbar-nav ms-auto">
           {% if user.is_authenticated %}
+            <li class="nav-item">
+              <a class="nav-link" href="{% url 'partituras:biblioteca' %}">{% translate "Biblioteca" %}</a>
+            </li>
             {% if user.es_admin or user.is_staff %}
             <li class="nav-item">
               <a class="nav-link position-relative" href="{% url 'admin:usuarios_solicitudacceso_changelist' %}">
@@ -56,13 +59,6 @@
                 {{ user.get_full_name|default:user.username }}
               </a>
               <ul class="dropdown-menu dropdown-menu-end" style="background:#193331; border-color:#2a4a47; min-width:200px">
-                {% if SSO_AFINACION or SSO_TEMPO or SSO_ENSAYOS %}
-                <li class="dropdown-header" style="color:var(--ss-text-muted); font-size:0.75rem;">{% translate "Otras apps" %}</li>
-                {% if SSO_AFINACION %}<li><a class="dropdown-item" href="{{ SSO_AFINACION }}" style="color:var(--ss-text-muted); font-size:0.85rem">Afinación</a></li>{% endif %}
-                {% if SSO_TEMPO %}<li><a class="dropdown-item" href="{{ SSO_TEMPO }}" style="color:var(--ss-text-muted); font-size:0.85rem">Tempo</a></li>{% endif %}
-                {% if SSO_ENSAYOS %}<li><a class="dropdown-item" href="{{ SSO_ENSAYOS }}" style="color:var(--ss-text-muted); font-size:0.85rem">Ensayos</a></li>{% endif %}
-                <li><hr class="dropdown-divider" style="border-color:#2a4a47"></li>
-                {% endif %}
                 <li>
                   <a class="dropdown-item" href="{% url 'cambiar_password' %}"
                      style="color:var(--ss-text-muted); font-size:0.85rem">
