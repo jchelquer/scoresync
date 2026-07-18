@@ -7,3 +7,16 @@
   changes:
     - type: nuevo
       text: "Base del proyecto: login compartido con afinación/ensayos/tempo, idioma, novedades y solicitud de acceso"
+- version: "1.0.0"
+  date: "2026-07-18"
+  changes:
+    - type: nuevo
+      text: "Corrección automática y asistida de orientación"
+    - type: nuevo
+      text: "Detección automática y corrección de márgenes"
+    - type: nuevoE
+      text: "Detección automática y corrección de sistemas"
+    - type: nuevo
+      text: "Detección de barras de compás y corrección manual"
+    - type: nuevo
+      text: "Numeración automática de compases y corrección manual"

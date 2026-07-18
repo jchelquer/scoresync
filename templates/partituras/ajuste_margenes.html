@@ -27,6 +27,7 @@
     cursor: grab;
   }
   .lienzo.zoom-activo { transform-origin: top left; }
+  .lienzo-wrapper.confirmada { box-shadow: 0 0 0 3px #2ecc71; border-radius: 4px; }
 
   .controles-zoom {
     position: fixed;
@@ -87,7 +88,7 @@
 
 <div class="row g-4">
   <div class="col-lg-9">
-    <div class="lienzo-wrapper" id="lienzo-wrapper">
+    <div class="lienzo-wrapper{% if pagina.margen_confirmado %} confirmada{% endif %}" id="lienzo-wrapper">
       <div class="lienzo" id="lienzo">
         <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}" alt="Página {{ pagina.numero }}">
       </div>

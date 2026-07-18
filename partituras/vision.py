@@ -471,6 +471,16 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1):
     (encontrar_ancla, que sí filtra plicas) para el mismo rectángulo —
     confundía al usuario ver un resultado y, al pedir "buscar" sobre esa
     misma zona, obtener otro.
+
+    La búsqueda se acota al extremo real del pentagrama DENTRO del
+    rectángulo (_extremos_pentagrama, igual que detectar_barras), no a todo
+    el alto del rectángulo — que tiene relleno vertical a propósito
+    (_PADDING_ANCLA_Y en _guardar_ancla) para que el usuario no necesite ser
+    preciso al ubicarlo. Sin este acote, la corrida más larga podía
+    extenderse unos píxeles hacia el relleno (texto o ligadura cerca, o
+    simple ruido) y dar una línea de alto distinto (~10px, medido en un caso
+    real) a la que ya se había mostrado en la detección automática inicial,
+    que sí busca acotado a las líneas reales del pentagrama.
     """
     binaria = _binarizar(img_bgr)
     h, w = binaria.shape
@@ -481,37 +491,40 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1):
 
     recorte = binaria[y0:y1, x0:x1] > 0
     alto = recorte.shape[0]
-    largos = np.array([_largo_max_en_rango(recorte[:, x], 0, alto - 1) for x in range(recorte.shape[1])])
-    if largos.max() < alto * 0.5:
+    extremos = _extremos_pentagrama(recorte)
+    r0, r1 = extremos if extremos else (0, alto - 1)
+
+    largos = np.array([_largo_max_en_rango(recorte[:, x], r0, r1) for x in range(recorte.shape[1])])
+    if largos.max() < (r1 - r0) * 0.5:
         return None
 
-    escala = alto
+    escala = r1 - r0
     margen = max(2, round(escala * 0.06))
     radio_nota = max(margen + 1, round(escala * 0.17))
     ventana = max(10, round(escala * 0.3))
 
     orden = np.argsort(-largos)
     umbral_largo = largos.max() * 0.85
-    mejor_x = None
+    mejor_x = mejor_ini = mejor_fin = None
     for x_local in orden:
         if largos[x_local] < umbral_largo:
             break
-        _, ini_rel, fin_rel = _mejor_corrida(recorte[:, x_local], 0, alto - 1)
-        if _es_barra_limpia(binaria, x0 + x_local, y0 + ini_rel, y0 + fin_rel, margen, radio_nota, ventana):
-            mejor_x = int(x_local)
+        _, ini_rel, fin_rel = _mejor_corrida(recorte[:, x_local], r0, r1)
+        y_ini_abs, y_fin_abs = y0 + r0 + ini_rel, y0 + r0 + fin_rel
+        if _es_barra_limpia(binaria, x0 + x_local, y_ini_abs, y_fin_abs, margen, radio_nota, ventana):
+            mejor_x, mejor_ini, mejor_fin = int(x_local), ini_rel, fin_rel
             break
     if mejor_x is None:
         mejor_x = int(orden[0])
+        _, mejor_ini, mejor_fin = _mejor_corrida(recorte[:, mejor_x], r0, r1)
 
-    columna = recorte[:, mejor_x]
-    filas_con_tinta = np.where(columna)[0]
-    if len(filas_con_tinta) == 0:
+    if mejor_ini == mejor_fin:
         return None
 
     return {
         'x': x0 + mejor_x,
-        'y0': y0 + int(filas_con_tinta[0]),
-        'y1': y0 + int(filas_con_tinta[-1]),
+        'y0': y0 + r0 + mejor_ini,
+        'y1': y0 + r0 + mejor_fin,
     }
 
 

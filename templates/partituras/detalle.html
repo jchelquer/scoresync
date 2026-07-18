@@ -74,7 +74,7 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando barras…">Detectar barras</button>
           </form>
-          <a href="{% url 'partituras:ajuste_barras' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar barras</a>
+          <a href="{% url 'partituras:ajuste_barras' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar barras y compases</a>
           {% endif %}
         </div>
 
@@ -97,7 +97,7 @@
             <th>{% translate "Márgenes" %}</th>
             <th>{% translate "Sistemas" %}</th>
             <th>{% translate "Ancla" %}</th>
-            <th>{% translate "Barras" %}</th>
+            <th>{% translate "Barras / compases" %}</th>
           </tr>
         </thead>
         <tbody>

@@ -90,6 +90,7 @@ class Pagina(models.Model):
     ancla_linea_y1 = models.FloatField(null=True, blank=True)
     ancla_confirmada = models.BooleanField(default=False)
     barras_confirmadas = models.BooleanField(default=False)
+    compases_confirmados = models.BooleanField(default=False)
     ignorada = models.BooleanField(default=False, help_text="Página en blanco, portada, etc. — se excluye del análisis.")
 
     class Meta:

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}Ajustar barras — {{ partitura.titulo }}{% endblock %}
+{% block title %}Barras y compases — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -20,6 +20,32 @@
   .linea-barra.aceptada { background: rgba(46, 204, 113, 0.35); }
   .linea-barra.dudosa { background: rgba(231, 76, 60, 0.35); }
   .linea-barra:hover { background: rgba(255, 255, 255, 0.5); }
+  .compas-caja {
+    position: absolute;
+    border-left: 1px dashed rgba(255, 255, 255, 0.18);
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .numero-compas {
+    position: absolute;
+    background: rgba(55, 182, 163, 0.55);
+    color: #fff;
+    font-size: 0.7rem;
+    line-height: 1.3;
+    padding: 1px 5px;
+    border-radius: 3px;
+    cursor: pointer;
+    z-index: 2;
+    white-space: nowrap;
+    box-shadow: 0 0 2px #000;
+  }
+  .numero-compas input {
+    width: 3.2rem;
+    font-size: 0.7rem;
+    padding: 0 2px;
+    border: none;
+    border-radius: 3px;
+  }
   .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
   .leyenda-punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
 
@@ -30,6 +56,17 @@
     cursor: grab;
   }
   .lienzo.zoom-activo { transform-origin: top left; }
+  .lienzo-wrapper.confirmada { box-shadow: 0 0 0 3px #2ecc71; border-radius: 4px; }
+  .aviso-pendiente {
+    display: none;
+    background: #e67e22;
+    color: #fff;
+    font-weight: 600;
+    padding: 0.5rem 0.9rem;
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+  }
+  .aviso-pendiente.visible { display: block; }
 
   .controles-zoom {
     position: fixed;
@@ -65,7 +102,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2">
   <h5 style="color: var(--ss-text-bright)">
-    {% translate "Ajustar barras de compás" %} — {{ partitura.titulo }}
+    {% translate "Ajustar barras y numerar compases" %} — {{ partitura.titulo }}
     <span class="small" style="color: var(--ss-text-muted)">({{ pagina.numero }}/{{ total }})</span>
   </h5>
   <div class="d-flex gap-2">
@@ -90,7 +127,10 @@
 
 <div class="row g-4">
   <div class="col-lg-9">
-    <div class="lienzo-wrapper" id="lienzo-wrapper">
+    <div class="aviso-pendiente" id="aviso-pendiente">
+      <i class="bi bi-exclamation-triangle-fill me-1"></i>{% translate "Pendiente de confirmación — los cambios no se guardaron todavía." %}
+    </div>
+    <div class="lienzo-wrapper{% if pagina.barras_confirmadas %} confirmada{% endif %}" id="lienzo-wrapper">
       <div class="lienzo" id="lienzo">
         <img id="imagen-pagina" src="{% url 'partituras:pagina_imagen_normalizada' partitura.pk pagina.numero %}" alt="Página {{ pagina.numero }}">
       </div>
@@ -105,11 +145,15 @@
         <span class="leyenda-punto" style="background: #e74c3c"></span>{% translate "Dudosa" %}
       </p>
       <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí." %}
+        {% translate "Barras — clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí." %}
+      </p>
+      <p class="small" style="color: var(--ss-text-muted)">
+        {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número para editarlo a mano; lo que sigue se corre igual. Nada se guarda hasta Confirmar." %}
       </p>
       <form method="post" id="form-barras">
         {% csrf_token %}
         <input type="hidden" name="barras" id="input-barras">
+        <input type="hidden" name="compases" id="input-compases">
         <button type="submit" name="accion" value="confirmar" class="btn btn-ss w-100 mb-2">
           {% translate "Confirmar" %}
           {% if pagina.numero < total %}→{% endif %}
@@ -143,13 +187,131 @@ const lienzo = document.getElementById('lienzo');
 const imagen = document.getElementById('imagen-pagina');
 const sistemas = {{ sistemas_json|safe }};
 let barras = {{ barras_json|safe }}.map(b => ({...b, _key: b.id ?? ('nuevo-' + Math.random())}));
+let compases = {{ compases_json|safe }};
+const numeroInicial = {{ numero_inicial }};
+let sucio = false;
+let ultimoClickBarra = null;
+let ultimoClickTiempo = 0;
 
 function sistemaDe(sistemaId) {
   return sistemas.find(s => s.id === sistemaId);
 }
 
+// Vincula cada compás cargado con la barra que lo termina, por posición: al
+// cargar la página, los compases ya vienen en el mismo orden que sus barras
+// aceptadas, sistema por sistema (así se construyeron). Con esa referencia
+// estable, recalcularCompases() sabe qué compás reusar (y qué número
+// conservar) cuando esa barra sigue estando aceptada, en vez de tener que
+// resecuenciar todo de cero cada vez que una barra cambia.
+sistemas.forEach(s => {
+  const propios = compases.filter(c => c.sistema_id === s.id).sort((a, b) => a.x - b.x);
+  const aceptadas = barras.filter(b => b.sistema_id === s.id && b.estado === 'aceptada').sort((a, b) => a.x - b.x);
+  propios.forEach((c, i) => { c._finBarra = aceptadas[i] ? aceptadas[i]._key : null; });
+});
+
+// Dado el número que tenía cada compás antes del cambio (numerosViejos,
+// alineado con clavesViejas = la barra que terminaba cada uno) y la nueva
+// lista de barras aceptadas (clavesNuevas, mismo orden canónico: sistema,
+// luego x), calcula los números nuevos. Un solo clic sólo puede agregar o
+// sacar UNA barra de la lista, así que alcanza con encontrar el único punto
+// donde ambas listas divergen:
+// - si la lista nueva tiene una más: se insertó una barra ahí — el compás
+//   nuevo hereda el número que tenía el que estaba en esa posición, y ese y
+//   todos los que siguen suben uno.
+// - si tiene una menos: se sacó una barra — ese número desaparece y todos
+//   los que siguen bajan uno.
+// Nunca resecuenciamos desde cero salvo que no haya nada previo (página
+// recién llegada a esta pantalla) o pase algo inesperado (más de un cambio
+// a la vez) — así una renumeración manual en el medio no se pisa.
+function difundirNumeros(clavesViejas, numerosViejos, clavesNuevas) {
+  if (clavesViejas.length === 0) {
+    let n = numeroInicial;
+    return clavesNuevas.map(() => n++);
+  }
+  let i = 0;
+  while (i < clavesViejas.length && i < clavesNuevas.length && clavesViejas[i] === clavesNuevas[i]) i++;
+
+  if (clavesNuevas.length === clavesViejas.length) {
+    return numerosViejos;  // el conjunto de barras aceptadas no cambió en los hechos
+  }
+  if (clavesNuevas.length === clavesViejas.length + 1) {
+    const numeroNuevo = (i < numerosViejos.length) ? numerosViejos[i] : numerosViejos[numerosViejos.length - 1] + 1;
+    const resultado = numerosViejos.slice(0, i);
+    resultado.push(numeroNuevo);
+    for (let k = i; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] + 1);
+    return resultado;
+  }
+  if (clavesNuevas.length === clavesViejas.length - 1) {
+    const resultado = numerosViejos.slice(0, i);
+    for (let k = i + 1; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] - 1);
+    return resultado;
+  }
+  let n = numeroInicial;
+  return clavesNuevas.map(() => n++);
+}
+
+// Muchas partituras no tienen una barra de compás pegada al borde derecho
+// real del sistema — el pentagrama simplemente termina ahí. Ese tramo final
+// (entre la última barra aceptada y el borde) es un compás real igual, y
+// sin esto se quedaba sin caja y sin número. Lo agregamos como un límite
+// "virtual" (misma lógica que el arranque del sistema en x=0, que tampoco
+// tiene una barra real) sólo cuando el hueco final es comparable al ancho
+// típico de los demás compases del sistema — así no inventamos un compás
+// de más por el margen de imprecisión normal de la detección.
+function conCierreDeSistema(propias, sistemaId) {
+  if (propias.length === 0) return propias;
+  const ultima = propias[propias.length - 1];
+  const hueco = 1 - ultima.x;
+  if (hueco <= 0) return propias;
+
+  const anchos = [];
+  let xPrev = 0;
+  propias.forEach(b => { anchos.push(b.x - xPrev); xPrev = b.x; });
+  anchos.sort((a, b) => a - b);
+  const anchoTipico = anchos[Math.floor(anchos.length / 2)];
+
+  if (hueco > anchoTipico * 0.4) {
+    return [...propias, { x: 1, sistema_id: sistemaId, _key: 'fin-sistema-' + sistemaId }];
+  }
+  return propias;
+}
+
+function recalcularCompases() {
+  const clavesViejas = compases.map(c => c._finBarra);
+  const numerosViejos = compases.map(c => c.numero);
+
+  // Una sola lista (orden canónico: sistema, luego x) de qué barras están
+  // aceptadas ahora mismo — tanto los números como la geometría de cada
+  // compás salen de ESTA misma lista, nunca de dos filtros independientes
+  // sobre `barras` que en teoría podrían llegar a desalinearse.
+  const aceptadasOrdenadas = [];
+  sistemas.forEach(s => {
+    const propias = barras.filter(b => b.sistema_id === s.id && b.estado === 'aceptada').sort((a, b) => a.x - b.x);
+    conCierreDeSistema(propias, s.id).forEach(b => aceptadasOrdenadas.push(b));
+  });
+  const clavesNuevas = aceptadasOrdenadas.map(b => b._key);
+  const numerosNuevos = difundirNumeros(clavesViejas, numerosViejos, clavesNuevas);
+
+  compases = [];
+  const xInicioPorSistema = new Map();
+  aceptadasOrdenadas.forEach((b, idx) => {
+    const xInicio = xInicioPorSistema.get(b.sistema_id) ?? 0;
+    compases.push({ sistema_id: b.sistema_id, x: xInicio, width: b.x - xInicio, numero: numerosNuevos[idx], _finBarra: b._key });
+    xInicioPorSistema.set(b.sistema_id, b.x);
+  });
+}
+
+function marcarSucio() {
+  sucio = true;
+  document.getElementById('aviso-pendiente').classList.add('visible');
+  // El aro verde dice "esto es lo que hay guardado" — si hay cambios sin
+  // confirmar ya no es cierto, aunque la página siga confirmada en la base.
+  document.getElementById('lienzo-wrapper').classList.remove('confirmada');
+}
+
 function render() {
-  lienzo.querySelectorAll('.banda-sistema, .linea-barra').forEach(el => el.remove());
+  recalcularCompases();
+  lienzo.querySelectorAll('.banda-sistema, .linea-barra, .compas-caja, .numero-compas').forEach(el => el.remove());
 
   sistemas.forEach(s => {
     const banda = document.createElement('div');
@@ -161,9 +323,31 @@ function render() {
       const r = lienzo.getBoundingClientRect();
       const fracX = (e.clientX - r.left) / r.width;
       barras.push({ id: null, sistema_id: s.id, x: fracX, estado: 'aceptada', origen: 'manual', _key: 'nuevo-' + Math.random() });
+      marcarSucio();
       render();
     });
     lienzo.appendChild(banda);
+  });
+
+  compases.forEach(c => {
+    const s = sistemaDe(c.sistema_id);
+    if (!s) return;
+
+    const caja = document.createElement('div');
+    caja.className = 'compas-caja';
+    caja.style.left = (c.x * 100) + '%';
+    caja.style.top = (s.y * 100) + '%';
+    caja.style.width = (c.width * 100) + '%';
+    caja.style.height = (s.height * 100) + '%';
+    lienzo.appendChild(caja);
+
+    const numero = document.createElement('div');
+    numero.className = 'numero-compas';
+    numero.textContent = c.numero;
+    numero.style.left = 'calc(' + (c.x * 100) + '% + 2px)';
+    numero.style.top = 'calc(' + (s.y * 100) + '% - 18px)';
+    numero.addEventListener('click', () => activarEdicionNumero(numero, c));
+    lienzo.appendChild(numero);
   });
 
   barras.forEach(b => {
@@ -179,21 +363,67 @@ function render() {
       : '{% translate "Dudosa — clic para aceptar, doble clic para borrar" %}';
     linea.addEventListener('click', e => {
       e.stopPropagation();
-      b.estado = b.estado === 'aceptada' ? 'dudosa' : 'aceptada';
-      render();
-    });
-    linea.addEventListener('dblclick', e => {
-      e.stopPropagation();
-      barras = barras.filter(x => x._key !== b._key);
+      // El navegador dispara DOS "click" sueltos antes de un "dblclick"
+      // (mousedown/up, click, mousedown/up, click, recién ahí dblclick) —
+      // usar dblclick nativo hacía que un borrado disparara además dos
+      // toggles de estado de por medio (tres recálculos de numeración en
+      // cadena en vez de uno). Detectamos el doble clic nosotros mismos,
+      // por tiempo, para que un borrado sea un solo cambio.
+      const ahora = Date.now();
+      if (ultimoClickBarra === b && ahora - ultimoClickTiempo < 400) {
+        barras = barras.filter(x => x._key !== b._key);
+        ultimoClickBarra = null;
+      } else {
+        b.estado = b.estado === 'aceptada' ? 'dudosa' : 'aceptada';
+        ultimoClickBarra = b;
+        ultimoClickTiempo = ahora;
+      }
+      marcarSucio();
       render();
     });
     lienzo.appendChild(linea);
   });
 }
 
+function activarEdicionNumero(elemento, compas) {
+  elemento.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.value = compas.numero;
+  elemento.appendChild(input);
+  input.focus();
+  input.select();
+
+  let resuelto = false;
+  function confirmar() {
+    if (resuelto) return;
+    resuelto = true;
+    const nuevo = parseInt(input.value, 10);
+    if (!isNaN(nuevo) && nuevo !== compas.numero) {
+      // Corrección manual: mueve este compás (y todo lo que sigue, en esta
+      // página) el mismo delta — no resecuencia, para no pisar otra
+      // renumeración manual que hubiera más adelante.
+      const idx = compases.findIndex(c => c._finBarra === compas._finBarra);
+      if (idx !== -1) {
+        const delta = nuevo - compases[idx].numero;
+        for (let k = idx; k < compases.length; k++) compases[k].numero += delta;
+        marcarSucio();
+      }
+    }
+    render();
+  }
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmar();
+    if (e.key === 'Escape') { resuelto = true; render(); }
+  });
+  input.addEventListener('blur', confirmar);
+}
+
 document.getElementById('form-barras').addEventListener('submit', () => {
-  const payload = barras.map(b => ({ id: b.id, sistema_id: b.sistema_id, x: b.x, estado: b.estado }));
-  document.getElementById('input-barras').value = JSON.stringify(payload);
+  const payloadBarras = barras.map(b => ({ id: b.id, sistema_id: b.sistema_id, x: b.x, estado: b.estado }));
+  document.getElementById('input-barras').value = JSON.stringify(payloadBarras);
+  const payloadCompases = compases.map(c => ({ sistema_id: c.sistema_id, x: c.x, width: c.width, numero: c.numero }));
+  document.getElementById('input-compases').value = JSON.stringify(payloadCompases);
 });
 
 imagen.addEventListener('load', render);

@@ -7,9 +7,10 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import PartituraForm
-from .models import Barra, Pagina, Partitura, Sistema
+from .models import Barra, Compas, Pagina, Partitura, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
+from .services import guardar_compases_pagina, numero_inicial_pagina
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
     detectar_sistemas, encontrar_ancla,
@@ -544,6 +545,9 @@ def iniciar_deteccion_barras(request, pk):
 
 @login_required
 def ajuste_barras(request, pk, numero):
+    """Pantalla fusionada: ajustar barras (aceptadas/dudosas, agregar/borrar)
+    Y numerar los compases que resultan de ellas, en un solo lugar — separarlas
+    obligaba a ir y volver cada vez que numerar hacía notar un error de barra."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
@@ -554,7 +558,9 @@ def ajuste_barras(request, pk, numero):
         if accion == "ignorar":
             pagina.ignorada = True
             pagina.barras_confirmadas = False
-            pagina.save(update_fields=["ignorada", "barras_confirmadas"])
+            pagina.compases_confirmados = False
+            pagina.save(update_fields=["ignorada", "barras_confirmadas", "compases_confirmados"])
+            Compas.objects.filter(sistema__pagina=pagina).delete()
             return _siguiente_pagina(partitura, pk, "ajuste_barras", numero, "barras_confirmadas")
 
         if accion == "redetectar":
@@ -562,6 +568,13 @@ def ajuste_barras(request, pk, numero):
                 _detectar_barras_pagina(partitura, pagina)
                 pagina.barras_confirmadas = False
                 pagina.save(update_fields=["barras_confirmadas"])
+                # Las barras acaban de cambiar — los compases que hubiera
+                # (y su posible confirmación) ya no corresponden a nada real,
+                # se borran en vez de dejarlos colgados y desactualizados.
+                Compas.objects.filter(sistema__pagina=pagina).delete()
+                if pagina.compases_confirmados:
+                    pagina.compases_confirmados = False
+                    pagina.save(update_fields=["compases_confirmados"])
             return redirect("partituras:ajuste_barras", pk=pk, numero=numero)
 
         try:
@@ -583,8 +596,15 @@ def ajuste_barras(request, pk, numero):
                     Barra.objects.create(sistema=sistema, x=d["x"], estado=d["estado"], origen="manual")
 
         if accion == "confirmar":
+            try:
+                datos_compases = json.loads(request.POST.get("compases", "[]"))
+            except (json.JSONDecodeError, ValueError):
+                return HttpResponseBadRequest("JSON de compases inválido")
             pagina.barras_confirmadas = True
             pagina.save(update_fields=["barras_confirmadas"])
+            guardar_compases_pagina(pagina, datos_compases)
+            pagina.compases_confirmados = True
+            pagina.save(update_fields=["compases_confirmados"])
             return _siguiente_pagina(partitura, pk, "ajuste_barras", numero, "barras_confirmadas")
 
         return redirect("partituras:ajuste_barras", pk=pk, numero=numero)
@@ -595,10 +615,17 @@ def ajuste_barras(request, pk, numero):
         .order_by("sistema__orden", "x")
         .values("id", "sistema_id", "x", "estado", "origen")
     )
+    compases = list(
+        Compas.objects.filter(sistema__pagina=pagina)
+        .order_by("sistema__orden", "x")
+        .values("id", "sistema_id", "x", "y", "width", "height", "numero")
+    )
     return render(request, "partituras/ajuste_barras.html", {
         "partitura": partitura,
         "pagina": pagina,
         "total": total,
         "sistemas_json": json.dumps(sistemas),
         "barras_json": json.dumps(barras),
+        "compases_json": json.dumps(compases),
+        "numero_inicial": numero_inicial_pagina(pagina),
     })
