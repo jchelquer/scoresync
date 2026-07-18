@@ -2,11 +2,17 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
-- version: "0.1.0"
-  date: "2026-07-17"
+- version: "1.0.2"
+  date: "2026-07-20"
+  changes:
+    - type: mejorado
+      text: "Mejora de interfaz. Secuencia rigurosa."
+- version: "1.0.1"
+  date: "2026-07-19"
   changes:
     - type: nuevo
-      text: "Base del proyecto: login compartido con afinación/ensayos/tempo, idioma, novedades y solicitud de acceso"
+      text: "Detección automática de silencions múltiples. El usuario indica cuántos son para no tener que usar OCR."
+
 - version: "1.0.0"
   date: "2026-07-18"
   changes:
@@ -20,3 +26,9 @@
       text: "Detección de barras de compás y corrección manual"
     - type: nuevo
       text: "Numeración automática de compases y corrección manual"
+
+- version: "0.1.0"
+  date: "2026-07-17"
+  changes:
+    - type: nuevo
+      text: "Base del proyecto: login compartido con afinación/ensayos/tempo, idioma, novedades y solicitud de acceso"

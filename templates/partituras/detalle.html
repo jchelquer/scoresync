@@ -18,7 +18,7 @@
           Análisis: <strong>{{ partitura.get_estado_analisis_display }}</strong>
         </p>
 
-        <div class="d-flex flex-wrap gap-2 mb-3">
+        <div class="d-flex flex-wrap gap-2 mb-2">
           <a href="{{ partitura.archivo_original.url }}" target="_blank" class="btn btn-outline-light">
             <i class="bi bi-box-arrow-up-right me-1"></i>Ver PDF original
           </a>
@@ -28,55 +28,49 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-ss" data-texto-procesando="Analizando PDF…">Enderezar PDF</button>
           </form>
-          {% elif partitura.estado_normalizacion == 'propuesta' %}
-          <a href="{% url 'partituras:ajuste_orientacion' partitura.pk 1 %}" class="btn btn-ss">Continuar ajuste de orientación</a>
-          {% else %}
-          <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Analizando PDF…">Re-enderezar PDF</button>
-          </form>
-          {% endif %}
-
-          {% if partitura.estado_normalizacion == 'confirmada' %}
-          <form method="post" action="{% url 'partituras:iniciar_deteccion_margenes' partitura.pk %}" class="form-procesando">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando márgenes…">Detectar márgenes</button>
-          </form>
-          <a href="{% url 'partituras:ajuste_margenes' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar márgenes</a>
-          {% endif %}
-
-          {% if partitura.estado_normalizacion == 'confirmada' %}
-            {% if partitura.estado_analisis == 'pendiente' %}
-            <form method="post" action="{% url 'partituras:iniciar_deteccion_sistemas' partitura.pk %}" class="form-procesando">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-ss" data-texto-procesando="Detectando sistemas…">Detectar sistemas</button>
-            </form>
-            {% elif partitura.estado_analisis == 'propuesto' %}
-            <a href="{% url 'partituras:ajuste_sistemas' partitura.pk 1 %}" class="btn btn-ss">Continuar ajuste de sistemas</a>
-            {% else %}
-            <form method="post" action="{% url 'partituras:iniciar_deteccion_sistemas' partitura.pk %}" class="form-procesando">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando sistemas…">Re-detectar sistemas</button>
-            </form>
-            {% endif %}
-          {% endif %}
-
-          {% if partitura.estado_normalizacion == 'confirmada' %}
-          <form method="post" action="{% url 'partituras:iniciar_deteccion_ancla' partitura.pk %}" class="form-procesando">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Buscando ancla…">Detectar ancla (experimental)</button>
-          </form>
-          <a href="{% url 'partituras:ajuste_ancla' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar ancla</a>
-          {% endif %}
-
-          {% if partitura.estado_normalizacion == 'confirmada' %}
-          <form method="post" action="{% url 'partituras:iniciar_deteccion_barras' partitura.pk %}" class="form-procesando">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Detectando barras…">Detectar barras</button>
-          </form>
-          <a href="{% url 'partituras:ajuste_barras' partitura.pk 1 %}" class="btn btn-outline-light">Ver/ajustar barras y compases</a>
           {% endif %}
         </div>
+
+        {% if partitura.estado_normalizacion != 'pendiente' %}
+        <p class="small mb-2" style="color: var(--ss-text-muted)">
+          {% translate "Cada etapa se habilita cuando la anterior está confirmada en todas las páginas." %}
+        </p>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <a href="{% url 'partituras:ajuste_orientacion' partitura.pk 1 %}" class="btn btn-ss">1. Orientación</a>
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+          <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-light btn-sm" data-texto-procesando="Analizando PDF…">
+              <i class="bi bi-arrow-repeat"></i> Re-enderezar
+            </button>
+          </form>
+          {% endif %}
+
+          {% if partitura.estado_normalizacion == 'confirmada' %}
+          <a href="{% url 'partituras:ajuste_margenes' partitura.pk pagina_margenes %}" class="btn btn-ss">2. Márgenes</a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="{% translate 'Completá la orientación primero' %}">2. Márgenes</button>
+          {% endif %}
+
+          {% if partitura.margenes_completos %}
+          <a href="{% url 'partituras:ajuste_sistemas' partitura.pk pagina_sistemas %}" class="btn btn-ss">3. Sistemas</a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="{% translate 'Completá los márgenes primero' %}">3. Sistemas</button>
+          {% endif %}
+
+          {% if partitura.sistemas_completos %}
+          <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina_ancla %}" class="btn btn-ss">4. Ancla</a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="{% translate 'Completá los sistemas primero' %}">4. Ancla</button>
+          {% endif %}
+
+          {% if partitura.ancla_completa %}
+          <a href="{% url 'partituras:ajuste_barras' partitura.pk pagina_barras %}" class="btn btn-ss">5. Barras y compases</a>
+          {% else %}
+          <button type="button" class="btn btn-outline-secondary" disabled title="{% translate 'Completá el ancla primero' %}">5. Barras y compases</button>
+          {% endif %}
+        </div>
+        {% endif %}
 
         <a href="{% url 'partituras:biblioteca' %}" class="btn btn-outline-light">← Volver a la biblioteca</a>
       </div>

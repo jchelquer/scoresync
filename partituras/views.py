@@ -10,7 +10,10 @@ from .forms import PartituraForm
 from .models import Barra, Compas, Pagina, Partitura, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
-from .services import guardar_compases_pagina, numero_inicial_pagina
+from .services import (
+    guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
+    invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
+)
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
     detectar_sistemas, encontrar_ancla,
@@ -19,16 +22,68 @@ from .vision import (
 DPI = 300
 
 
+# Orden fijo del pipeline de preparación — cada etapa se habilita recién
+# cuando la anterior está confirmada en TODAS las páginas activas de la
+# partitura (ver Partitura.margenes_completos y análogas). "orientacion" no
+# tiene una propiedad de completitud propia porque ya existe
+# `estado_normalizacion` con el mismo sentido.
+_ETAPAS = ["ajuste_orientacion", "ajuste_margenes", "ajuste_sistemas", "ajuste_ancla", "ajuste_barras"]
+
+
+def _siguiente_etapa(url_name):
+    idx = _ETAPAS.index(url_name)
+    return _ETAPAS[idx + 1] if idx + 1 < len(_ETAPAS) else None
+
+
 def _siguiente_pagina(partitura, pk, url_name, numero_actual, campo_confirmado):
     """Redirige a la próxima página (excluyendo la actual e ignoradas) que
     todavía no tiene `campo_confirmado` en True, dentro de la misma etapa
-    (`url_name`) — o al detalle de la partitura si no queda ninguna."""
+    (`url_name`). Si no queda ninguna, la etapa está completa: encadena
+    directo a la primera página de la etapa siguiente (o al detalle si ésta
+    era la última) — el usuario nunca tiene que volver al menú a mitad de
+    camino."""
     siguiente = partitura.paginas.filter(
         ignorada=False, **{campo_confirmado: False},
     ).exclude(numero=numero_actual).order_by("numero").first()
     if siguiente:
         return redirect(f"partituras:{url_name}", pk=pk, numero=siguiente.numero)
+    proxima_etapa = _siguiente_etapa(url_name)
+    if proxima_etapa:
+        return redirect(f"partituras:{proxima_etapa}", pk=pk, numero=1)
     return redirect("partituras:detalle", pk=pk)
+
+
+def _primera_pendiente(partitura, campo, numero_default=1):
+    pagina = partitura.paginas.filter(ignorada=False, **{campo: False}).order_by("numero").first()
+    return pagina.numero if pagina else numero_default
+
+
+def _primera_pendiente_sistemas(partitura, numero_default=1):
+    for pagina in partitura.paginas.filter(ignorada=False).order_by("numero"):
+        if not pagina.sistemas_confirmados:
+            return pagina.numero
+    return numero_default
+
+
+def _proximo_paso(partitura):
+    """(url_name, numero) de la primera página pendiente en la primera
+    etapa incompleta — o None si no hay nada pendiente todavía por arrancar
+    (o si ya está todo confirmado). Es lo que hace que abrir una partitura
+    te lleve directo a lo que falta, en vez de al menú."""
+    if partitura.estado_normalizacion == "pendiente":
+        return None  # ni siquiera se corrió "Enderezar PDF" — no hay nada a lo que saltar
+    if partitura.estado_normalizacion != "confirmada":
+        pagina = partitura.paginas.filter(confirmada=False).order_by("numero").first()
+        return ("ajuste_orientacion", pagina.numero) if pagina else None
+    if not partitura.margenes_completos:
+        return ("ajuste_margenes", _primera_pendiente(partitura, "margen_confirmado"))
+    if not partitura.sistemas_completos:
+        return ("ajuste_sistemas", _primera_pendiente_sistemas(partitura))
+    if not partitura.ancla_completa:
+        return ("ajuste_ancla", _primera_pendiente(partitura, "ancla_confirmada"))
+    if not partitura.barras_completas:
+        return ("ajuste_barras", _primera_pendiente(partitura, "barras_confirmadas"))
+    return None
 
 
 @login_required
@@ -54,10 +109,37 @@ def subir(request):
     return render(request, "partituras/subir.html", {"form": form})
 
 
+def _contexto_estado(partitura):
+    return {
+        "partitura": partitura,
+        "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
+        "pagina_sistemas": _primera_pendiente_sistemas(partitura),
+        "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
+        "pagina_barras": _primera_pendiente(partitura, "barras_confirmadas"),
+    }
+
+
 @login_required
 def detalle(request, pk):
+    """Punto de entrada "inteligente": si hay algo pendiente, te lleva
+    directo ahí — nunca hace falta pasar por el menú a propósito. Si no hay
+    nada pendiente (o todavía no arrancó nada), muestra el panel de estado."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    return render(request, "partituras/detalle.html", {"partitura": partitura})
+    paso = _proximo_paso(partitura)
+    if paso:
+        url_name, numero = paso
+        return redirect(f"partituras:{url_name}", pk=pk, numero=numero)
+    return render(request, "partituras/detalle.html", _contexto_estado(partitura))
+
+
+@login_required
+def estado(request, pk):
+    """El mismo panel que `detalle`, pero sin el salto automático — para
+    volver a ver el estado general a propósito (el botón "Salir" de cada
+    etapa apunta acá, no a `detalle`, para no rebotar de vuelta a la misma
+    pantalla que se acaba de dejar)."""
+    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    return render(request, "partituras/detalle.html", _contexto_estado(partitura))
 
 
 # ── Normalización: rotación + desalineado fino ────────────────────────────
@@ -114,6 +196,8 @@ def pagina_imagen_normalizada(request, pk, numero):
 @login_required
 def ajuste_orientacion(request, pk, numero):
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if partitura.estado_normalizacion == "pendiente":
+        return redirect("partituras:detalle", pk=pk)  # todavía no se corrió "Enderezar PDF"
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
 
@@ -132,13 +216,18 @@ def ajuste_orientacion(request, pk, numero):
                 pass
             pagina.save(update_fields=["angulo_deskew_aplicado"])
         elif accion == "confirmar":
+            if pagina.confirmada:
+                # Ya estaba confirmada: esto es un rehacer, no la primera
+                # vez — todo lo de abajo (márgenes, sistemas, ancla, barras)
+                # está calculado sobre la imagen vieja y ya no vale.
+                invalidar_desde_orientacion(pagina)
             pagina.confirmada = True
             pagina.save(update_fields=["confirmada"])
             siguiente = partitura.paginas.filter(confirmada=False).order_by("numero").first()
             if siguiente:
                 return redirect("partituras:ajuste_orientacion", pk=pk, numero=siguiente.numero)
             _generar_pdf_normalizado(partitura)
-            return redirect("partituras:detalle", pk=pk)
+            return redirect("partituras:ajuste_margenes", pk=pk, numero=1)
         return redirect("partituras:ajuste_orientacion", pk=pk, numero=numero)
 
     return render(request, "partituras/ajuste_orientacion.html", {
@@ -165,35 +254,30 @@ def _generar_pdf_normalizado(partitura):
 
 # ── Márgenes (recuadro de contenido real) ──────────────────────────────────
 
-@login_required
-def iniciar_deteccion_margenes(request, pk):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    if request.method != "POST":
-        return redirect("partituras:detalle", pk=pk)
-
-    for pagina in partitura.paginas.order_by("numero"):
-        if pagina.ignorada or pagina.margen_confirmado:
-            continue  # no pisar una página que el usuario ya revisó y confirmó
-        img = rasterizar_pagina(partitura.archivo_original.path, pagina.numero, dpi=DPI)
-        normalizada = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)
-        m = detectar_margenes(normalizada)
-        pagina.margen_x0_detectado = pagina.margen_x0_aplicado = m['x0']
-        pagina.margen_y0_detectado = pagina.margen_y0_aplicado = m['y0']
-        pagina.margen_x1_detectado = pagina.margen_x1_aplicado = m['x1']
-        pagina.margen_y1_detectado = pagina.margen_y1_aplicado = m['y1']
-        pagina.margen_confirmado = False
-        pagina.save(update_fields=[
-            "margen_x0_detectado", "margen_y0_detectado", "margen_x1_detectado", "margen_y1_detectado",
-            "margen_x0_aplicado", "margen_y0_aplicado", "margen_x1_aplicado", "margen_y1_aplicado",
-            "margen_confirmado",
-        ])
-
-    return redirect("partituras:ajuste_margenes", pk=pk, numero=1)
+def _detectar_margenes_pagina(pagina):
+    """Corre detectar_margenes y aplica el resultado a esta página. Usado
+    tanto al entrar por primera vez a esta etapa (auto-detección) como por
+    "volver a detectar de cero" desde la propia pantalla."""
+    img = rasterizar_pagina(pagina.partitura.archivo_original.path, pagina.numero, dpi=DPI)
+    normalizada = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)
+    m = detectar_margenes(normalizada)
+    pagina.margen_x0_detectado = pagina.margen_x0_aplicado = m['x0']
+    pagina.margen_y0_detectado = pagina.margen_y0_aplicado = m['y0']
+    pagina.margen_x1_detectado = pagina.margen_x1_aplicado = m['x1']
+    pagina.margen_y1_detectado = pagina.margen_y1_aplicado = m['y1']
+    pagina.margen_confirmado = False
+    pagina.save(update_fields=[
+        "margen_x0_detectado", "margen_y0_detectado", "margen_x1_detectado", "margen_y1_detectado",
+        "margen_x0_aplicado", "margen_y0_aplicado", "margen_x1_aplicado", "margen_y1_aplicado",
+        "margen_confirmado",
+    ])
 
 
 @login_required
 def ajuste_margenes(request, pk, numero):
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if partitura.estado_normalizacion != "confirmada":
+        return redirect("partituras:detalle", pk=pk)  # falta terminar orientación
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
 
@@ -201,16 +285,7 @@ def ajuste_margenes(request, pk, numero):
         accion = request.POST.get("accion")
 
         if accion == "redetectar":
-            img = rasterizar_pagina(partitura.archivo_original.path, pagina.numero, dpi=DPI)
-            normalizada = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)
-            m = detectar_margenes(normalizada)
-            pagina.margen_x0_aplicado, pagina.margen_y0_aplicado = m['x0'], m['y0']
-            pagina.margen_x1_aplicado, pagina.margen_y1_aplicado = m['x1'], m['y1']
-            pagina.margen_confirmado = False
-            pagina.save(update_fields=[
-                "margen_x0_aplicado", "margen_y0_aplicado", "margen_x1_aplicado", "margen_y1_aplicado",
-                "margen_confirmado",
-            ])
+            _detectar_margenes_pagina(pagina)
             return redirect("partituras:ajuste_margenes", pk=pk, numero=numero)
 
         if accion == "ignorar":
@@ -229,6 +304,10 @@ def ajuste_margenes(request, pk, numero):
         pagina.margen_x1_aplicado, pagina.margen_y1_aplicado = x1, y1
 
         if accion == "confirmar":
+            if pagina.margen_confirmado:
+                # Rehacer: lo que hubiera de sistemas/ancla/barras para acá
+                # se detectó sobre el margen viejo, ya no corresponde.
+                invalidar_desde_margenes(pagina)
             pagina.margen_confirmado = True
             pagina.save(update_fields=[
                 "margen_x0_aplicado", "margen_y0_aplicado", "margen_x1_aplicado", "margen_y1_aplicado",
@@ -238,6 +317,9 @@ def ajuste_margenes(request, pk, numero):
 
         pagina.save(update_fields=["margen_x0_aplicado", "margen_y0_aplicado", "margen_x1_aplicado", "margen_y1_aplicado"])
         return redirect("partituras:ajuste_margenes", pk=pk, numero=numero)
+
+    if not pagina.ignorada and not pagina.tiene_margen_detectado:
+        _detectar_margenes_pagina(pagina)
 
     return render(request, "partituras/ajuste_margenes.html", {
         "partitura": partitura,
@@ -273,37 +355,23 @@ def _detectar_sistemas_pagina(partitura, pagina):
 
 
 @login_required
-def iniciar_deteccion_sistemas(request, pk):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    if request.method != "POST":
-        return redirect("partituras:detalle", pk=pk)
-    if partitura.estado_normalizacion != "confirmada":
-        return redirect("partituras:detalle", pk=pk)
-
-    for pagina in partitura.paginas.order_by("numero"):
-        if pagina.sistemas_confirmados:
-            continue  # no pisar una página que el usuario ya revisó y confirmó
-        _detectar_sistemas_pagina(partitura, pagina)
-
-    partitura.estado_analisis = "propuesto"
-    partitura.save(update_fields=["estado_analisis"])
-    return redirect("partituras:ajuste_sistemas", pk=pk, numero=1)
-
-
-@login_required
 def ajuste_sistemas(request, pk, numero):
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if not partitura.margenes_completos:
+        return redirect("partituras:detalle", pk=pk)  # falta terminar márgenes
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
 
     if request.method == "POST":
         accion = request.POST.get("accion", "confirmar")
+        ya_estaba_confirmada = pagina.sistemas_confirmados  # antes de tocar nada
 
         if accion == "redetectar":
             # Ignora lo que haya (confirmado o no) y vuelve a correr
-            # detectar_sistemas de cero — para cuando se entró a esta
-            # pantalla sin haber pasado antes por "Detectar sistemas".
+            # detectar_sistemas de cero.
             _detectar_sistemas_pagina(partitura, pagina)
+            if ya_estaba_confirmada:
+                invalidar_desde_sistemas(pagina)
             return redirect("partituras:ajuste_sistemas", pk=pk, numero=numero)
 
         try:
@@ -325,13 +393,23 @@ def ajuste_sistemas(request, pk, numero):
                     origen="manual", confirmado=True,
                 )
 
-        pendiente = partitura.paginas.filter(sistemas__confirmado=False).order_by("numero").first()
+        if ya_estaba_confirmada:
+            # Rehacer: el ancla y las barras/compases de esta página se
+            # ubicaron relativos a los sistemas viejos, ya no valen.
+            invalidar_desde_sistemas(pagina)
+
+        pendiente = partitura.paginas.filter(
+            ignorada=False, sistemas__confirmado=False,
+        ).order_by("numero").first()
         if pendiente:
             return redirect("partituras:ajuste_sistemas", pk=pk, numero=pendiente.numero)
 
         partitura.estado_analisis = "confirmado"
         partitura.save(update_fields=["estado_analisis"])
-        return redirect("partituras:detalle", pk=pk)
+        return redirect("partituras:ajuste_ancla", pk=pk, numero=1)
+
+    if not pagina.ignorada and not pagina.tiene_sistemas:
+        _detectar_sistemas_pagina(partitura, pagina)
 
     sistemas = list(pagina.sistemas.order_by("orden").values("id", "y", "height"))
     return render(request, "partituras/ajuste_sistemas.html", {
@@ -384,40 +462,39 @@ def _guardar_ancla(pagina, w, h, x0, y0, x1, y1, linea):
         pagina.ancla_linea_x = pagina.ancla_linea_y0 = pagina.ancla_linea_y1 = None
 
 
-@login_required
-def iniciar_deteccion_ancla(request, pk):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    if request.method != "POST":
-        return redirect("partituras:detalle", pk=pk)
-
-    for pagina in partitura.paginas.order_by("numero"):
-        if pagina.ignorada or pagina.ancla_confirmada:
-            continue  # no pisar una página que el usuario ya revisó y confirmó
-        normalizada, recortada, (offset_x, offset_y) = _pagina_normalizada_recortada(partitura, pagina)
-        h, w = normalizada.shape[:2]
-        ancla = encontrar_ancla(recortada)
-        if ancla is None:
-            continue
-
-        x, y0, y1 = ancla['x'] + offset_x, ancla['y0'] + offset_y, ancla['y1'] + offset_y
+def _detectar_ancla_pagina(partitura, pagina):
+    """Corre encontrar_ancla y aplica el resultado a esta página (si
+    encontró algo — si no, no toca los campos, y la plantilla ya sabe
+    mostrar un rectángulo por defecto razonable para que el usuario lo
+    ubique a mano). Usado tanto al entrar por primera vez a esta etapa como
+    por "volver a detectar de cero"."""
+    normalizada, recortada, (offset_x, offset_y) = _pagina_normalizada_recortada(partitura, pagina)
+    h, w = normalizada.shape[:2]
+    ancla = encontrar_ancla(recortada)
+    if ancla:
+        x = ancla['x'] + offset_x
+        y0 = ancla['y0'] + offset_y
+        y1 = ancla['y1'] + offset_y
         _guardar_ancla(pagina, w, h, x, y0, x, y1, {'x': x, 'y0': y0, 'y1': y1})
-        pagina.ancla_confirmada = False
-        pagina.save(update_fields=[
-            "ancla_x0", "ancla_x1", "ancla_y0", "ancla_y1",
-            "ancla_linea_x", "ancla_linea_y0", "ancla_linea_y1", "ancla_confirmada",
-        ])
-
-    return redirect("partituras:ajuste_ancla", pk=pk, numero=1)
+    pagina.ancla_confirmada = False
+    pagina.save(update_fields=[
+        "ancla_x0", "ancla_x1", "ancla_y0", "ancla_y1",
+        "ancla_linea_x", "ancla_linea_y0", "ancla_linea_y1", "ancla_confirmada",
+    ])
 
 
 @login_required
 def ajuste_ancla(request, pk, numero):
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if not partitura.sistemas_completos:
+        return redirect("partituras:detalle", pk=pk)  # falta terminar sistemas
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
 
     if request.method == "POST":
         accion = request.POST.get("accion")
+        ya_estaba_confirmada = pagina.ancla_confirmada  # antes de tocar nada
+
         if accion == "ignorar":
             pagina.ignorada = True
             pagina.ancla_confirmada = False
@@ -427,19 +504,9 @@ def ajuste_ancla(request, pk, numero):
         if accion == "redetectar":
             # Ignora el rectángulo actual y confirmado/no-confirmado: vuelve a
             # correr encontrar_ancla de cero, como la primera vez.
-            normalizada, recortada, (offset_x, offset_y) = _pagina_normalizada_recortada(partitura, pagina)
-            h, w = normalizada.shape[:2]
-            ancla = encontrar_ancla(recortada)
-            if ancla:
-                x = ancla['x'] + offset_x
-                y0 = ancla['y0'] + offset_y
-                y1 = ancla['y1'] + offset_y
-                _guardar_ancla(pagina, w, h, x, y0, x, y1, {'x': x, 'y0': y0, 'y1': y1})
-                pagina.ancla_confirmada = False
-                pagina.save(update_fields=[
-                    "ancla_x0", "ancla_y0", "ancla_x1", "ancla_y1",
-                    "ancla_linea_x", "ancla_linea_y0", "ancla_linea_y1", "ancla_confirmada",
-                ])
+            _detectar_ancla_pagina(partitura, pagina)
+            if ya_estaba_confirmada:
+                invalidar_desde_ancla(pagina)
             return redirect("partituras:ajuste_ancla", pk=pk, numero=numero)
 
         try:
@@ -475,6 +542,10 @@ def ajuste_ancla(request, pk, numero):
             # Guarda exactamente lo que el usuario tiene en pantalla — sin
             # volver a buscar. Si quiere una línea refinada primero, usa
             # "Buscar"; confirmar no debería mover nada por su cuenta.
+            if ya_estaba_confirmada:
+                # Rehacer: las barras de esta página se detectaron con la
+                # referencia de escala del ancla vieja, ya no valen.
+                invalidar_desde_ancla(pagina)
             pagina.ancla_x0, pagina.ancla_y0, pagina.ancla_x1, pagina.ancla_y1 = rx0, ry0, rx1, ry1
             lx = request.POST.get("linea_x", "")
             ly0 = request.POST.get("linea_y0", "")
@@ -491,6 +562,9 @@ def ajuste_ancla(request, pk, numero):
             return _siguiente_pagina(partitura, pk, "ajuste_ancla", numero, "ancla_confirmada")
 
         return redirect("partituras:ajuste_ancla", pk=pk, numero=numero)
+
+    if not pagina.ignorada and not pagina.tiene_ancla_detectada:
+        _detectar_ancla_pagina(partitura, pagina)
 
     return render(request, "partituras/ajuste_ancla.html", {
         "partitura": partitura,
@@ -533,29 +607,13 @@ def _detectar_barras_pagina(partitura, pagina):
 
 
 @login_required
-def iniciar_deteccion_barras(request, pk):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    if request.method != "POST":
-        return redirect("partituras:detalle", pk=pk)
-
-    for pagina in partitura.paginas.order_by("numero"):
-        if pagina.ignorada or pagina.barras_confirmadas:
-            continue  # no pisar una página que el usuario ya revisó y confirmó
-        if not pagina.ancla_confirmada or not pagina.sistemas_confirmados:
-            continue  # hace falta el ancla y los sistemas confirmados primero
-        _detectar_barras_pagina(partitura, pagina)
-        pagina.barras_confirmadas = False
-        pagina.save(update_fields=["barras_confirmadas"])
-
-    return redirect("partituras:ajuste_barras", pk=pk, numero=1)
-
-
-@login_required
 def ajuste_barras(request, pk, numero):
     """Pantalla fusionada: ajustar barras (aceptadas/dudosas, agregar/borrar)
     Y numerar los compases que resultan de ellas, en un solo lugar — separarlas
     obligaba a ir y volver cada vez que numerar hacía notar un error de barra."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if not partitura.ancla_completa:
+        return redirect("partituras:detalle", pk=pk)  # falta terminar el ancla
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     total = partitura.paginas.count()
 
@@ -615,6 +673,9 @@ def ajuste_barras(request, pk, numero):
             return _siguiente_pagina(partitura, pk, "ajuste_barras", numero, "barras_confirmadas")
 
         return redirect("partituras:ajuste_barras", pk=pk, numero=numero)
+
+    if not pagina.ignorada and not pagina.tiene_barras_detectadas:
+        _detectar_barras_pagina(partitura, pagina)
 
     sistemas = list(pagina.sistemas.order_by("orden").values("id", "y", "height"))
     barras = list(

@@ -53,6 +53,33 @@ class Partitura(models.Model):
     def __str__(self):
         return f"{self.titulo} ({self.parte})" if self.parte else self.titulo
 
+    def _paginas_activas(self):
+        return self.paginas.filter(ignorada=False)
+
+    def _etapa_completa(self, campo):
+        """True si hay al menos una página activa y NINGUNA tiene `campo`
+        en False — una partitura sin páginas todavía (o sin ninguna activa)
+        nunca cuenta como "completa" (sería vacuamente cierto, y no arrancó)."""
+        activas = self._paginas_activas()
+        return activas.exists() and not activas.filter(**{campo: False}).exists()
+
+    @property
+    def margenes_completos(self):
+        return self._etapa_completa('margen_confirmado')
+
+    @property
+    def sistemas_completos(self):
+        activas = list(self._paginas_activas())
+        return bool(activas) and all(p.sistemas_confirmados for p in activas)
+
+    @property
+    def ancla_completa(self):
+        return self._etapa_completa('ancla_confirmada')
+
+    @property
+    def barras_completas(self):
+        return self._etapa_completa('barras_confirmadas')
+
 
 class Pagina(models.Model):
     partitura = models.ForeignKey(Partitura, related_name='paginas', on_delete=models.CASCADE)
@@ -113,8 +140,8 @@ class Pagina(models.Model):
     @property
     def tiene_margen_detectado(self):
         """False sólo si los 4 campos siguen en el default de fábrica (0,0,1,1)
-        y nunca se confirmó — o sea, 'iniciar_deteccion_margenes' nunca corrió
-        para esta página. No 100% infalible (un margen detectado que coincida
+        y nunca se confirmó — o sea, todavía no se detectó nada para esta
+        página. No 100% infalible (un margen detectado que coincida
         exactamente con el default de fábrica se vería igual), pero es una
         aproximación razonable para distinguir "nunca corrido" de "corrido
         pero no confirmado" en la tabla de estado."""

@@ -92,13 +92,13 @@
     {% if pagina.numero < total %}
     <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
     {% endif %}
-    <a href="{% url 'partituras:detalle' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
+    <a href="{% url 'partituras:estado' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
   </div>
 </div>
 <div class="d-flex flex-wrap gap-1 mb-3">
   {% for p in partitura.paginas.all %}
   <a href="{% url 'partituras:ajuste_ancla' partitura.pk p.numero %}"
-     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.ignorada %}btn-outline-secondary{% elif p.ancla_confirmada %}btn-outline-success{% else %}btn-outline-light{% endif %}"
+     class="btn btn-sm {% if p.numero == pagina.numero %}btn-ss{% elif p.ignorada %}btn-outline-secondary{% elif p.ancla_confirmada %}btn-outline-success{% else %}btn-outline-danger{% endif %}"
      title="{% if p.ignorada %}{% translate 'Ignorada' %}{% elif p.ancla_confirmada %}{% translate 'Confirmada' %}{% else %}{% translate 'Pendiente' %}{% endif %}">
     {{ p.numero }}{% if p.ancla_confirmada %} <i class="bi bi-check"></i>{% elif p.ignorada %} <i class="bi bi-eye-slash"></i>{% endif %}
   </a>
