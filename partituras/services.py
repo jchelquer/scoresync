@@ -12,12 +12,16 @@ def numero_inicial_pagina(pagina):
     hay ninguno propio todavía — continúa desde el último compás de la
     página anterior (en toda la partitura), o arranca en 1 si no hay nada
     previo. Se le pasa al cliente para que sepa desde dónde numerar si
-    arranca a construir compases de cero."""
+    arranca a construir compases de cero.
+
+    Suma `repeticiones` del anterior, no siempre 1 — si ese último compás es
+    un silencio de varios compases marcado a mano, el que sigue tiene que
+    saltar la cantidad real, no sólo uno."""
     anterior = Compas.objects.filter(
         sistema__pagina__partitura=pagina.partitura,
         sistema__pagina__numero__lt=pagina.numero,
     ).order_by('-sistema__pagina__numero', '-sistema__orden', '-x').first()
-    return (anterior.numero + 1) if anterior else 1
+    return (anterior.numero + anterior.repeticiones) if anterior else 1
 
 
 def guardar_compases_pagina(pagina, compases_data):
@@ -46,6 +50,7 @@ def guardar_compases_pagina(pagina, compases_data):
             y=sistemas_por_id[d['sistema_id']].y,
             width=d['width'],
             height=sistemas_por_id[d['sistema_id']].height,
+            repeticiones=d.get('repeticiones', 1),
             origen='auto',
             confirmado=False,
         )
@@ -67,6 +72,9 @@ def guardar_compases_pagina(pagina, compases_data):
     if primero_siguiente is None:
         return
 
-    desfasaje = (ultimo.numero + 1) - primero_siguiente.numero
+    # Última + sus repeticiones, no siempre +1 — un cierre en silencio de
+    # varios compases tiene que empujar la página siguiente la cantidad
+    # real, no sólo un compás.
+    desfasaje = (ultimo.numero + ultimo.repeticiones) - primero_siguiente.numero
     if desfasaje != 0:
         siguientes.update(numero=F('numero') + desfasaje)

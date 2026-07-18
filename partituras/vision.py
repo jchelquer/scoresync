@@ -443,17 +443,26 @@ def encontrar_ancla(img_bgr):
         for x in candidatas:
             angulo = _inclinacion_barra(binaria, x, sistema['y0'], sistema['y1'])
             if angulo is not None:
+                # y0/y1 de la corrida de tinta REAL en esta columna, no los
+                # bordes del pentagrama completo — antes se devolvía
+                # directamente sistema['y0']/['y1'], que es casi siempre más
+                # ancho que la barra real (la tinta no llega a los bordes
+                # exactos del pentagrama por antialiasing/umbral). Eso hacía
+                # que el segmento mostrado acá no coincidiera con el que
+                # encuentra buscar_barra_en_rectangulo (que sí mide la
+                # corrida real) al pedir "Buscar" sobre el mismo rectángulo.
+                _, ini_rel, fin_rel = _mejor_corrida(binaria[:, x], sistema['y0'], sistema['y1'])
                 return {
                     'x': x,
-                    'y0': sistema['y0'],
-                    'y1': sistema['y1'],
+                    'y0': sistema['y0'] + ini_rel,
+                    'y1': sistema['y0'] + fin_rel,
                     'angulo': angulo,
                     'alto_pentagrama': sistema['y1'] - sistema['y0'],
                 }
     return None
 
 
-def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1):
+def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1, sistema_px=None):
     """
     Búsqueda acotada: dado un rectángulo (en píxeles, sobre la imagen
     completa) que el usuario ubicó de forma aproximada alrededor de una
@@ -472,15 +481,20 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1):
     confundía al usuario ver un resultado y, al pedir "buscar" sobre esa
     misma zona, obtener otro.
 
-    La búsqueda se acota al extremo real del pentagrama DENTRO del
-    rectángulo (_extremos_pentagrama, igual que detectar_barras), no a todo
-    el alto del rectángulo — que tiene relleno vertical a propósito
-    (_PADDING_ANCLA_Y en _guardar_ancla) para que el usuario no necesite ser
-    preciso al ubicarlo. Sin este acote, la corrida más larga podía
-    extenderse unos píxeles hacia el relleno (texto o ligadura cerca, o
-    simple ruido) y dar una línea de alto distinto (~10px, medido en un caso
-    real) a la que ya se había mostrado en la detección automática inicial,
-    que sí busca acotado a las líneas reales del pentagrama.
+    La búsqueda se acota al extremo real del pentagrama (líneas 1-5, no todo
+    el alto del rectángulo — que tiene relleno vertical a propósito,
+    _PADDING_ANCLA_Y en _guardar_ancla, para que el usuario no necesite ser
+    preciso al ubicarlo). Si se pasa `sistema_px` ({'y0','y1'} en píxeles de
+    la imagen completa, el resultado de detectar_sistemas para el sistema al
+    que pertenece esta barra) se usan ESOS extremos — calculados sobre la
+    banda ancha de todo el sistema (~2000px), mucho más confiable que
+    recalcularlos acá con _extremos_pentagrama sobre el rectángulo angosto
+    (~60px, sólo el relleno alrededor de una barra candidata): con tan poco
+    ancho, el perfil de densidad por fila es más ruidoso y puede angostar o
+    ensanchar el pentagrama unos píxeles de más respecto al cálculo de la
+    detección automática inicial para el mismo sistema — dando una y0/y1
+    final distinta para la misma barra real. Sin `sistema_px` (llamador no
+    lo tiene a mano) se cae al cálculo local, como antes.
     """
     binaria = _binarizar(img_bgr)
     h, w = binaria.shape
@@ -491,8 +505,15 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1):
 
     recorte = binaria[y0:y1, x0:x1] > 0
     alto = recorte.shape[0]
-    extremos = _extremos_pentagrama(recorte)
-    r0, r1 = extremos if extremos else (0, alto - 1)
+    r0 = r1 = None
+    if sistema_px:
+        r0 = max(0, int(sistema_px['y0']) - y0)
+        r1 = min(alto - 1, int(sistema_px['y1']) - y0)
+        if r1 <= r0:
+            r0 = r1 = None
+    if r0 is None:
+        extremos = _extremos_pentagrama(recorte)
+        r0, r1 = extremos if extremos else (0, alto - 1)
 
     largos = np.array([_largo_max_en_rango(recorte[:, x], r0, r1) for x in range(recorte.shape[1])])
     if largos.max() < (r1 - r0) * 0.5:

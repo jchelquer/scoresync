@@ -45,7 +45,24 @@
     padding: 0 2px;
     border: none;
     border-radius: 3px;
+    -moz-appearance: textfield;
   }
+  /* Sin flechitas de incremento — un clic accidental ahí cambiaba el valor
+     sin que el usuario lo notara, sobre todo con dos cajitas tan chicas
+     una al lado de la otra. */
+  .numero-compas input::-webkit-inner-spin-button,
+  .numero-compas input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .numero-compas.editando {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 1px 4px;
+  }
+  .numero-compas input.input-repeticiones { width: 2.2rem; }
+  .numero-compas .separador-edicion { opacity: 0.7; font-size: 0.65rem; }
   .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
   .leyenda-punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; }
 
@@ -148,7 +165,7 @@
         {% translate "Barras — clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí." %}
       </p>
       <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número para editarlo a mano; lo que sigue se corre igual. Nada se guarda hasta Confirmar." %}
+        {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número: aparecen dos cajitas, el número y cuántos compases vale (para un silencio de varios compases) — completá la que te resulte más cómoda, lo que sigue se acomoda solo. Nada se guarda hasta Confirmar." %}
       </p>
       <form method="post" id="form-barras">
         {% csrf_token %}
@@ -210,20 +227,24 @@ sistemas.forEach(s => {
 });
 
 // Dado el número que tenía cada compás antes del cambio (numerosViejos,
-// alineado con clavesViejas = la barra que terminaba cada uno) y la nueva
-// lista de barras aceptadas (clavesNuevas, mismo orden canónico: sistema,
-// luego x), calcula los números nuevos. Un solo clic sólo puede agregar o
-// sacar UNA barra de la lista, así que alcanza con encontrar el único punto
-// donde ambas listas divergen:
+// alineado con clavesViejas = la barra que terminaba cada uno), cuánto vale
+// cada uno (repeticionesViejos — 1 en el caso normal, más de 1 si el
+// usuario marcó a mano un silencio de varios compases) y la nueva lista de
+// barras aceptadas (clavesNuevas, mismo orden canónico: sistema, luego x),
+// calcula los números nuevos. Un solo clic sólo puede agregar o sacar UNA
+// barra de la lista, así que alcanza con encontrar el único punto donde
+// ambas listas divergen:
 // - si la lista nueva tiene una más: se insertó una barra ahí — el compás
-//   nuevo hereda el número que tenía el que estaba en esa posición, y ese y
-//   todos los que siguen suben uno.
+//   nuevo (vale 1, recién aparece) hereda el número que tenía el que estaba
+//   en esa posición, y ese y todos los que siguen suben uno.
 // - si tiene una menos: se sacó una barra — ese número desaparece y todos
-//   los que siguen bajan uno.
+//   los que siguen bajan lo que valía ese compás (repeticionesViejos[i]),
+//   no siempre uno.
 // Nunca resecuenciamos desde cero salvo que no haya nada previo (página
 // recién llegada a esta pantalla) o pase algo inesperado (más de un cambio
-// a la vez) — así una renumeración manual en el medio no se pisa.
-function difundirNumeros(clavesViejas, numerosViejos, clavesNuevas) {
+// a la vez) — así una renumeración o un silencio de varios compases marcado
+// a mano no se pisan.
+function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, clavesNuevas) {
   if (clavesViejas.length === 0) {
     let n = numeroInicial;
     return clavesNuevas.map(() => n++);
@@ -235,15 +256,18 @@ function difundirNumeros(clavesViejas, numerosViejos, clavesNuevas) {
     return numerosViejos;  // el conjunto de barras aceptadas no cambió en los hechos
   }
   if (clavesNuevas.length === clavesViejas.length + 1) {
-    const numeroNuevo = (i < numerosViejos.length) ? numerosViejos[i] : numerosViejos[numerosViejos.length - 1] + 1;
+    const numeroNuevo = (i < numerosViejos.length)
+      ? numerosViejos[i]
+      : numerosViejos[numerosViejos.length - 1] + (repeticionesViejos[repeticionesViejos.length - 1] ?? 1);
     const resultado = numerosViejos.slice(0, i);
     resultado.push(numeroNuevo);
     for (let k = i; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] + 1);
     return resultado;
   }
   if (clavesNuevas.length === clavesViejas.length - 1) {
+    const pesoBorrado = repeticionesViejos[i] ?? 1;
     const resultado = numerosViejos.slice(0, i);
-    for (let k = i + 1; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] - 1);
+    for (let k = i + 1; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] - pesoBorrado);
     return resultado;
   }
   let n = numeroInicial;
@@ -279,6 +303,7 @@ function conCierreDeSistema(propias, sistemaId) {
 function recalcularCompases() {
   const clavesViejas = compases.map(c => c._finBarra);
   const numerosViejos = compases.map(c => c.numero);
+  const repeticionesViejos = compases.map(c => c.repeticiones ?? 1);
 
   // Una sola lista (orden canónico: sistema, luego x) de qué barras están
   // aceptadas ahora mismo — tanto los números como la geometría de cada
@@ -290,13 +315,25 @@ function recalcularCompases() {
     conCierreDeSistema(propias, s.id).forEach(b => aceptadasOrdenadas.push(b));
   });
   const clavesNuevas = aceptadasOrdenadas.map(b => b._key);
-  const numerosNuevos = difundirNumeros(clavesViejas, numerosViejos, clavesNuevas);
+  const numerosNuevos = difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, clavesNuevas);
+
+  // Preserva las repeticiones de cada compás que sigue existiendo (misma
+  // idea que con el número: identificado por la barra que lo cierra, no por
+  // posición) — un silencio de varios compases marcado a mano no se pierde
+  // porque se agregó o borró otra barra en cualquier otra parte de la
+  // página. Los compases nuevos arrancan en 1.
+  const repeticionesPorClave = new Map();
+  clavesViejas.forEach((k, idx) => repeticionesPorClave.set(k, repeticionesViejos[idx]));
 
   compases = [];
   const xInicioPorSistema = new Map();
   aceptadasOrdenadas.forEach((b, idx) => {
     const xInicio = xInicioPorSistema.get(b.sistema_id) ?? 0;
-    compases.push({ sistema_id: b.sistema_id, x: xInicio, width: b.x - xInicio, numero: numerosNuevos[idx], _finBarra: b._key });
+    compases.push({
+      sistema_id: b.sistema_id, x: xInicio, width: b.x - xInicio,
+      numero: numerosNuevos[idx], _finBarra: b._key,
+      repeticiones: repeticionesPorClave.get(b._key) ?? 1,
+    });
     xInicioPorSistema.set(b.sistema_id, b.x);
   });
 }
@@ -343,10 +380,16 @@ function render() {
 
     const numero = document.createElement('div');
     numero.className = 'numero-compas';
-    numero.textContent = c.numero;
+    numero.textContent = c.repeticiones > 1 ? (c.numero + '–' + (c.numero + c.repeticiones - 1)) : c.numero;
     numero.style.left = 'calc(' + (c.x * 100) + '% + 2px)';
     numero.style.top = 'calc(' + (s.y * 100) + '% - 18px)';
-    numero.addEventListener('click', () => activarEdicionNumero(numero, c));
+    numero.addEventListener('click', () => {
+      // Un clic dentro de las cajitas de edición (la de repeticiones, p.ej.)
+      // rebota hacia este mismo div — sin este guard, reabría la edición
+      // de cero cada vez y perdías el foco/lo que estabas por escribir.
+      if (numero.classList.contains('editando')) return;
+      activarEdicionNumero(numero, c);
+    });
     lienzo.appendChild(numero);
   });
 
@@ -385,44 +428,94 @@ function render() {
   });
 }
 
+// Dos cajitas: el número absoluto de este compás (como antes) y cuántos
+// compases vale (repeticiones — 1 en el caso normal). Completar cualquiera
+// de las dos alcanza: si sabés el número impreso del compás siguiente,
+// usás la absoluta; si lo que ves es la cantidad de un silencio de varios
+// compases, usás la de repeticiones y el resto se acomoda solo.
 function activarEdicionNumero(elemento, compas) {
   elemento.innerHTML = '';
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.value = compas.numero;
-  elemento.appendChild(input);
-  input.focus();
-  input.select();
+  elemento.classList.add('editando');
+
+  const inputNumero = document.createElement('input');
+  inputNumero.type = 'number';
+  inputNumero.value = compas.numero;
+  inputNumero.title = '{% translate "Número de este compás" %}';
+
+  const separador = document.createElement('span');
+  separador.className = 'separador-edicion';
+  separador.textContent = '×';
+
+  const inputRepeticiones = document.createElement('input');
+  inputRepeticiones.type = 'number';
+  inputRepeticiones.min = '1';
+  inputRepeticiones.value = compas.repeticiones ?? 1;
+  inputRepeticiones.className = 'input-repeticiones';
+  inputRepeticiones.title = '{% translate "Cuántos compases vale (silencio de varios compases)" %}';
+
+  elemento.appendChild(inputNumero);
+  elemento.appendChild(separador);
+  elemento.appendChild(inputRepeticiones);
+
+  // Selecciona todo el contenido al enfocar (por Tab o por clic) para que
+  // escribir directamente lo reemplace — un clic del mouse por sí solo sólo
+  // pone el cursor, no selecciona; el preventDefault en mouseup evita que
+  // el propio clic deshaga la selección que hace el foco.
+  [inputNumero, inputRepeticiones].forEach(input => {
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('mouseup', e => e.preventDefault());
+  });
+
+  inputNumero.focus();
 
   let resuelto = false;
   function confirmar() {
     if (resuelto) return;
     resuelto = true;
-    const nuevo = parseInt(input.value, 10);
-    if (!isNaN(nuevo) && nuevo !== compas.numero) {
-      // Corrección manual: mueve este compás (y todo lo que sigue, en esta
-      // página) el mismo delta — no resecuencia, para no pisar otra
-      // renumeración manual que hubiera más adelante.
-      const idx = compases.findIndex(c => c._finBarra === compas._finBarra);
-      if (idx !== -1) {
-        const delta = nuevo - compases[idx].numero;
+    const idx = compases.findIndex(c => c._finBarra === compas._finBarra);
+    if (idx !== -1) {
+      let cambio = false;
+      const nuevoNumero = parseInt(inputNumero.value, 10);
+      if (!isNaN(nuevoNumero) && nuevoNumero !== compases[idx].numero) {
+        // Corrección manual del número: mueve este compás (y todo lo que
+        // sigue, en esta página) el mismo delta — no resecuencia, para no
+        // pisar otra renumeración manual que hubiera más adelante.
+        const delta = nuevoNumero - compases[idx].numero;
         for (let k = idx; k < compases.length; k++) compases[k].numero += delta;
-        marcarSucio();
+        cambio = true;
       }
+      const nuevasRepeticiones = parseInt(inputRepeticiones.value, 10);
+      if (!isNaN(nuevasRepeticiones) && nuevasRepeticiones >= 1 && nuevasRepeticiones !== compases[idx].repeticiones) {
+        // Cambia cuánto vale ESTE compás — sólo desplaza lo que sigue (no a
+        // él mismo) la diferencia.
+        const deltaRep = nuevasRepeticiones - compases[idx].repeticiones;
+        compases[idx].repeticiones = nuevasRepeticiones;
+        for (let k = idx + 1; k < compases.length; k++) compases[k].numero += deltaRep;
+        cambio = true;
+      }
+      if (cambio) marcarSucio();
     }
     render();
   }
-  input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') confirmar();
-    if (e.key === 'Escape') { resuelto = true; render(); }
+  function blurHandler(e) {
+    // Si el foco se movió al otro input del par, no cerrar todavía — sólo
+    // confirmar cuando el foco se va de los dos.
+    if (e.relatedTarget === inputNumero || e.relatedTarget === inputRepeticiones) return;
+    confirmar();
+  }
+  [inputNumero, inputRepeticiones].forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') confirmar();
+      if (e.key === 'Escape') { resuelto = true; render(); }
+    });
+    input.addEventListener('blur', blurHandler);
   });
-  input.addEventListener('blur', confirmar);
 }
 
 document.getElementById('form-barras').addEventListener('submit', () => {
   const payloadBarras = barras.map(b => ({ id: b.id, sistema_id: b.sistema_id, x: b.x, estado: b.estado }));
   document.getElementById('input-barras').value = JSON.stringify(payloadBarras);
-  const payloadCompases = compases.map(c => ({ sistema_id: c.sistema_id, x: c.x, width: c.width, numero: c.numero }));
+  const payloadCompases = compases.map(c => ({ sistema_id: c.sistema_id, x: c.x, width: c.width, numero: c.numero, repeticiones: c.repeticiones }));
   document.getElementById('input-compases').value = JSON.stringify(payloadCompases);
 });
 

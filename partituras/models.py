@@ -183,6 +183,13 @@ class Compas(models.Model):
     y = models.FloatField()
     width = models.FloatField()
     height = models.FloatField()
+    repeticiones = models.PositiveIntegerField(
+        default=1,
+        help_text="Cuántos compases reales representa éste — 1 en el caso normal; más de 1 para "
+                   "un silencio de varios compases marcado a mano por el usuario (no se detecta "
+                   "automáticamente). El siguiente compás numera desde numero + repeticiones, no "
+                   "siempre numero + 1.",
+    )
     origen = models.CharField(max_length=10, choices=ORIGENES, default='auto')
     confirmado = models.BooleanField(default=False)
 

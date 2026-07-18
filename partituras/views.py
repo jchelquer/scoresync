@@ -451,7 +451,14 @@ def ajuste_ancla(request, pk, numero):
         if accion == "buscar":
             normalizada, _, _ = _pagina_normalizada_recortada(partitura, pagina)
             h, w = normalizada.shape[:2]
-            refinado = buscar_barra_en_rectangulo(normalizada, rx0 * w, ry0 * h, rx1 * w, ry1 * h)
+            y_centro = (ry0 * h + ry1 * h) / 2
+            sistema_px = next(
+                (s for s in detectar_sistemas(normalizada) if s['y0'] <= y_centro <= s['y1']),
+                None,
+            )
+            refinado = buscar_barra_en_rectangulo(
+                normalizada, rx0 * w, ry0 * h, rx1 * w, ry1 * h, sistema_px=sistema_px,
+            )
             if refinado:
                 _guardar_ancla(pagina, w, h, refinado['x'], refinado['y0'], refinado['x'], refinado['y1'], refinado)
             else:
@@ -618,7 +625,7 @@ def ajuste_barras(request, pk, numero):
     compases = list(
         Compas.objects.filter(sistema__pagina=pagina)
         .order_by("sistema__orden", "x")
-        .values("id", "sistema_id", "x", "y", "width", "height", "numero")
+        .values("id", "sistema_id", "x", "y", "width", "height", "numero", "repeticiones")
     )
     return render(request, "partituras/ajuste_barras.html", {
         "partitura": partitura,
