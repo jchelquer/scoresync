@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Itinerario — {{ obra.titulo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Itinerario de ejecución" %} — {{ obra.titulo }}
+  </h5>
+  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+</div>
+
+<p class="small mb-1" style="color: var(--ss-text-muted)">
+  {% translate "Cada fila es un tramo de compases que se toca de corrido, en el orden real de ejecución (número de fila, columna izquierda). Donde una fila no sigue en el compás/pulso justo donde terminó la anterior, ahí hay una repetición o un salto — no hace falta indicar cuál ni por qué. La última fila, sin Desde/Hasta, es sólo el cierre: marca dónde termina el último compás real." %}
+</p>
+<p class="small mb-1" style="color: var(--ss-text-muted)">
+  {% translate "Desde/Hasta: \"20\" es el compás 20 entero; \"20,1.5\" es compás 20, pulso uno y medio (coma separa compás de pulso, punto es el decimal DENTRO del pulso). En Desde, \"20\" solo significa pulso 1; en Hasta, \"20\" solo significa hasta el final del compás." %}
+</p>
+<p class="small mb-3" style="color: var(--ss-text-muted)">
+  {% translate "BPM es el tempo de arranque del tramo (o el único, si es constante). BPM llegada sólo se completa en un tramo con accelerando/ritardando, para indicar adónde llega — eso es lo que hereda la fila siguiente, no el de arranque. Un calderón se carga como su propio tramo de un solo pulso, con el BPM bajo que corresponda a la duración deseada. Tiempo calculado es una estimación a partir de los BPM cargados — se recalcula solo al guardar, es sólo de referencia hasta que se sincronice con audio/video real." %}
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ formset.management_form }}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle" style="color: var(--ss-text-muted)">
+      <thead>
+        <tr>
+          <th>{% translate "Orden" %}</th>
+          <th>{% translate "Desde" %}</th>
+          <th>{% translate "Hasta" %}</th>
+          <th>{% translate "Indicación" %}</th>
+          <th>{% translate "Tempo" %}</th>
+          <th>{% translate "BPM" %}</th>
+          <th>{% translate "BPM llegada" %}</th>
+          <th>{% translate "Descripción" %}</th>
+          <th>{% translate "Tiempo inicio" %}</th>
+          <th>{% translate "Tiempo calculado" %}</th>
+          <th>{% translate "Borrar" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for form in formset %}
+        <tr>
+          {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+          <td>{{ form.orden }}</td>
+          <td>{{ form.desde_texto }}</td>
+          <td>{{ form.hasta_texto }}</td>
+          <td>{{ form.indicacion_compas }}</td>
+          <td>{{ form.variacion_tempo }}</td>
+          <td>{{ form.bpm }}</td>
+          <td>{{ form.bpm_llegada }}</td>
+          <td>{{ form.descripcion }}</td>
+          <td>{{ form.tiempo_inicio }}</td>
+          <td class="small">{{ form.instance.tiempo_inicio_calculado|default:"—" }}</td>
+          <td class="text-center">{{ form.DELETE }}</td>
+        </tr>
+        {% if form.errors %}
+        <tr><td colspan="11" class="text-danger small">{{ form.errors }}</td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button type="submit" class="btn btn-ss">{% translate "Guardar itinerario" %}</button>
+</form>
+{% endblock %}

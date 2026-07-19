@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.1.0"
+  date: "2026-07-19"
+  changes:
+    - type: nuevo
+      text: "Itinerario de ejecución por obra: tabla editable de tramos (compases, tempo, BPM) con guardado, reordenamiento y renumeración automática."
+
 - version: "1.0.2"
   date: "2026-07-20"
   changes:

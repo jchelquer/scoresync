@@ -18,6 +18,43 @@
           Análisis: <strong>{{ partitura.get_estado_analisis_display }}</strong>
         </p>
 
+        <p class="small mb-3" style="color: var(--ss-text-muted)">
+          {% if partitura.obra %}
+          {% translate "Obra" %}: <strong>{{ partitura.obra.titulo }}</strong>
+          <form method="post" action="{% url 'partituras:gestionar_obra' partitura.pk %}" class="d-inline">
+            {% csrf_token %}
+            <button type="submit" name="accion" value="separar" class="btn btn-outline-light btn-sm ms-1">
+              {% translate "Separar de la obra" %}
+            </button>
+          </form>
+          {% else %}
+          {% translate "Todavía no pertenece a ninguna obra." %}
+          {% if obras_propias %}
+          <form method="post" action="{% url 'partituras:gestionar_obra' partitura.pk %}" class="d-inline-flex gap-1 align-items-center ms-1">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="adjuntar">
+            <select name="obra_id" class="form-select form-select-sm" style="width: auto;">
+              {% for obra in obras_propias %}
+              <option value="{{ obra.pk }}">{{ obra.titulo }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Adjuntar" %}</button>
+          </form>
+          {% endif %}
+          <details class="d-inline ms-1">
+            <summary class="small d-inline" style="cursor: pointer; color: var(--ss-accent);">{% translate "o creá una obra nueva" %}</summary>
+            <form method="post" action="{% url 'partituras:crear_obra' %}" class="d-flex gap-1 align-items-center mt-2">
+              {% csrf_token %}
+              <input type="hidden" name="partitura_pk" value="{{ partitura.pk }}">
+              <input type="text" name="titulo" class="form-control form-control-sm" placeholder="{% translate 'Título de la obra' %}" required>
+              <input type="text" name="compositor" class="form-control form-control-sm" placeholder="{% translate 'Compositor (opcional)' %}">
+              <input type="text" name="arreglista" class="form-control form-control-sm" placeholder="{% translate 'Arreglista (opcional)' %}">
+              <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Crear y adjuntar" %}</button>
+            </form>
+          </details>
+          {% endif %}
+        </p>
+
         <div class="d-flex flex-wrap gap-2 mb-2">
           <a href="{{ partitura.archivo_original.url }}" target="_blank" class="btn btn-outline-light">
             <i class="bi bi-box-arrow-up-right me-1"></i>Ver PDF original

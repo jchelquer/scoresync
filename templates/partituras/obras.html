@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Obras — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 style="color: var(--ss-text-bright)">{% translate "Obras" %}</h4>
+</div>
+
+<div class="row justify-content-center mb-4">
+  <div class="col-md-7">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h6 style="color: var(--ss-text-bright)">{% translate "Crear una obra nueva" %}</h6>
+        <form method="post" action="{% url 'partituras:crear_obra' %}" class="d-flex flex-wrap gap-2 mt-2">
+          {% csrf_token %}
+          <input type="text" name="titulo" class="form-control" style="max-width: 16rem;" placeholder="{% translate 'Título de la obra' %}" required>
+          <input type="text" name="compositor" class="form-control" style="max-width: 12rem;" placeholder="{% translate 'Compositor (opcional)' %}">
+          <input type="text" name="arreglista" class="form-control" style="max-width: 12rem;" placeholder="{% translate 'Arreglista (opcional)' %}">
+          <button type="submit" class="btn btn-ss">{% translate "Crear" %}</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if obras %}
+<div class="row g-3">
+  {% for obra in obras %}
+  <div class="col-md-4">
+    <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="text-decoration-none">
+      <div class="card border-0 h-100" style="background: var(--ss-surface)">
+        <div class="card-body">
+          <h6 class="card-title" style="color: var(--ss-text-bright)"><i class="bi bi-music-note-list me-1"></i>{{ obra.titulo }}</h6>
+          <p class="small mb-1" style="color: var(--ss-text-muted)">{{ obra.compositor|default:"—" }}{% if obra.arreglista %} · {% translate "arr." %} {{ obra.arreglista }}{% endif %}</p>
+          <p class="small mb-0" style="color: var(--ss-text-muted)">
+            {{ obra.partituras.count }} {% translate "parte(s)" %}
+          </p>
+        </div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p style="color: var(--ss-text-muted)">{% translate "Todavía no creaste ninguna obra." %}</p>
+{% endif %}
+{% endblock %}

@@ -1,12 +1,18 @@
 """Lógica de dominio que no depende de HTTP — guardado de compases a partir
 de lo que el cliente ya calculó (geometría + numeración), el reajuste de
-numeración entre páginas, y la invalidación en cascada cuando se rehace una
+numeración entre páginas, la invalidación en cascada cuando se rehace una
 etapa anterior del pipeline (orientación → márgenes → sistemas → ancla →
-barras/compases)."""
+barras/compases), y la resolución del itinerario de ejecución de una obra
+(herencia de campos en blanco + tiempo estimado a partir de bpm)."""
+
+import re
+from datetime import timedelta
 
 from django.db.models import F
 
 from .models import Barra, Compas
+
+_PATRON_INDICACION_COMPAS = re.compile(r'^[1-9]\d*/[1-9]\d*$')
 
 
 _CAMPOS_ANCLA = [
@@ -155,3 +161,164 @@ def guardar_compases_pagina(pagina, compases_data):
     desfasaje = (ultimo.numero + ultimo.repeticiones) - primero_siguiente.numero
     if desfasaje != 0:
         siguientes.update(numero=F('numero') + desfasaje)
+
+
+# ── Itinerario de ejecución de una obra ────────────────────────────────────
+
+def validar_indicacion_compas(texto):
+    """Valida el formato de una indicación de compás — vacío es válido
+    (significa "hereda de la fila anterior"). Levanta ValueError si no es
+    numerador/denominador enteros positivos (ej: 4/4, 3/4, 6/8) — sin esto,
+    un texto libre inválido pasaba sin aviso y _pulsos_por_compas
+    simplemente no podía calcular nada más adelante, en silencio."""
+    texto = (texto or '').strip()
+    if not texto:
+        return ''
+    if not _PATRON_INDICACION_COMPAS.match(texto):
+        raise ValueError(
+            f'"{texto}" no es una indicación de compás válida — usá el formato '
+            'numerador/denominador (ej: 4/4, 3/4, 6/8).'
+        )
+    return texto
+
+
+def renumerar_segmentos(obra):
+    """Renumera obra.segmentos de a 10 (10, 20, 30…), preservando el orden
+    relativo actual — se corre en cada guardado del itinerario para que una
+    inserción futura ("entre medio") siempre tenga hueco disponible, en vez
+    de dejar que se vaya agotando de a poco con sucesivas inserciones.
+
+    Se hace en dos pasadas: si se asignara el valor final directamente,
+    orden=10 podría chocar contra otra fila que hoy YA tiene orden=10 y
+    todavía no fue procesada (viola unique_together (obra, orden)). Pasar
+    primero por un rango que no puede colisionar con nada evita eso."""
+    segmentos = list(obra.segmentos.order_by('orden'))
+    OFFSET_TEMPORAL = 10_000_000
+    for i, seg in enumerate(segmentos):
+        seg.orden = OFFSET_TEMPORAL + i
+        seg.save(update_fields=['orden'])
+    for i, seg in enumerate(segmentos, start=1):
+        seg.orden = i * 10
+        seg.save(update_fields=['orden'])
+
+
+def formatear_compas_pulso(compas, pulso, pulso_default):
+    """Inversa de parsear_compas_pulso — (4, 1) con pulso_default=1 -> "4";
+    (4, 1.5) -> "4,1.5". Se usa para reconstruir desde_texto/hasta_texto a
+    partir de compas_desde/pulso_desde (o hasta) ya guardados, p.ej. si se
+    cargaron por otra vía o hay que rehacer el backfill de una migración."""
+    if compas is None:
+        return ''
+    if pulso is None or pulso == pulso_default:
+        return str(compas)
+    return f'{compas},{pulso:g}'
+
+
+def parsear_compas_pulso(texto, pulso_default):
+    """"4" -> (4, pulso_default); "4,1.5" -> (4, 1.5); "" -> (None, None).
+    Coma separa compás de pulso, punto es el decimal DENTRO del pulso (no al
+    revés) — así no hay ambigüedad entre "el separador" y "el decimal".
+    Levanta ValueError si el formato no es válido."""
+    texto = (texto or '').strip()
+    if not texto:
+        return None, None
+    if ',' in texto:
+        compas_str, pulso_str = texto.split(',', 1)
+        return int(compas_str.strip()), float(pulso_str.strip())
+    return int(texto), pulso_default
+
+
+def _pulsos_por_compas(indicacion):
+    """"4/4" -> 4.0, "6/8" -> 6.0 — el numerador tal cual, sin interpretar
+    compases compuestos (6/8 dirigido "en 2" queda fuera de alcance)."""
+    if not indicacion:
+        return None
+    try:
+        return float(indicacion.split('/')[0])
+    except (ValueError, IndexError):
+        return None
+
+
+def resolver_segmentos(obra):
+    """Recorre los segmentos de la obra en orden, resolviendo lo que en cada
+    fila quedó en blanco (hereda de la última fila con un valor propio — ver
+    ayuda de cada campo en el modelo Segmento) y calculando cuánto dura cada
+    tramo a partir de bpm/bpm_llegada. Devuelve una lista de dicts, uno por
+    segmento, en el mismo orden, cada uno con:
+      segmento, indicacion_compas, bpm (resueltos),
+      pulsos_por_compas, duracion_calculada (segundos), tiempo_inicio_calculado (segundos)
+
+    Si en algún punto falta bpm o indicación de compás para calcular, la
+    acumulación de tiempo se corta ahí — el resto de las filas quedan con
+    tiempo_inicio_calculado en None en vez de inventar un valor con un
+    tempo/indicación por defecto que nadie pidió."""
+    segmentos = list(obra.segmentos.order_by('orden'))
+    resueltos = []
+    indicacion_vigente = None
+    bpm_vigente = None
+    tiempo_acumulado = 0.0
+
+    for seg in segmentos:
+        indicacion = seg.indicacion_compas or indicacion_vigente
+        if indicacion:
+            indicacion_vigente = indicacion
+        bpm_inicio = seg.bpm or bpm_vigente
+        pulsos_compas = _pulsos_por_compas(indicacion)
+
+        info = {
+            'segmento': seg,
+            'indicacion_compas': indicacion,
+            'bpm': bpm_inicio,
+            'pulsos_por_compas': pulsos_compas,
+            'duracion_calculada': None,
+            'tiempo_inicio_calculado': tiempo_acumulado,
+        }
+        resueltos.append(info)
+
+        if seg.bpm_llegada:
+            bpm_vigente = seg.bpm_llegada
+        elif seg.bpm:
+            bpm_vigente = seg.bpm
+
+        if seg.compas_desde is None:
+            break  # fila de cierre: sólo el ancla de tiempo que ya se guardó arriba
+
+        if tiempo_acumulado is None:
+            continue  # ya se cortó la acumulación en una fila anterior
+
+        pulso_desde = seg.pulso_desde if seg.pulso_desde is not None else 1
+        pulso_hasta = seg.pulso_hasta if seg.pulso_hasta is not None else pulsos_compas
+
+        if not (bpm_inicio and pulsos_compas and pulso_hasta is not None and seg.compas_hasta is not None):
+            tiempo_acumulado = None
+            continue
+
+        if seg.compas_desde == seg.compas_hasta:
+            cantidad_pulsos = pulso_hasta - pulso_desde + 1
+        else:
+            compases_completos = seg.compas_hasta - seg.compas_desde - 1
+            cantidad_pulsos = (pulsos_compas - pulso_desde + 1) + (compases_completos * pulsos_compas) + pulso_hasta
+
+        duracion = max(cantidad_pulsos, 0) * (60.0 / bpm_inicio)
+        info['duracion_calculada'] = duracion
+        tiempo_acumulado += duracion
+
+    return resueltos
+
+
+def recalcular_tiempos_calculados(obra):
+    """Corre resolver_segmentos y guarda tiempo_inicio_calculado en cada
+    Segmento de la obra — se llama cada vez que se guarda el itinerario, así
+    queda como referencia independiente de tiempo_inicio (el real, sincronizado
+    con audio/video). Devuelve la lista de dicts de resolver_segmentos, para
+    que la vista pueda además chequear los límites de pulso sin recalcular
+    todo de nuevo."""
+    resueltos = resolver_segmentos(obra)
+    for info in resueltos:
+        seg = info['segmento']
+        segundos = info['tiempo_inicio_calculado']
+        nuevo = timedelta(seconds=segundos) if segundos is not None else None
+        if seg.tiempo_inicio_calculado != nuevo:
+            seg.tiempo_inicio_calculado = nuevo
+            seg.save(update_fields=['tiempo_inicio_calculado'])
+    return resueltos

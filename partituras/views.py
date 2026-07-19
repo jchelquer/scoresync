@@ -1,18 +1,20 @@
 import json
 
 import cv2
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import PartituraForm
-from .models import Barra, Compas, Pagina, Partitura, Sistema
+from .forms import ObraForm, PartituraForm, SegmentoFormSet
+from .models import Barra, Compas, Obra, Pagina, Partitura, Segmento, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
     guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
+    recalcular_tiempos_calculados, renumerar_segmentos,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -109,13 +111,14 @@ def subir(request):
     return render(request, "partituras/subir.html", {"form": form})
 
 
-def _contexto_estado(partitura):
+def _contexto_estado(request, partitura):
     return {
         "partitura": partitura,
         "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
         "pagina_sistemas": _primera_pendiente_sistemas(partitura),
         "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
         "pagina_barras": _primera_pendiente(partitura, "barras_confirmadas"),
+        "obras_propias": Obra.objects.filter(owner=request.user),
     }
 
 
@@ -129,7 +132,7 @@ def detalle(request, pk):
     if paso:
         url_name, numero = paso
         return redirect(f"partituras:{url_name}", pk=pk, numero=numero)
-    return render(request, "partituras/detalle.html", _contexto_estado(partitura))
+    return render(request, "partituras/detalle.html", _contexto_estado(request, partitura))
 
 
 @login_required
@@ -139,7 +142,169 @@ def estado(request, pk):
     etapa apunta acá, no a `detalle`, para no rebotar de vuelta a la misma
     pantalla que se acaba de dejar)."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
-    return render(request, "partituras/detalle.html", _contexto_estado(partitura))
+    return render(request, "partituras/detalle.html", _contexto_estado(request, partitura))
+
+
+# ── Obra (agrupa varias Partitura de la misma pieza, una por parte) ────────
+
+@login_required
+def obras(request):
+    """Lista de las obras propias — punto de entrada para crear una obra
+    sin depender de tener ya una partitura cargada."""
+    lista = Obra.objects.filter(owner=request.user)
+    return render(request, "partituras/obras.html", {"obras": lista})
+
+
+@login_required
+def obra_detalle(request, pk):
+    """Ficha de una obra: sus datos y las partes (partituras) que tiene
+    adjuntas, más un formulario para adjuntar otra partitura propia todavía
+    sin obra."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    return render(request, "partituras/obra_detalle.html", {
+        "obra": obra,
+        "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
+    })
+
+
+@login_required
+def itinerario_obra(request, pk):
+    """Tabla editable del itinerario de ejecución de la obra — insertar,
+    editar o borrar filas de una, sin pantalla gráfica: cada fila es un
+    tramo de compases que se toca de corrido (ver Segmento). Usa un
+    formset de Django en vez de JS a medida — es justo lo que hace falta
+    para "llenar una tabla", nada más."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    queryset = Segmento.objects.filter(obra=obra).order_by("orden")
+
+    if request.method == "POST":
+        formset = SegmentoFormSet(request.POST, queryset=queryset, prefix="segmentos")
+        if formset.is_valid():
+            # (obra, orden) es unique_together, así que guardar cada fila con
+            # el "orden" tal cual lo tipeó el usuario puede chocar contra el
+            # de otra fila que todavía no se actualizó (p.ej. insertar una
+            # fila nueva en el medio). Se guarda primero en un rango que no
+            # puede existir todavía — evita cualquier colisión sin importar
+            # el orden de guardado — y recién después renumerar_segmentos()
+            # asigna los valores finales limpios.
+            # (deleted_objects sólo queda poblado después de llamar a save(),
+            # así que hay que leerlo recién acá, no antes.)
+            instancias = sorted(formset.save(commit=False), key=lambda i: i.orden)
+            for eliminada in formset.deleted_objects:
+                eliminada.delete()
+
+            OFFSET_TEMPORAL = 10_000_000
+            for i, instancia in enumerate(instancias):
+                instancia.obra = obra
+                instancia.orden = OFFSET_TEMPORAL + i
+                instancia.save()
+
+            # Vuelve a numerar de a 10 en el orden actual — así una fila
+            # insertada "entre medio" (con un orden como 15) recupera hueco
+            # completo alrededor para la próxima inserción, en vez de ir
+            # agotándose de a poco.
+            renumerar_segmentos(obra)
+
+            # Recalcula tiempo_inicio_calculado de toda la obra (no sólo las
+            # filas tocadas: cambiar un bpm más arriba corre el cálculo de
+            # todo lo que sigue) y de paso avisa — sin bloquear el guardado —
+            # si algún pulso quedó fuera del rango de su indicación de compás.
+            for info in recalcular_tiempos_calculados(obra):
+                seg = info["segmento"]
+                pulsos_compas = info["pulsos_por_compas"]
+                if not pulsos_compas or seg.compas_desde is None:
+                    continue
+                pulso_desde = seg.pulso_desde if seg.pulso_desde is not None else 1
+                pulso_hasta = seg.pulso_hasta if seg.pulso_hasta is not None else pulsos_compas
+                if not (1 <= pulso_desde <= pulsos_compas):
+                    messages.warning(
+                        request,
+                        f"Fila {seg.orden}: el pulso desde ({pulso_desde:g}) está fuera de rango "
+                        f"para {info['indicacion_compas']} (1 a {pulsos_compas:g}).",
+                    )
+                if not (1 <= pulso_hasta <= pulsos_compas):
+                    messages.warning(
+                        request,
+                        f"Fila {seg.orden}: el pulso hasta ({pulso_hasta:g}) está fuera de rango "
+                        f"para {info['indicacion_compas']} (1 a {pulsos_compas:g}).",
+                    )
+
+            return redirect("partituras:itinerario_obra", pk=pk)
+    else:
+        formset = SegmentoFormSet(queryset=queryset, prefix="segmentos")
+
+    return render(request, "partituras/itinerario_obra.html", {
+        "obra": obra,
+        "formset": formset,
+    })
+
+
+@login_required
+def crear_obra(request):
+    """Crea una obra nueva. Si se llamó desde la ficha de una partitura
+    (partitura_pk en el POST) la adjunta ahí mismo en el mismo paso y vuelve
+    a esa partitura; si no, es una creación independiente y va a la ficha de
+    la obra recién creada."""
+    if request.method != "POST":
+        return redirect("partituras:obras")
+    partitura = Partitura.objects.filter(pk=request.POST.get("partitura_pk"), owner=request.user).first()
+    form = ObraForm(request.POST)
+    if not form.is_valid():
+        return redirect("partituras:estado", pk=partitura.pk) if partitura else redirect("partituras:obras")
+    obra = form.save(commit=False)
+    obra.owner = request.user
+    obra.save()
+    if partitura:
+        partitura.obra = obra
+        partitura.save(update_fields=["obra"])
+        # `estado`, no `detalle` — igual que el botón "Salir" de cada etapa:
+        # si se fuera a `detalle` (el router inteligente) y la partitura
+        # tiene trabajo pendiente, rebotaría a esa etapa sin mostrar la
+        # confirmación de que la obra se creó/adjuntó.
+        return redirect("partituras:estado", pk=partitura.pk)
+    return redirect("partituras:obra_detalle", pk=obra.pk)
+
+
+@login_required
+def adjuntar_a_obra(request, pk):
+    """Adjunta una partitura propia (todavía sin obra) a esta obra, desde
+    la propia ficha de la obra — el otro sentido de gestionar_obra."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    if request.method == "POST":
+        partitura = Partitura.objects.filter(
+            pk=request.POST.get("partitura_id"), owner=request.user, obra__isnull=True,
+        ).first()
+        if partitura:
+            partitura.obra = obra
+            partitura.save(update_fields=["obra"])
+    return redirect("partituras:obra_detalle", pk=pk)
+
+
+@login_required
+def gestionar_obra(request, pk):
+    """Adjunta o separa esta partitura de una obra. Por ahora sólo entre las
+    obras propias — todavía no hay una forma de ver/elegir obras de otros
+    usuarios (no hace falta aprobación del owner para sumar una parte, según
+    lo hablado, pero eso requiere primero un mecanismo para *ver* obras
+    ajenas, que no existe todavía)."""
+    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if request.method != "POST":
+        return redirect("partituras:estado", pk=pk)
+    accion = request.POST.get("accion")
+    if accion == "adjuntar":
+        obra = Obra.objects.filter(pk=request.POST.get("obra_id"), owner=request.user).first()
+        if obra:
+            partitura.obra = obra
+            partitura.save(update_fields=["obra"])
+    elif accion == "separar":
+        partitura.obra = None
+        partitura.save(update_fields=["obra"])
+    # `next`, si vino de la ficha de una obra (para volver ahí en vez de a la
+    # ficha de la partitura) — sólo se acepta una ruta local, no una URL externa.
+    siguiente = request.POST.get("next")
+    if siguiente and siguiente.startswith("/"):
+        return redirect(siguiente)
+    return redirect("partituras:estado", pk=pk)
 
 
 # ── Normalización: rotación + desalineado fino ────────────────────────────

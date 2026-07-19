@@ -12,6 +12,125 @@ def _upload_path_normalizado(instance, filename):
     return f"partituras/u{instance.owner_id}/{uuid.uuid4().hex}_normalizado.pdf"
 
 
+class Obra(models.Model):
+    """La pieza musical en sí, independiente de cualquier instrumento — varias
+    Partitura (una por parte/instrumento) pueden pertenecer a la misma Obra.
+    Dueña de los datos que son propiedad de la obra y no de una parte en
+    particular (más adelante: itinerario de repeticiones/saltos, grabación de
+    referencia para sincronizar) — ver notas de diseño del proyecto."""
+    titulo = models.CharField(max_length=200)
+    compositor = models.CharField(max_length=200, blank=True)
+    arreglista = models.CharField(max_length=200, blank=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='obras',
+    )
+    creado = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creado']
+        verbose_name = 'Obra'
+        verbose_name_plural = 'Obras'
+
+    def __str__(self):
+        return f"{self.titulo} ({self.compositor})" if self.compositor else self.titulo
+
+
+class Segmento(models.Model):
+    """Una fila del itinerario de ejecución de una Obra — un tramo contiguo
+    de compases que se toca de corrido. Donde una fila no continúa en el
+    compás/pulso exacto donde terminó la anterior, ahí hay un salto
+    (repetición, D.C./D.S., al Coda — lo que sea): no hace falta representar
+    el símbolo ni el motivo, sólo el tramo real que se toca. Una repetición
+    simple son dos filas con el mismo rango; una primera/segunda vez son dos
+    filas que divergen en el mismo punto.
+
+    La última fila de una obra es un ancla de cierre: sólo tiene
+    `tiempo_inicio` (dónde termina el último compás real), sin rango de
+    compases propio (`compas_desde` null) — así la duración de CUALQUIER
+    fila, incluida la última con contenido real, sale siempre de la misma
+    cuenta: tiempo_inicio de la fila siguiente menos el propio. No hace
+    falta un campo `tiempo_fin` aparte que sólo usaría la última fila."""
+
+    VARIACIONES_TEMPO = [
+        ('', 'Constante'),
+        ('accelerando', 'Accelerando'),
+        ('ritardando', 'Ritardando'),
+    ]
+
+    obra = models.ForeignKey(Obra, related_name='segmentos', on_delete=models.CASCADE)
+    orden = models.PositiveIntegerField(
+        help_text="Numerar de a 10 (10, 20, 30…) para poder insertar filas en el medio sin renumerar el resto.",
+    )
+    # compas_desde/pulso_desde/compas_hasta/pulso_hasta son los campos
+    # "de verdad" (los que usa el resto del código) — desde_texto/hasta_texto
+    # son lo que el usuario tipea en la tabla ("4" o "4,1") y se procesan al
+    # guardar (ver itinerario_obra). Quedan ambos a propósito, aunque sea
+    # redundante: es más simple que armar un campo de formulario custom que
+    # reparta un solo input en dos campos de modelo.
+    compas_desde = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Vacío sólo en la fila final de cierre (sin contenido propio, sólo marca dónde termina el último compás).",
+    )
+    pulso_desde = models.FloatField(
+        null=True, blank=True,
+        help_text="Vacío = 1 (el primer pulso) — se resuelve así al leer, nunca se guarda el 1 explícito. "
+                   "Puede ser decimal (1.5 = la corchea después del primer pulso).",
+    )
+    compas_hasta = models.PositiveIntegerField(null=True, blank=True)
+    pulso_hasta = models.FloatField(
+        null=True, blank=True,
+        help_text="Vacío = hasta el final del último pulso del compás — se resuelve así al leer. También puede ser decimal.",
+    )
+    desde_texto = models.CharField(
+        max_length=20, blank=True,
+        help_text='Lo que se tipea en la tabla: "4" (compás 4, pulso 1) o "4,1.5" (compás 4, pulso 1 y medio) — '
+                   'coma separa compás de pulso, punto es el decimal DENTRO del pulso.',
+    )
+    hasta_texto = models.CharField(
+        max_length=20, blank=True,
+        help_text='Igual que desde_texto, pero "4" sin coma acá significa "hasta el final del compás 4", no pulso 1.',
+    )
+    indicacion_compas = models.CharField(
+        max_length=10, blank=True,
+        help_text="Ej: 4/4 — vacío hereda la de la fila anterior.",
+    )
+    variacion_tempo = models.CharField(max_length=12, choices=VARIACIONES_TEMPO, blank=True, default='')
+    bpm = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Tempo de arranque de este tramo (constante, o punto de partida si es accelerando/ritardando) "
+                   "— vacío hereda el tempo vigente (bpm_llegada si la fila anterior tenía uno, si no su bpm) "
+                   "de la fila anterior. Se usa para calcular tiempo_inicio_calculado.",
+    )
+    bpm_llegada = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Sólo tiene sentido en un tramo con accelerando/ritardando: tempo al que llega al final. "
+                   "Es lo que hereda la fila siguiente (no el bpm de arranque) cuando está presente.",
+    )
+    descripcion = models.CharField(max_length=200, blank=True, help_text="Rótulo libre (ej: 'Exposición', 'Coda') — sin efecto en la secuencia.")
+    tiempo_inicio = models.DurationField(
+        null=True, blank=True,
+        help_text="Tiempo transcurrido desde el inicio de la grabación hasta acá — vacío hasta sincronizar con audio/video real.",
+    )
+    tiempo_inicio_calculado = models.DurationField(
+        null=True, blank=True,
+        help_text="Estimación a partir de bpm/bpm_llegada de cada tramo (no de una grabación real) — se recalcula "
+                   "solo cada vez que se guarda el itinerario, queda como referencia independiente de tiempo_inicio.",
+    )
+
+    class Meta:
+        ordering = ['obra', 'orden']
+        unique_together = [('obra', 'orden')]
+        verbose_name = 'Segmento'
+        verbose_name_plural = 'Segmentos'
+
+    def __str__(self):
+        if self.compas_desde is None:
+            return f"{self.obra} — cierre"
+        return f"{self.obra} — c.{self.compas_desde}–{self.compas_hasta}"
+
+
 class Partitura(models.Model):
     ESTADOS_NORM = [
         ('pendiente', 'Pendiente'),
@@ -26,6 +145,13 @@ class Partitura(models.Model):
 
     titulo = models.CharField(max_length=200)
     compositor = models.CharField(max_length=200, blank=True)
+    obra = models.ForeignKey(
+        Obra,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='partituras',
+        help_text="La obra a la que pertenece esta parte, si ya se agrupó — separarla no borra la partitura.",
+    )
     instrumento = models.ForeignKey(
         'actividades.Instrumento',
         null=True, blank=True,

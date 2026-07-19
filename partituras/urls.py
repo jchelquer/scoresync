@@ -8,6 +8,13 @@ urlpatterns = [
     path('subir/', views.subir, name='subir'),
     path('<int:pk>/', views.detalle, name='detalle'),
     path('<int:pk>/estado/', views.estado, name='estado'),
+    path('<int:pk>/obra/', views.gestionar_obra, name='gestionar_obra'),
+
+    path('obras/', views.obras, name='obras'),
+    path('obras/nueva/', views.crear_obra, name='crear_obra'),
+    path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
+    path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
+    path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),
 
     path('<int:pk>/normalizar/', views.iniciar_normalizacion, name='iniciar_normalizacion'),
     path('<int:pk>/orientacion/<int:numero>/', views.ajuste_orientacion, name='ajuste_orientacion'),
