@@ -2,6 +2,16 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.2.0"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "Navegador del itinerario: recorrer la obra compás a compás (manual o en tiempo real), con rango desde-hasta, repetición de pasada y loop."
+    - type: nuevo
+      text: "Ejecución en tiempo real con metrónomo visual y auditivo (acento en el primer pulso de cada compás, sonido apagable por separado) y tempo interpolado en los accelerando/ritardando, incluso si arrancan o cortan a mitad de compás."
+    - type: nuevo
+      text: "Pausar, continuar y reiniciar la ejecución, con Anterior/Siguiente siempre referidos al compás activo."
+
 - version: "1.1.0"
   date: "2026-07-19"
   changes:
