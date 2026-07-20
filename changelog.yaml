@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.3.1"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "Control de velocidad para la ejecución en tiempo real (20%-120% del tempo original), con slider junto al botón de Ejecutar/Pausar/Continuar. Se puede ajustar en cualquier momento: si está sonando, tocarlo pausa automáticamente antes de aplicar el cambio; en pausa, el nuevo valor se aplica al toque, listo para retomar con Continuar."
+
 - version: "1.3.0"
   date: "2026-07-20"
   changes:

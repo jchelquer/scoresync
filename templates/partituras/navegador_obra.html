@@ -40,6 +40,10 @@
   #barra-compacta #switch-metronomo-visual,
   #barra-compacta #switch-metronomo-audio { font-size: 0.8rem; }
   #score-header-extra #form-rango { margin-bottom: 0 !important; gap: 0.6rem !important; }
+  #barra-compacta #control-velocidad,
+  #score-header-extra #control-velocidad { font-size: 0.8rem; }
+  #barra-compacta #control-velocidad input[type="range"],
+  #score-header-extra #control-velocidad input[type="range"] { width: 4.5rem !important; }
 
   /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
      final de la fila compacta, empujados a la derecha (todo lo demás
@@ -196,6 +200,11 @@
 <div class="fila-botones d-flex justify-content-center gap-2 flex-wrap mb-3">
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "Anterior" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
+  <div class="d-flex align-items-center gap-2" id="control-velocidad">
+    <label for="velocidad-slider" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
+    <input type="range" id="velocidad-slider" min="20" max="120" step="5" value="100" style="width: 6.5rem;">
+    <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">100%</span>
+  </div>
   <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
@@ -280,6 +289,9 @@
   const metronomoAudioToggle = document.getElementById('metronomo-audio');
   const switchMetronomoVisual = document.getElementById('switch-metronomo-visual');
   const switchMetronomoAudio = document.getElementById('switch-metronomo-audio');
+  const controlVelocidad = document.getElementById('control-velocidad');
+  const velocidadSlider = document.getElementById('velocidad-slider');
+  const velocidadValor = document.getElementById('velocidad-valor');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
@@ -311,8 +323,10 @@
     // al final a medida que se recorre el array). Sólo uno de los cuatro
     // está visible a la vez (ver mostrarControles), así que el orden entre
     // ellos casi no se nota — Ejecutar primero porque es el punto de
-    // entrada antes de que exista un plan cargado.
+    // entrada antes de que exista un plan cargado. El control de velocidad
+    // va justo antes de ese grupo.
     { el: formRango, destino: scoreHeaderExtra },
+    { el: controlVelocidad, destino: scoreHeaderExtra },
     { el: btnPlay, destino: scoreHeaderExtra },
     { el: btnPause, destino: scoreHeaderExtra },
     { el: btnContinuar, destino: scoreHeaderExtra },
@@ -334,6 +348,28 @@
   }
   metronomoVisualToggle.addEventListener('change', actualizarVisibilidadMetronomo);
   actualizarVisibilidadMetronomo();
+
+  // Velocidad de ejecución (20%-120% del tempo original) — se puede tocar
+  // en cualquier momento, incluso con el plan ya cargado: si está en pausa,
+  // se reconstruyen los tiempos con la nueva velocidad y se reubica
+  // elapsedAlPausar en el punto equivalente de la nueva escala, para que
+  // "Continuar" retome el mismo pulso (ver reconstruirTiempos). Si en
+  // cambio está sonando, el primer toque la pausa antes de aplicar nada —
+  // cambiarla a mitad de un pulso en pleno reloj corriendo no tiene un
+  // punto de reanudación consistente.
+  if (velocidadSlider && velocidadValor) {
+    velocidadSlider.addEventListener('input', () => {
+      velocidadValor.textContent = velocidadSlider.value + '%';
+      if (!planCargado) return;
+      if (rafId) pausar();
+      velocidadActual = leerVelocidadSlider();
+      reconstruirTiempos();
+      if (idxMostrado >= 0 && idxMostrado < acumulados.length) {
+        elapsedAlPausar = acumulados[idxMostrado];
+        mostrarPulso(pulsos[idxMostrado]); // refresca el bpm mostrado a la nueva velocidad
+      }
+    });
+  }
   let pulsosPorCompasMarcados = 0; // para no regenerar las marcas si no cambió el compás
 
   // El plan que manda el servidor ya viene a nivel de PULSO (no de
@@ -350,6 +386,40 @@
   let elapsedAlPausar = 0;
   let audioCtx = null;
   let planCargado = false;
+  // Velocidad de ejecución (20%-120% del tempo original) — pulsos[] guarda
+  // SIEMPRE la duración/bpm de verdad tal como los mandó el servidor (el
+  // tempo real del itinerario no se toca en ningún lado); duracionEscalada/
+  // bpmEscalado son la "lente" que aplica velocidadActual encima, recién al
+  // usarlos (armar acumulados, mostrar el bpm en pantalla). Así se puede
+  // recalcular en cualquier momento — incluso con el plan ya cargado y en
+  // pausa — sin perder el original ni tener que volver a pedirle nada al
+  // servidor.
+  let velocidadActual = 100;
+
+  function leerVelocidadSlider() {
+    if (!velocidadSlider) return 100;
+    return Math.min(120, Math.max(20, parseInt(velocidadSlider.value, 10) || 100));
+  }
+
+  function duracionEscalada(p) {
+    return p.duracion == null ? null : p.duracion * (100 / velocidadActual);
+  }
+
+  function bpmEscalado(bpm) {
+    return bpm == null ? null : Math.round(bpm * (velocidadActual / 100));
+  }
+
+  // Reconstruye acumulados/totalDuracion desde pulsos[] (ya cargado) con la
+  // velocidadActual vigente — no toca compasInicios (eso no depende de la
+  // velocidad, sólo se arma una vez al cargar el plan).
+  function reconstruirTiempos() {
+    acumulados = [];
+    totalDuracion = 0;
+    pulsos.forEach(p => {
+      acumulados.push(totalDuracion);
+      totalDuracion += duracionEscalada(p);
+    });
+  }
 
   function click(acento) {
     if (!audioCtx) return;
@@ -463,11 +533,17 @@
   }
 
   function mostrarPulso(p) {
+    // El bpm (y el de llegada, en el paréntesis del accel/rit) se muestran
+    // ya pasados por la velocidad vigente — lo que se ve tiene que
+    // coincidir con lo que efectivamente está sonando, no con el tempo
+    // "de verdad" guardado en el itinerario (ver bpmEscalado).
+    const bpmMostrado = bpmEscalado(p.bpm);
+    const bpmLlegadaMostrado = bpmEscalado(p.bpm_llegada);
     document.getElementById('nav-compas').textContent = p.compas;
     setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
-    setCampo('nav-bpm-wrap', 'nav-bpm', p.bpm ? (p.bpm + ' bpm') : '');
+    setCampo('nav-bpm-wrap', 'nav-bpm', bpmMostrado ? (bpmMostrado + ' bpm') : '');
     const variTxt = (p.variacion_tempo_display) ?
-      (p.variacion_tempo_display + (p.bpm_llegada ? ' → ' + p.bpm_llegada : '')) : '';
+      (p.variacion_tempo_display + (bpmLlegadaMostrado ? ' → ' + bpmLlegadaMostrado : '')) : '';
     setCampo('nav-variacion-wrap', 'nav-variacion', variTxt);
     document.getElementById('nav-tiempo-wrap').style.display = 'none';
     setCampo('nav-descripcion-wrap', 'nav-descripcion', p.descripcion || '');
@@ -1076,6 +1152,10 @@
     btnPause.style.display = estado === 'reproduciendo' ? '' : 'none';
     btnContinuar.style.display = estado === 'pausado' ? '' : 'none';
     btnReiniciar.style.display = estado === 'pausado' ? '' : 'none';
+    // El slider de velocidad se deja SIEMPRE habilitado (nunca con el
+    // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
+    // no recibiría ni el primer evento de interacción, y el listener de
+    // 'input' no podría pausar antes de aplicar el cambio (ver más arriba).
   }
 
   // Reposicionan el reloj (elapsedAlPausar) para que "Continuar" retome
@@ -1198,14 +1278,12 @@
       return;
     }
     pulsos = data.pulsos;
-    acumulados = [];
+    velocidadActual = leerVelocidadSlider();
     compasInicios = [];
-    totalDuracion = 0;
     pulsos.forEach((p, idx) => {
-      acumulados.push(totalDuracion);
-      totalDuracion += p.duracion;
       if (p.es_primer_pulso_compas) compasInicios.push(idx);
     });
+    reconstruirTiempos();
     idxMostrado = -1;
     planCargado = true;
     actualizarBotonesNav();
