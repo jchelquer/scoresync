@@ -18,8 +18,8 @@ from .services import (
     avanzar_compas, buscar_posicion, construir_plan, geometria_partitura,
     guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
-    recalcular_tiempos_calculados, renumerar_segmentos, resolver_segmentos,
-    retroceder_compas, segmentos_navegables,
+    parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
+    resolver_segmentos, retroceder_compas, segmentos_navegables,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -265,16 +265,32 @@ def _leer_entero(valor, default):
         return default
 
 
-def _partitura_seguida(obra):
+def _partes_disponibles(obra):
+    """Partes de esta obra que se pueden seguir en la ejecución — sólo las
+    que ya tienen compases confirmados en alguna página (mostrar una parte
+    a medio procesar sería peor que no mostrar nada)."""
+    return [p for p in obra.partituras.all() if p.paginas.filter(compases_confirmados=True).exists()]
+
+
+def _partitura_seguida(obra, request):
     """La parte de esta obra que se usa para mostrar el score durante la
-    ejecución — por ahora, cualquiera que ya tenga compases confirmados en
-    alguna página (más adelante: preferir la que coincida con el
-    instrumento del usuario logueado, cuando haya más de una parte para
-    elegir — ver notas de diseño del proyecto sobre la elección de parte)."""
-    return next(
-        (p for p in obra.partituras.all() if p.paginas.filter(compases_confirmados=True).exists()),
-        None,
-    )
+    ejecución. Prioridad: (1) la elegida explícitamente por querystring
+    (?parte=<id>), si es válida — así el selector del navegador puede
+    cambiarla; (2) la propia del usuario logueado (Partitura.owner), el
+    default más útil: "mi parte" sin tener que elegir nada; (3) la primera
+    disponible, si ninguna de las anteriores aplica."""
+    candidatas = _partes_disponibles(obra)
+    if not candidatas:
+        return None
+    partitura_id = _leer_entero(request.GET.get("parte"), None)
+    if partitura_id:
+        elegida = next((p for p in candidatas if p.id == partitura_id), None)
+        if elegida:
+            return elegida
+    propia = next((p for p in candidatas if p.owner_id == request.user.id), None)
+    if propia:
+        return propia
+    return candidatas[0]
 
 
 @login_required
@@ -299,15 +315,34 @@ def navegador_obra(request, pk):
 
     resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
 
-    desde_compas = _leer_entero(request.GET.get("desde_compas"), navegables[0].compas_desde)
+    # desde_compas/hasta_compas aceptan la misma notación "compás,pulso" que
+    # desde_texto/hasta_texto en el itinerario (ver parsear_compas_pulso) —
+    # el texto crudo se conserva para reponerlo en el input y para armar las
+    # URLs de anterior/siguiente; el compás ya parseado (entero) sigue
+    # siendo lo que usan buscar_posicion/avanzar_compas/retroceder_compas,
+    # que trabajan a nivel de compás, no de pulso.
+    desde_compas_raw = request.GET.get("desde_compas") or ""
+    try:
+        desde_compas, desde_pulso = parsear_compas_pulso(desde_compas_raw, 1)
+    except ValueError:
+        desde_compas, desde_pulso = None, None
+    if desde_compas is None:
+        desde_compas = navegables[0].compas_desde
+        desde_pulso = None
+        desde_compas_raw = str(desde_compas)
     desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
+
     hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    try:
+        hasta_compas, hasta_pulso = parsear_compas_pulso(hasta_compas_raw, None)
+    except ValueError:
+        hasta_compas, hasta_pulso = None, None
     hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
     loop = request.GET.get("loop") == "on"
 
     pos_desde = buscar_posicion(obra, desde_compas, desde_pasada) or (navegables[0], navegables[0].compas_desde)
     if hasta_compas_raw:
-        pos_hasta = buscar_posicion(obra, _leer_entero(hasta_compas_raw, 0), hasta_pasada) \
+        pos_hasta = buscar_posicion(obra, hasta_compas or 0, hasta_pasada) \
             or (navegables[-1], navegables[-1].compas_hasta)
     else:
         pos_hasta = (navegables[-1], navegables[-1].compas_hasta)
@@ -329,12 +364,17 @@ def navegador_obra(request, pk):
     )
     anterior = retroceder_compas(obra, segmento_actual, compas_actual)
 
+    partes_disponibles = _partes_disponibles(obra)
+    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
+
     base_params = {
-        "desde_compas": desde_compas, "desde_pasada": desde_pasada,
+        "desde_compas": desde_compas_raw, "desde_pasada": desde_pasada,
         "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
     }
     if loop:
         base_params["loop"] = "on"
+    if partitura_seguida:
+        base_params["parte"] = partitura_seguida.pk
 
     def url_para(posicion):
         if posicion is None:
@@ -354,11 +394,13 @@ def navegador_obra(request, pk):
         "url_siguiente": url_para(siguiente),
         "url_anterior": url_para(anterior),
         "en_fin_de_rango": en_fin_de_rango and not loop,
-        "desde_compas": desde_compas, "desde_pasada": desde_pasada,
+        "desde_compas": desde_compas_raw, "desde_pasada": desde_pasada,
         "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
         "loop": loop,
         "compas_siguiente": siguiente[1] if siguiente else None,
-        "tiene_score": _partitura_seguida(obra) is not None,
+        "tiene_score": partitura_seguida is not None,
+        "partitura_seguida": partitura_seguida,
+        "partes_disponibles": partes_disponibles,
     })
 
 
@@ -375,13 +417,26 @@ def plan_obra(request, pk):
     if not navegables:
         return JsonResponse({"pulsos": [], "completo": True})
 
-    desde_compas = _leer_entero(request.GET.get("desde_compas"), navegables[0].compas_desde)
+    try:
+        desde_compas, desde_pulso = parsear_compas_pulso(request.GET.get("desde_compas") or "", 1)
+    except ValueError:
+        desde_compas, desde_pulso = None, None
+    if desde_compas is None:
+        desde_compas = navegables[0].compas_desde
+        desde_pulso = None
     desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
-    hasta_compas_raw = request.GET.get("hasta_compas") or ""
-    hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
-    hasta_compas = _leer_entero(hasta_compas_raw, None) if hasta_compas_raw else None
 
-    pulsos, completo = construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
+    hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    try:
+        hasta_compas, hasta_pulso = parsear_compas_pulso(hasta_compas_raw, None) if hasta_compas_raw else (None, None)
+    except ValueError:
+        hasta_compas, hasta_pulso = None, None
+    hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
+
+    pulsos, completo = construir_plan(
+        obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
+        desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
+    )
     return JsonResponse({"pulsos": pulsos, "completo": completo})
 
 
@@ -393,7 +448,7 @@ def score_geometria_obra(request, pk):
     score se dibuja después con esto ya en memoria, sin volver a pedirle
     la posición de cada compás al servidor."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
-    partitura = _partitura_seguida(obra)
+    partitura = _partitura_seguida(obra, request)
     if not partitura:
         return JsonResponse({"partitura": None, "paginas": []})
 

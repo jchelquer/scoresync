@@ -2,6 +2,24 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.3.0"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "El rango desde/hasta del navegador acepta un pulso puntual (ej. 5,1.3 = compás 5, pulso 1 más 3 décimos), no sólo el compás entero."
+    - type: nuevo
+      text: "Atajos de teclado durante la ejecución: Espacio pausa/continúa, flechas izquierda/derecha van a Anterior/Siguiente."
+    - type: nuevo
+      text: "Logo propio de ScoreSync (favicon) y logo de Infedu-jch con link a infedu.com.ar en el pie de página."
+    - type: mejorado
+      text: "El recuadro que marca el compás actual se recorta proporcionalmente cuando sólo se va a tocar una parte de él (arranca o corta a mitad de pulso)."
+    - type: mejorado
+      text: "En modo partitura, el metrónomo visual y el sonido quedan accesibles en la barra compacta; el cursor de pulso sobre el score hace de indicador visual en cada pulso, sin un recuadro aparte."
+    - type: mejorado
+      text: "En modo partitura, Ejecutar/Pausar/Continuar/Reiniciar se reubicaron junto al rango y Anterior/Siguiente; los botones de navegación tienen forma de tecla de teclado."
+    - type: corregido
+      text: "El recorte y el cursor sobre el primer compás de cada sistema quedaban corridos por un dato de geometría (arranca en x=0, antes del margen real de la página)."
+
 - version: "1.2.1"
   date: "2026-07-20"
   changes:

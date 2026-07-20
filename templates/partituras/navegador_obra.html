@@ -2,13 +2,124 @@
 {% load i18n %}
 {% block title %}Navegador — {{ obra.titulo }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* Modo "ensayo con parte" (ver alternarModoScore() en el script de más
+     abajo): header y panel de controles normales se esconden enteros —
+     sus elementos clave ya fueron REUBICADOS (no clonados: son los mismos
+     nodos con sus mismos listeners) en dos destinos antes de esconder el
+     resto: metrónomo/compás/indicación/bpm/modo/volver van a
+     #barra-compacta; rango (desde/hasta/loop), Ejecutar/Pausar/Continuar/
+     Reiniciar y Anterior/Siguiente van a #score-header-extra, junto a los
+     botones de zoom — así nada se pierde, sólo queda afuera el título, el
+     selector de parte, y lo que no se pidió tener en ninguna fila
+     (checkboxes de metrónomo, descripción, etc). */
+  /* !important hace falta: #header-normal tiene la clase .d-flex de
+     Bootstrap, y las utilidades de display de Bootstrap (.d-flex, .d-none)
+     se definen con !important en su propia hoja — un display:none común
+     nunca les gana, sin importar especificidad ni orden. */
+  body.modo-partitura #header-normal,
+  body.modo-partitura #panel-controles,
+  body.modo-partitura footer {
+    display: none !important;
+  }
+  #barra-compacta { display: none; }
+  body.modo-partitura #barra-compacta {
+    display: flex !important;
+    align-items: flex-end !important;
+  }
+  body.modo-partitura #score-header-extra {
+    display: flex !important;
+  }
+
+  #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
+  #barra-compacta #nav-indicacion-wrap,
+  #barra-compacta #nav-bpm-wrap { font-size: 0.8rem; }
+  #barra-compacta .btn,
+  #score-header-extra .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
+  #barra-compacta #switch-metronomo-visual,
+  #barra-compacta #switch-metronomo-audio { font-size: 0.8rem; }
+  #score-header-extra #form-rango { margin-bottom: 0 !important; gap: 0.6rem !important; }
+
+  /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
+     final de la fila compacta, empujados a la derecha (todo lo demás
+     sigue agrupado a la izquierda). */
+  #barra-compacta #btn-modo-score { margin-left: auto; }
+
+  /* Alto real: se calcula en JS contra el espacio que efectivamente queda
+     debajo del panel en el viewport (ajustarAltoContenedorScore) — el
+     panel no arranca en el borde superior de la pantalla, así que un
+     porcentaje fijo de la ventana (vh) o un calc() adivinado podían
+     quedar más altos que el espacio real disponible. Este mínimo es sólo
+     para el primerísimo instante antes de que el JS corra. */
+  #score-ventana-contenedor { min-height: 200px; }
+
+  /* El score aprovecha todo el ancho de la ventana del navegador, no sólo
+     el ancho del .container de Bootstrap que limita el resto de la
+     página — truco estándar de "full-bleed" (centra un elemento de
+     100vw respecto al viewport, sin importar el contenedor angosto en el
+     que esté anidado). */
+  #score-panel {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    margin-left: -50vw;
+  }
+  #score-panel .card-body { padding-left: 1.5rem; padding-right: 1.5rem; }
+
+  /* "Tecla" de teclado (▲▼ de navegación vertical, y las flechitas junto a
+     Anterior/Siguiente que recuerdan el atajo de teclado ←/→) — un
+     recuadro con un borde inferior más grueso que "levanta" la tecla,
+     y se aplana al hacer click, imitando una keycap física. */
+  .ss-tecla {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.8rem;
+    height: 1.7rem;
+    padding: 0 0.35rem;
+    border-radius: 5px;
+    border: 1px solid #142221;
+    border-bottom-width: 3px;
+    background: linear-gradient(180deg, #3d6f6b, #2c5350);
+    color: var(--ss-text-bright);
+    font-weight: 700;
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    appearance: none;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08) inset;
+  }
+  .ss-tecla:hover { filter: brightness(1.12); }
+  .ss-tecla:active {
+    border-bottom-width: 1px;
+    margin-top: 2px;
+    filter: brightness(0.95);
+  }
+  .ss-tecla-inline {
+    min-width: 1.4rem;
+    height: 1.3rem;
+    font-size: 0.75rem;
+    vertical-align: -1px;
+    cursor: default;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h5 style="color: var(--ss-text-bright)">
+<div class="d-flex justify-content-between align-items-center mb-3" id="header-normal">
+  <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
     {% translate "Navegador" %} — {{ obra.titulo }}
   </h5>
-  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  <div class="d-flex gap-2">
+    {% if tiene_score %}
+    <button id="btn-modo-score" type="button" class="btn btn-outline-light btn-sm">🎼 {% translate "Modo partitura" %}</button>
+    {% endif %}
+    <a id="link-volver-obra" href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  </div>
 </div>
+
+<div id="barra-compacta" class="d-none flex-wrap align-items-center gap-2 mb-2"></div>
 
 {% if sin_contenido %}
 <p class="small" style="color: var(--ss-text-muted)">
@@ -17,28 +128,33 @@
 </p>
 {% else %}
 
-<form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-4">
-  <div>
-    <label class="form-label small mb-0">{% translate "Desde compás" %}</label>
-    <input type="number" name="desde_compas" value="{{ desde_compas }}" class="form-control form-control-sm" style="width: 6rem;">
+<div id="panel-controles">
+<form method="get" id="form-rango" class="form-rango d-flex flex-wrap gap-3 align-items-end mb-4">
+  {% if partitura_seguida %}<input type="hidden" name="parte" value="{{ partitura_seguida.pk }}">{% endif %}
+  <div class="d-flex align-items-end gap-1">
+    <div>
+      <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "desde c." %}</label>
+      <input type="text" inputmode="decimal" name="desde_compas" value="{{ desde_compas }}" placeholder="{% translate 'ej. 5,1.3' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos)' %}" class="form-control form-control-sm" style="width: 5rem;">
+    </div>
+    <div>
+      <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+      <input type="number" name="desde_pasada" value="{{ desde_pasada }}" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
+    </div>
   </div>
-  <div>
-    <label class="form-label small mb-0">{% translate "Vez" %}</label>
-    <input type="number" name="desde_pasada" value="{{ desde_pasada }}" min="1" class="form-control form-control-sm" style="width: 5rem;">
-  </div>
-  <div>
-    <label class="form-label small mb-0">{% translate "Hasta compás" %}</label>
-    <input type="number" name="hasta_compas" value="{{ hasta_compas }}" placeholder="{% translate 'fin' %}" class="form-control form-control-sm" style="width: 6rem;">
-  </div>
-  <div>
-    <label class="form-label small mb-0">{% translate "Vez" %}</label>
-    <input type="number" name="hasta_pasada" value="{{ hasta_pasada }}" min="1" class="form-control form-control-sm" style="width: 5rem;">
+  <div class="d-flex align-items-end gap-1">
+    <div>
+      <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "hasta c." %}</label>
+      <input type="text" inputmode="decimal" name="hasta_compas" value="{{ hasta_compas }}" placeholder="{% translate 'fin' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos)' %}" class="form-control form-control-sm" style="width: 5rem;">
+    </div>
+    <div>
+      <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+      <input type="number" name="hasta_pasada" value="{{ hasta_pasada }}" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
+    </div>
   </div>
   <div class="form-check mb-1">
     <input type="checkbox" name="loop" id="loop" class="form-check-input" {% if loop %}checked{% endif %}>
-    <label for="loop" class="form-check-label small">{% translate "Loop" %}</label>
+    <label for="loop" class="form-check-label small" style="color: var(--ss-text-muted);">{% translate "Loop" %}</label>
   </div>
-  <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Fijar rango" %}</button>
 </form>
 
 <div class="card border-0 text-center mb-3" style="background: var(--ss-surface)">
@@ -48,9 +164,9 @@
       <div id="nav-metronomo-punto" style="position: absolute; top: 50%; left: 12.5%; width: 1.5rem; height: 1.5rem; margin-top: -0.75rem; margin-left: -0.75rem; border-radius: 50%; background: var(--ss-accent); opacity: 0.35; transition: left 0.08s linear, opacity 0.06s, transform 0.06s;"></div>
     </div>
     <div class="display-3" id="nav-compas" style="color: var(--ss-text-bright)">{{ compas_actual }}</div>
-    <p class="small mb-0" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
+    <p class="nav-compas-label small mb-0" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
 
-    <div class="mt-4 d-flex justify-content-center gap-4 flex-wrap">
+    <div class="info-extra mt-4 d-flex justify-content-center gap-4 flex-wrap">
       <span id="nav-indicacion-wrap" style="color: var(--ss-text); {% if not indicacion_compas %}display:none;{% endif %}">
         <i class="bi bi-music-note-beamed me-1"></i><span id="nav-indicacion">{{ indicacion_compas }}</span>
       </span>
@@ -77,36 +193,61 @@
 
 <p id="plan-error" class="small text-warning text-center" style="display:none;"></p>
 
-<div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
-  <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}>← {% translate "Anterior" %}</button>
-  <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %} →</button>
+<div class="fila-botones d-flex justify-content-center gap-2 flex-wrap mb-3">
+  <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "Anterior" %}</button>
+  <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
   <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
   <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;">↺ {% translate "Reiniciar" %}</button>
-  <div class="form-check form-switch d-flex align-items-center ms-2">
+  <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
     <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
-    <label class="form-check-label small ms-1" for="metronomo-visual">{% translate "Metrónomo visual" %}</label>
+    <label class="form-check-label small ms-1" for="metronomo-visual" style="color: var(--ss-text-muted);">{% translate "Metrónomo visual" %}</label>
   </div>
-  <div class="form-check form-switch d-flex align-items-center">
+  <div class="form-check form-switch d-flex align-items-center" id="switch-metronomo-audio">
     <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
-    <label class="form-check-label small ms-1" for="metronomo-audio">{% translate "Sonido" %}</label>
+    <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
   </div>
+</div>
 </div>
 
 {% if tiene_score %}
-<div class="card border-0 mb-3" style="background: var(--ss-surface)">
+<div class="card border-0 mb-3" id="score-panel" style="background: var(--ss-surface)">
   <div class="card-body">
-    <p class="small mb-2" style="color: var(--ss-text-muted)">{% translate "Score" %} — <span id="score-parte"></span></p>
-    <div class="d-flex gap-3 flex-wrap justify-content-center">
-      <div class="text-center">
-        <canvas id="score-canvas-actual" width="320" height="110" style="background:#222; border-radius:4px; border: 2px solid var(--ss-accent);"></canvas>
-        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">{% translate "actual" %}</p>
+    <div class="d-flex align-items-end flex-wrap gap-2 mb-2" id="score-header-row">
+      {% if partes_disponibles|length > 1 %}
+      <form method="get" class="d-flex align-items-center gap-2">
+        <input type="hidden" name="desde_compas" value="{{ desde_compas }}">
+        <input type="hidden" name="desde_pasada" value="{{ desde_pasada }}">
+        <input type="hidden" name="hasta_compas" value="{{ hasta_compas }}">
+        <input type="hidden" name="hasta_pasada" value="{{ hasta_pasada }}">
+        {% if loop %}<input type="hidden" name="loop" value="on">{% endif %}
+        <span class="small" style="color: var(--ss-text-muted)">{% translate "Score" %} —</span>
+        <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+          {% for p in partes_disponibles %}
+          <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
+            {{ p.titulo }}{% if p.parte %} — {{ p.parte }}{% endif %}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </form>
+      {% else %}
+      <p class="small mb-0" id="score-titulo-parte" style="color: var(--ss-text-muted)">{% translate "Score" %} — <span id="score-parte"></span></p>
+      {% endif %}
+      <!-- Modo partitura: acá se reubican el rango (desde/hasta/loop) y
+           Anterior/Siguiente — ver alternarModoScore(). Vacío y escondido
+           en modo normal, donde esos controles siguen en su lugar de
+           siempre. -->
+      <div id="score-header-extra" class="d-none align-items-end flex-wrap gap-2"></div>
+      <div class="d-flex align-items-end gap-1" style="margin-left: auto;">
+        <button id="btn-sistema-anterior" type="button" class="ss-tecla" title="{% translate 'Subir un sistema' %}">↑</button>
+        <button id="btn-sistema-siguiente" type="button" class="ss-tecla" title="{% translate 'Bajar un sistema' %}">↓</button>
+        <button id="btn-zoom-menos" type="button" class="btn btn-outline-light btn-sm" title="{% translate 'Alejar' %}">−</button>
+        <button id="btn-zoom-mas" type="button" class="btn btn-outline-light btn-sm" title="{% translate 'Acercar' %}">+</button>
       </div>
-      <div class="text-center">
-        <canvas id="score-canvas-siguiente" width="320" height="110" style="background:#222; border-radius:4px; border: 2px dashed var(--ss-text-muted);"></canvas>
-        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">{% translate "siguiente" %}</p>
-      </div>
+    </div>
+    <div id="score-ventana-contenedor" style="position: relative; width: 100%; background: #222; border-radius: 4px; overflow: auto;">
+      <canvas id="score-ventana-canvas" style="display: block;"></canvas>
     </div>
     <p id="score-error" class="small text-warning mt-2 mb-0" style="display:none;"></p>
   </div>
@@ -121,6 +262,15 @@
   const btnReiniciar = document.getElementById('btn-reiniciar');
   const btnAnterior = document.getElementById('btn-anterior');
   const btnSiguiente = document.getElementById('btn-siguiente');
+  const btnModoScore = document.getElementById('btn-modo-score');
+  const linkVolverObra = document.getElementById('link-volver-obra');
+  const formRango = document.getElementById('form-rango');
+  const barraCompacta = document.getElementById('barra-compacta');
+  const scoreHeaderExtra = document.getElementById('score-header-extra');
+  const btnZoomMas = document.getElementById('btn-zoom-mas');
+  const btnZoomMenos = document.getElementById('btn-zoom-menos');
+  const btnSistemaAnterior = document.getElementById('btn-sistema-anterior');
+  const btnSistemaSiguiente = document.getElementById('btn-sistema-siguiente');
   const errorEl = document.getElementById('plan-error');
   const loopEl = document.getElementById('loop');
   const metronomoCaja = document.getElementById('nav-metronomo-caja');
@@ -128,6 +278,53 @@
   const metronomoMarcas = document.getElementById('nav-metronomo-marcas');
   const metronomoVisualToggle = document.getElementById('metronomo-visual');
   const metronomoAudioToggle = document.getElementById('metronomo-audio');
+  const switchMetronomoVisual = document.getElementById('switch-metronomo-visual');
+  const switchMetronomoAudio = document.getElementById('switch-metronomo-audio');
+  const navCompas = document.getElementById('nav-compas');
+  const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
+  const navBpmWrap = document.getElementById('nav-bpm-wrap');
+
+  // Modo "ensayo con parte" (ver alternarModoScore() más abajo): estos
+  // nodos se REUBICAN físicamente (no se clonan — siguen siendo los mismos
+  // elementos con sus mismos listeners/ids), cada uno a uno de dos
+  // destinos — compás/indicación/bpm/switches de metrónomo/modo/volver a
+  // #barra-compacta; rango (con Loop), Ejecutar/Pausar/Continuar/Reiniciar
+  // (entre Loop y Anterior) y Anterior/Siguiente a #score-header-extra,
+  // junto a los botones de zoom. El recuadro con el puntito del metrónomo
+  // (metronomoCaja) NO se reubica acá a propósito: en modo partitura el
+  // cursor de pulso que ya se dibuja sobre el score (ver
+  // renderizarCursorPulso) hace de indicador visual, no hace falta uno
+  // aparte flotando en la barra. Se marca la posición original de cada uno
+  // con un comentario ancla ANTES de mover nada, así restaurar no depende
+  // de en qué orden se muevan/restauren varios hermanos entre sí.
+  const reubicables = [
+    { el: navCompas, destino: barraCompacta },
+    { el: navIndicacionWrap, destino: barraCompacta },
+    { el: navBpmWrap, destino: barraCompacta },
+    { el: switchMetronomoVisual, destino: barraCompacta },
+    { el: switchMetronomoAudio, destino: barraCompacta },
+    { el: btnModoScore, destino: barraCompacta },
+    { el: linkVolverObra, destino: barraCompacta },
+    // Ejecutar/Pausar/Continuar/Reiniciar van en la MISMA fila que el rango
+    // (con Loop) y Anterior/Siguiente — entre uno y otro, ya que el orden
+    // acá determina el orden final en el destino (appendChild va agregando
+    // al final a medida que se recorre el array). Sólo uno de los cuatro
+    // está visible a la vez (ver mostrarControles), así que el orden entre
+    // ellos casi no se nota — Ejecutar primero porque es el punto de
+    // entrada antes de que exista un plan cargado.
+    { el: formRango, destino: scoreHeaderExtra },
+    { el: btnPlay, destino: scoreHeaderExtra },
+    { el: btnPause, destino: scoreHeaderExtra },
+    { el: btnContinuar, destino: scoreHeaderExtra },
+    { el: btnReiniciar, destino: scoreHeaderExtra },
+    { el: btnAnterior, destino: scoreHeaderExtra },
+    { el: btnSiguiente, destino: scoreHeaderExtra },
+  ].filter(r => r.el && r.destino);
+  const anclasReubicacion = reubicables.map(({ el, destino }) => {
+    const ancla = document.createComment('ancla');
+    el.parentNode.insertBefore(ancla, el);
+    return { el, ancla, destino };
+  });
 
   function actualizarVisibilidadMetronomo() {
     // Con el visual apagado no tiene sentido dejar el recuadro/punto
@@ -197,12 +394,62 @@
     }, 90);
   }
 
+  // El cursor de pulso que ya se dibuja sobre el score (renderizarCursorPulso)
+  // hace las veces de metrónomo visual ahí — no hay un recuadro/puntito
+  // aparte en modo partitura (ver reubicables más arriba). Sólo agranda y
+  // resalta un instante en cada pulso, gobernado por el mismo switch
+  // "Metrónomo visual"; se activa ACÁ (antes de mostrarPulso) para que el
+  // repintado que sigue ya dibuje el cursor en su posición nueva con el
+  // flash puesto, no la vieja.
+  let cursorFlashActivo = false;
+  let cursorFlashAcento = false;
+  let cursorFlashTimeoutId = null;
+  function flashCursorScore(acento) {
+    cursorFlashActivo = true;
+    cursorFlashAcento = acento;
+    if (cursorFlashTimeoutId) clearTimeout(cursorFlashTimeoutId);
+    cursorFlashTimeoutId = setTimeout(() => {
+      cursorFlashActivo = false;
+      repintarScore();
+    }, 90);
+  }
+
   function marcarPulso(p) {
     if (metronomoVisualToggle.checked) {
       posicionarPunto(p.pulso, p.pulsos_por_compas);
       flashVisual(p.acento);
+      flashCursorScore(p.acento);
     }
     if (metronomoAudioToggle.checked) click(p.acento);
+  }
+
+  // Cobertura real del número de compás que cae en pulsos[idx], fusionando
+  // TODAS las ocurrencias CONSECUTIVAS de ese mismo número a los dos lados
+  // (un compás partido entre dos filas — una termina en un pulso, la
+  // siguiente arranca en el que sigue — da varias "ocurrencias" seguidas
+  // del mismo número en pulsos[], y en conjunto siguen siendo el compás
+  // COMPLETO). Sirve tanto para el primer/último compás del rango pedido
+  // (si desde_pulso/hasta_pulso lo acotan) como para cualquier compás en el
+  // MEDIO del plan cuya fila real corte a mitad de pulso sin que otra la
+  // siga cubriendo — ahí sí queda parcial de verdad. Devuelve [numero,
+  // fracIni, fracFin].
+  function coberturaCompasEnPosicion(idx) {
+    if (idx < 0 || idx >= pulsos.length) return [null, 0, 1];
+    const numero = pulsos[idx].compas;
+    let ini = idx, fin = idx;
+    while (ini - 1 >= 0 && pulsos[ini - 1].compas === numero) ini--;
+    while (fin + 1 < pulsos.length && pulsos[fin + 1].compas === numero) fin++;
+    let minP = null, maxP = null, n = null;
+    for (let j = ini; j <= fin; j++) {
+      const pj = pulsos[j];
+      if (pj.pulso != null && pj.pulsos_por_compas) {
+        minP = minP === null ? pj.pulso : Math.min(minP, pj.pulso);
+        maxP = maxP === null ? pj.pulso : Math.max(maxP, pj.pulso);
+        n = pj.pulsos_por_compas;
+      }
+    }
+    if (!n) return [numero, 0, 1];
+    return [numero, (minP - 1) / n, maxP / n];
   }
 
   function setCampo(wrapId, spanId, valor) {
@@ -233,33 +480,90 @@
       const k = indiceCompasActual();
       if (k + 1 < compasInicios.length) siguienteNum = pulsos[compasInicios[k + 1]].compas;
     }
-    actualizarScore(p.compas, siguienteNum);
+    actualizarScore(p.compas, siguienteNum, p.pulso, p.pulsos_por_compas);
   }
 
-  // ── Score en pantalla: recorte del compás actual y del siguiente ──
-  // Se muestran como dos imágenes recortadas (canvas), no la página
-  // entera — cada una sale de la página que le corresponda, así que
-  // "siguiente" funciona igual esté en la misma página que "actual", en
-  // otra, o sea el último compás de toda la parte (no hay un "borde de
-  // pantalla" del que depender, ver calcularCaja).
-  const scoreCanvasActual = document.getElementById('score-canvas-actual');
-  const scoreCanvasSiguiente = document.getElementById('score-canvas-siguiente');
+  // ── Score en pantalla: ventana de sistemas que entran en el viewport ──
+  // Se muestra un recorte de la página con tantos sistemas consecutivos
+  // como entren en el alto real del contenedor (medido en vivo, no una
+  // cantidad fija) — no la página entera. Cuando el compás actual llega
+  // al ÚLTIMO sistema de esa ventana, se superpone un fondo de color
+  // sobre el PENÚLTIMO sistema con un recorte del compás siguiente (así
+  // no tapa lo que se está leyendo) — y el cambio real de ventana ocurre
+  // 1 pulso antes de que arranque el compás que ya no entra, no cuando
+  // ese compás ya empezó, para que la vista nueva ya esté lista.
+  const scoreVentanaContenedor = document.getElementById('score-ventana-contenedor');
+  const scoreVentanaCanvas = document.getElementById('score-ventana-canvas');
   const scoreErrorEl = document.getElementById('score-error');
+
+  // El panel no arranca en el borde superior de la pantalla (tiene el
+  // header, la fila compacta o los controles completos arriba, según el
+  // modo) — un alto fijo en CSS (vh o calc()) no puede saber cuánto
+  // espacio real queda debajo sin adivinar. Se mide contra el viewport de
+  // verdad: lo que queda desde donde arranca el panel hasta el borde
+  // inferior de la ventana del navegador, con un margen chico de respiro.
+  function ajustarAltoContenedorScore() {
+    if (!scoreVentanaContenedor) return;
+    const top = scoreVentanaContenedor.getBoundingClientRect().top;
+    const margenInferior = 16;
+    const altoDisponible = Math.max(window.innerHeight - top - margenInferior, 150);
+    scoreVentanaContenedor.style.height = altoDisponible + 'px';
+  }
+  window.addEventListener('resize', () => {
+    ajustarAltoContenedorScore();
+    if (ultimoEntradaResaltar) activarVentana(ultimoEntradaResaltar).then(repintarScore).catch(() => {});
+  });
   let scoreGeometria = null; // { porCompas: {numero: {...,pagina_numero,offset,repeticiones}}, porPagina: {numero: pagina} }
+  let ventanaActiva = null; // { pagina_numero, sistemas: [...], top, bottom, img, pagina, escalaRender }
   const imagenesPorPagina = {}; // numero de página -> HTMLImageElement ya cargada (caché)
+  let nivelZoom = 1;
+  // ZOOM_MIN < 1 alcanza a propósito: alejar más allá del ancho completo
+  // deja sobrar ancho sin usar, pero cada sistema ocupa menos alto en
+  // pantalla — así entran más sistemas en la ventana (ver
+  // calcularVentanaSync), que es justo cómo se gana espacio vertical.
+  const ZOOM_MIN = 0.4, ZOOM_MAX = 3, ZOOM_PASO = 0.2;
+  // Último estado decidido por actualizarScore (qué resaltar, si hay
+  // preview) — el zoom recalcula la ventana con esto mismo como ancla, no
+  // vuelve a decidir nada de la ejecución (ver repintarScore).
+  let ultimoEntradaResaltar = null;
+  let ultimoEnUltimoCompas = false;
+  let ultimoSiguiente = null;
+  let ultimoPulso = 1;
+  let ultimoPulsosPorCompas = 1;
+  // Fracción [0,1] del compás resaltado que realmente se va a tocar en el
+  // plan cargado — 0..1 (compás entero) salvo que sea el primer o el
+  // último compás del rango pedido y arranque/corte a mitad de pulso (ver
+  // actualizarScore), en cuyo caso el recuadro verde se recorta a esa
+  // porción en vez de marcar el compás entero.
+  let ultimoFracIni = 0;
+  let ultimoFracFin = 1;
   // Canvas no puede leer variables CSS directamente (var(--ss-accent)) —
   // se resuelve una sola vez acá, con un valor fijo de respaldo por si
   // por lo que sea la variable no estuviera definida.
   const colorAcento = (getComputedStyle(document.documentElement).getPropertyValue('--ss-accent') || '#37b6a3').trim() || '#37b6a3';
 
   async function cargarScoreGeometria() {
-    if (!scoreCanvasActual) return; // tiene_score=False, no se renderizó el panel
+    if (!scoreVentanaCanvas) return; // tiene_score=False, no se renderizó el panel
+    ajustarAltoContenedorScore();
     try {
-      const resp = await fetch('{% url "partituras:score_geometria_obra" obra.pk %}');
+      // La parte a seguir puede venir del <input type="hidden" name="parte">
+      // del form de rango (siempre refleja la que ya resolvió el servidor
+      // para esta carga de página) — sin esto, este pedido aparte corría
+      // su propia resolución de "parte por defecto" sin enterarse de cuál
+      // se había elegido.
+      const parteVal = formRango ? new FormData(formRango).get('parte') : null;
+      const url = '{% url "partituras:score_geometria_obra" obra.pk %}' + (parteVal ? '?parte=' + encodeURIComponent(parteVal) : '');
+      const resp = await fetch(url);
       const data = await resp.json();
       if (!data.partitura) return;
-      document.getElementById('score-parte').textContent = data.partitura.parte
-        ? `${data.partitura.titulo} — ${data.partitura.parte}` : data.partitura.titulo;
+      // #score-parte sólo existe cuando hay una sola parte disponible (si
+      // hay más de una, ese lugar lo ocupa el <select> server-rendered,
+      // que ya muestra el nombre de la elegida sin necesitar JS).
+      const scoreParteEl = document.getElementById('score-parte');
+      if (scoreParteEl) {
+        scoreParteEl.textContent = data.partitura.parte
+          ? `${data.partitura.titulo} — ${data.partitura.parte}` : data.partitura.titulo;
+      }
       const porCompas = {};
       const porPagina = {};
       for (const pagina of data.paginas) {
@@ -313,7 +617,13 @@
     const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
     const proximoEnSistema = delMismoSistema[posEnSistema + 1] || null;
 
-    const left = compas.x;
+    // El PRIMER compás de un sistema puede tener x=0 en los datos (antes
+    // del margen de la página — ver Compas.x) porque nace antes del borde
+    // izquierdo de lo que realmente está dibujado (el contenido arranca en
+    // margen_x0, no en x=0). Sin este piso, cualquier cálculo proporcional
+    // dentro de la caja (recorte parcial, cursor) queda corrido porque el
+    // ancho de referencia (right-left) sale más grande que el real.
+    const left = Math.max(compas.x, pagina.margen_x0);
     const right = proximoEnSistema ? proximoEnSistema.x : pagina.margen_x1;
 
     // Caja completa entre barras — si es un silencio de varios compases
@@ -333,48 +643,326 @@
     });
   }
 
-  async function pintarRecorte(entrada, canvas) {
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!entrada || !scoreGeometria) return;
-    const pagina = scoreGeometria.porPagina[entrada.pagina_numero];
-    if (!pagina) return;
-    const caja = calcularCaja(entrada, pagina);
-    if (!caja) return;
+  function ventanaContieneCompas(ventana, entrada) {
+    if (!ventana || !entrada || entrada.pagina_numero !== ventana.pagina_numero) return false;
+    const compas = ventana.pagina.compases.find(c => c.numero === entrada.numero);
+    if (!compas) return false;
+    return ventana.sistemas.some(s => s.orden === compas.sistema_orden);
+  }
+
+  function calcularVentanaSync(pagina, sistemaAnclaOrden, img) {
+    const sistemas = pagina.sistemas; // ya vienen ordenados por 'orden'
+    const idxAncla = sistemas.findIndex(s => s.orden === sistemaAnclaOrden);
+
+    const contRect = scoreVentanaContenedor.getBoundingClientRect();
+    const contW = Math.max(contRect.width, 50);
+    const contH = Math.max(contRect.height, 50);
+
+    // La escala (y por lo tanto cuántos sistemas entran) depende del
+    // nivelZoom VIGENTE, no de un ancho fijo a zoom=1 — con zoom < 1 cada
+    // sistema ocupa menos alto en pantalla, así que entran más (a costa de
+    // sobrar ancho, ya no se estira para llenar el contenedor); con
+    // zoom > 1 entran menos. Todo lo que decide cuándo cambiar de ventana
+    // (ventanaContieneCompas, último compás visible) usa esta misma
+    // ventana, así que ya queda automáticamente ajustado a lo que
+    // efectivamente se ve con el zoom actual, no a lo que se vería sin
+    // zoom.
+    const anchoFrac = pagina.margen_x1 - pagina.margen_x0;
+    const escala = (contW / (anchoFrac * img.naturalWidth)) * nivelZoom;
+    const altoDisponibleFrac = contH / (escala * img.naturalHeight);
+
+    const topPrimero = idxAncla > 0
+      ? (sistemas[idxAncla - 1].y + sistemas[idxAncla - 1].height + sistemas[idxAncla].y) / 2
+      : pagina.margen_y0;
+
+    // Arranca en el sistema ancla y suma los siguientes mientras entren en
+    // el alto medido en vivo del contenedor — nunca queda vacía: si ni
+    // siquiera el ancla entra entera, se incluye igual sola.
+    const incluidos = [];
+    let idx = idxAncla;
+    let limiteInferior = topPrimero;
+    while (idx < sistemas.length) {
+      const sistema = sistemas[idx];
+      const siguienteSistema = sistemas[idx + 1] || null;
+      const bottomEste = siguienteSistema
+        ? (sistema.y + sistema.height + siguienteSistema.y) / 2
+        : pagina.margen_y1;
+      if (incluidos.length > 0 && (bottomEste - topPrimero) > altoDisponibleFrac) break;
+      incluidos.push(sistema);
+      limiteInferior = bottomEste;
+      idx++;
+    }
+
+    // Lo que entra en la ventana tiene que poder verse completo sin
+    // scrollear ni acomodar nada. El sistema ancla siempre se incluye
+    // aunque él solo ya exceda altoDisponibleFrac (si no, la ventana
+    // quedaría vacía) — para esos casos (sistema alto + zoom alto) se
+    // achica la escala efectiva lo justo para que ese contenido entre
+    // entero, aunque eso signifique no llegar al zoom pedido.
+    const altoVentanaFrac = Math.max(limiteInferior - topPrimero, 0.001);
+    const escalaFinal = Math.min(escala, contH / (altoVentanaFrac * img.naturalHeight));
+
+    return { pagina_numero: pagina.numero, sistemas: incluidos, top: topPrimero, bottom: limiteInferior, escalaFinal };
+  }
+
+  async function activarVentana(entradaAncla) {
+    const pagina = scoreGeometria.porPagina[entradaAncla.pagina_numero];
+    const compasAncla = pagina && pagina.compases.find(c => c.numero === entradaAncla.numero);
+    if (!pagina || !compasAncla) { ventanaActiva = null; return; }
     const img = await obtenerImagen(pagina);
-    const sx = caja.left * img.naturalWidth;
-    const sy = caja.top * img.naturalHeight;
-    const sw = Math.max((caja.right - caja.left) * img.naturalWidth, 1);
-    const sh = Math.max((caja.bottom - caja.top) * img.naturalHeight, 1);
-    const escala = Math.min(canvas.width / sw, canvas.height / sh);
-    const dw = sw * escala, dh = sh * escala;
-    const dx = (canvas.width - dw) / 2, dy = (canvas.height - dh) / 2;
-    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    const ventana = calcularVentanaSync(pagina, compasAncla.sistema_orden, img);
+    ventana.img = img;
+    ventana.pagina = pagina;
+    ventanaActiva = ventana;
+  }
 
-    // Silencio de varios compases (repeticiones > 1): se ve TODO el tramo
-    // entre barras (ya dibujado arriba, sin recortar a una porción) — acá
-    // se marcan las divisiones y se resalta la que corresponde a este
-    // número puntual, mismo criterio que el recuadro del metrónomo.
-    const repeticiones = entrada.repeticiones || 1;
-    if (repeticiones > 1) {
-      const anchoParte = dw / repeticiones;
-      const offset = entrada.offset || 0;
+  // Primer compás (por x) de un sistema — sirve de "ancla" para reactivar
+  // la ventana en ese sistema.
+  function primerCompasDelSistema(pagina, sistema) {
+    const compases = pagina.compases.filter(c => c.sistema_orden === sistema.orden).sort((a, b) => a.x - b.x);
+    const compas = compases[0];
+    if (!compas) return null;
+    return { numero: compas.numero, pagina_numero: pagina.numero, offset: 0, repeticiones: compas.repeticiones || 1 };
+  }
 
-      ctx.fillStyle = 'rgba(55, 182, 163, 0.25)';
-      ctx.fillRect(dx + offset * anchoParte, dy, anchoParte, dh);
-      ctx.strokeStyle = colorAcento;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(dx + offset * anchoParte, dy, anchoParte, dh);
+  // Navegación vertical manual (▲/▼): re-ancla la ventana un sistema para
+  // arriba/abajo, cruzando de página en los bordes — independiente de
+  // dónde esté el cursor de la ejecución (que, al avanzar un pulso, va a
+  // volver a llevar la ventana a donde corresponda si hace falta — ver
+  // actualizarScore). Sirve para mirar antes/después sin interrumpir nada.
+  function sistemaAdyacente(direccion) {
+    if (!ventanaActiva || !scoreGeometria) return null;
+    const pagina = ventanaActiva.pagina;
+    const idxPrimero = pagina.sistemas.findIndex(s => s.orden === ventanaActiva.sistemas[0].orden);
+    const idxDestino = idxPrimero + direccion;
+    if (idxDestino >= 0 && idxDestino < pagina.sistemas.length) {
+      return primerCompasDelSistema(pagina, pagina.sistemas[idxDestino]);
+    }
+    const paginaDestino = scoreGeometria.porPagina[pagina.numero + direccion];
+    if (!paginaDestino || !paginaDestino.sistemas.length) return null;
+    const sistemaDestino = direccion > 0 ? paginaDestino.sistemas[0] : paginaDestino.sistemas[paginaDestino.sistemas.length - 1];
+    return primerCompasDelSistema(paginaDestino, sistemaDestino);
+  }
 
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 1;
-      for (let i = 1; i < repeticiones; i++) {
-        const x = dx + i * anchoParte;
-        ctx.beginPath();
-        ctx.moveTo(x, dy);
-        ctx.lineTo(x, dy + dh);
-        ctx.stroke();
-      }
+  async function avanzarVertical(direccion) {
+    const ancla = sistemaAdyacente(direccion);
+    if (!ancla) return;
+    await activarVentana(ancla);
+    repintarScore();
+  }
+  if (btnSistemaAnterior) btnSistemaAnterior.addEventListener('click', () => avanzarVertical(-1));
+  if (btnSistemaSiguiente) btnSistemaSiguiente.addEventListener('click', () => avanzarVertical(1));
+
+  // La composición de la ventana y su escala final YA se decidieron en
+  // calcularVentanaSync (que garantiza que todo entre completo, sin
+  // scroll — ver escalaFinal ahí) — acá sólo se dibuja con eso. El canvas
+  // se dimensiona en píxeles reales al tamaño final (no se escala por
+  // CSS), para que no pierda nitidez.
+  function renderizarVentanaBase(ventana) {
+    const canvas = scoreVentanaCanvas;
+    const img = ventana.img, pagina = ventana.pagina;
+    const sx = pagina.margen_x0 * img.naturalWidth;
+    const sy = ventana.top * img.naturalHeight;
+    const sw = Math.max((pagina.margen_x1 - pagina.margen_x0) * img.naturalWidth, 1);
+    const sh = Math.max((ventana.bottom - ventana.top) * img.naturalHeight, 1);
+
+    const escala = ventana.escalaFinal;
+    const w = Math.round(sw * escala);
+    const h = Math.round(sh * escala);
+
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    ventana.escalaRender = escala; // px en pantalla por unidad de píxel natural de la imagen
+  }
+
+  // Fondo de color sobre el PENÚLTIMO sistema de la ventana (nunca el
+  // último, que es el que se está leyendo en este momento) con un recorte
+  // del compás siguiente encima — se llama mientras el compás actual esté
+  // en el último sistema de la ventana, así que da tiempo de verlo antes
+  // del cambio real (que ocurre 1 pulso antes de que arranque ese compás).
+  // Recuadro semitransparente sobre el compás actual — mismo criterio
+  // visual que el que ya existía cuando el score mostraba compases
+  // sueltos (borde de acento + relleno tenue), ahora ubicado dentro de la
+  // ventana completa. Si es parte de un silencio de varios compases
+  // (repeticiones > 1), sólo se resalta la porción que le toca a este
+  // número puntual, no el tramo entero — mismo criterio que las marcas
+  // del metrónomo.
+  function renderizarCompasActualSync(ventana, entradaActual, fracIni, fracFin) {
+    const pagina = ventana.pagina, img = ventana.img;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const escala = ventana.escalaRender;
+    const caja = calcularCaja(entradaActual, pagina);
+    if (!caja) return;
+
+    const repeticiones = entradaActual.repeticiones || 1;
+    const offset = entradaActual.offset || 0;
+    const anchoSlot = (caja.right - caja.left) / repeticiones;
+    const leftReal = caja.left + offset * anchoSlot;
+
+    // Si el plan cargado sólo va a tocar una porción de este compás
+    // (arranca o corta a mitad de pulso — ver actualizarScore), el
+    // recuadro se recorta proporcionalmente a esa porción en vez de
+    // marcar el compás entero.
+    const ini = fracIni != null ? fracIni : 0;
+    const fin = fracFin != null ? fracFin : 1;
+    const leftMarca = leftReal + ini * anchoSlot;
+    const anchoMarca = Math.max((fin - ini) * anchoSlot, 0);
+
+    const x0 = (leftMarca - pagina.margen_x0) * img.naturalWidth * escala;
+    const y0 = (caja.top - ventana.top) * img.naturalHeight * escala;
+    const w = Math.max(anchoMarca * img.naturalWidth * escala, 1);
+    const h = Math.max((caja.bottom - caja.top) * img.naturalHeight * escala, 1);
+
+    ctx.fillStyle = 'rgba(55, 182, 163, 0.15)';
+    ctx.fillRect(x0, y0, w, h);
+    ctx.strokeStyle = colorAcento;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x0, y0, w, h);
+  }
+
+  // Punto discreto (no una línea vertical que atraviese el pentagrama —
+  // eso confundiría, como si marcara la nota exacta a tocar, cosa que no
+  // sabemos) centrado en el borde superior de la caja del compás, en la
+  // posición horizontal proporcional al pulso — mismo cálculo que ya usa
+  // el punto del metrónomo (carril centrado en (pulso-0.5)/n). Semitransparente,
+  // con el número de pulso adentro.
+  function renderizarCursorPulso(ventana, entradaActual, pulso, pulsosPorCompas) {
+    const pagina = ventana.pagina, img = ventana.img;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const escala = ventana.escalaRender;
+    const caja = calcularCaja(entradaActual, pagina);
+    if (!caja) return;
+
+    const repeticiones = entradaActual.repeticiones || 1;
+    const offset = entradaActual.offset || 0;
+    const anchoSlot = (caja.right - caja.left) / repeticiones;
+    const leftReal = caja.left + offset * anchoSlot;
+
+    const n = Math.max(pulsosPorCompas || 1, 1);
+    const p = Math.min(Math.max(pulso || 1, 1), n);
+    const fracX = (p - 0.5) / n;
+
+    // Los límites (no sólo el valor "ideal") escalan con nivelZoom — si
+    // fueran fijos en píxeles, a zoom alto el punto quedaría chico
+    // respecto a una notación mucho más grande, y a zoom bajo, grande y
+    // desproporcionado respecto a una notación chica.
+    let radio = Math.min(Math.max((anchoSlot * img.naturalWidth * escala) / (n * 2.2), 8 * nivelZoom), 16 * nivelZoom);
+    // El cursor hace de metrónomo visual acá (ver flashCursorScore): un
+    // instante más grande y opaco en cada pulso, más todavía si es el
+    // acento — mismo criterio que el punto flotante de flashVisual, pero
+    // sobre este círculo en vez de uno aparte.
+    if (cursorFlashActivo) radio *= cursorFlashAcento ? 1.45 : 1.22;
+    const boxLeftPx = (leftReal - pagina.margen_x0) * img.naturalWidth * escala;
+    const boxRightPx = boxLeftPx + anchoSlot * img.naturalWidth * escala;
+    let cx = boxLeftPx + fracX * anchoSlot * img.naturalWidth * escala;
+    // El primer/último pulso puede caer tan cerca del borde de la caja que
+    // el radio del círculo se pasaría afuera (invisible si queda fuera del
+    // canvas) — se recorta para que el círculo entero quede siempre
+    // adentro de la caja del compás.
+    if (boxRightPx - boxLeftPx < radio * 2) {
+      cx = (boxLeftPx + boxRightPx) / 2;
+    } else {
+      cx = Math.min(Math.max(cx, boxLeftPx + radio), boxRightPx - radio);
+    }
+    // La caja del PRIMER compás de un sistema arranca en x=0 (antes del
+    // margen de la página, ver Compas.x) — eso puede nacer antes del
+    // borde izquierdo de lo que realmente está dibujado (el canvas
+    // arranca en margen_x0, no en x=0). El recorte contra la caja no
+    // alcanza en ese caso: hace falta además no salirse del canvas real.
+    cx = Math.min(Math.max(cx, radio), canvas.width - radio);
+    // El borde superior del círculo (no el centro) coincide con el borde
+    // superior de la caja — el círculo entero queda hacia ADENTRO del
+    // compás, nunca asomando arriba de él (donde no hay margen para un
+    // compás del primer sistema de la ventana).
+    const cy = (caja.top - ventana.top) * img.naturalHeight * escala + radio;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radio, 0, Math.PI * 2);
+    ctx.fillStyle = cursorFlashActivo ? 'rgba(55, 182, 163, 0.85)' : 'rgba(55, 182, 163, 0.55)';
+    ctx.fill();
+    ctx.strokeStyle = colorAcento;
+    ctx.lineWidth = cursorFlashActivo ? 2.5 : 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.round(radio * 1.1)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(p), cx, cy + 1);
+  }
+
+  function renderizarPreviewSync(ventana, entradaSiguiente) {
+    if (!entradaSiguiente || ventana.sistemas.length < 2) return;
+    const pagina = ventana.pagina, img = ventana.img;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const escala = ventana.escalaRender;
+
+    const penultimo = ventana.sistemas[ventana.sistemas.length - 2];
+    const ultimoDeVentana = ventana.sistemas[ventana.sistemas.length - 1];
+    const idxPenultimo = pagina.sistemas.findIndex(s => s.orden === penultimo.orden);
+    const anterior = pagina.sistemas[idxPenultimo - 1] || null;
+    const topPenultimo = anterior ? (anterior.y + anterior.height + penultimo.y) / 2 : pagina.margen_y0;
+    const bottomPenultimo = (penultimo.y + penultimo.height + ultimoDeVentana.y) / 2;
+
+    const py0 = (topPenultimo - ventana.top) * img.naturalHeight * escala;
+    const py1 = (bottomPenultimo - ventana.top) * img.naturalHeight * escala;
+    const alto = Math.max(py1 - py0, 1);
+
+    ctx.fillStyle = 'rgba(20, 20, 20, 0.92)';
+    ctx.fillRect(0, py0, canvas.width, alto);
+    ctx.strokeStyle = colorAcento;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, py0 + 1, Math.max(canvas.width - 2, 1), Math.max(alto - 2, 1));
+
+    const paginaSiguiente = scoreGeometria.porPagina[entradaSiguiente.pagina_numero];
+    if (!paginaSiguiente) return;
+    const cajaSiguiente = calcularCaja(entradaSiguiente, paginaSiguiente);
+    if (!cajaSiguiente) return;
+
+    const dibujarRecorte = (imgSig) => {
+      const sx = cajaSiguiente.left * imgSig.naturalWidth;
+      const sy = cajaSiguiente.top * imgSig.naturalHeight;
+      const sw = Math.max((cajaSiguiente.right - cajaSiguiente.left) * imgSig.naturalWidth, 1);
+      const sh = Math.max((cajaSiguiente.bottom - cajaSiguiente.top) * imgSig.naturalHeight, 1);
+      const escalaRecorte = Math.min((canvas.width - 16) / sw, (alto - 16) / sh);
+      const dw = sw * escalaRecorte, dh = sh * escalaRecorte;
+      const dx = canvas.width - dw - 8, dy = py0 + (alto - dh) / 2; // pegado a la derecha
+      ctx.drawImage(imgSig, sx, sy, sw, sh, dx, dy, dw, dh);
+    };
+    // Puede ser una página ya cacheada (rápido, sincrónico en la práctica)
+    // o no (la primera vez) — de cualquier forma no debe bloquear ni
+    // romper el resto: si no está lista, esta vez sólo se ve el fondo
+    // resaltado, y se completa sola apenas cargue.
+    const imgCacheada = imagenesPorPagina[paginaSiguiente.numero];
+    if (imgCacheada) dibujarRecorte(imgCacheada);
+    else obtenerImagen(paginaSiguiente).then(dibujarRecorte).catch(() => {});
+  }
+
+  // Vuelve a dibujar con el ÚLTIMO estado ya decidido por actualizarScore
+  // (qué compás resaltar, si hay preview) — el botón de zoom llama a esto
+  // directamente: cambiar el nivel de zoom no cambia nada de la decisión
+  // de ejecución, sólo el tamaño del dibujo.
+  function repintarScore() {
+    if (!ventanaActiva) return;
+    renderizarVentanaBase(ventanaActiva);
+    if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
+      renderizarCompasActualSync(ventanaActiva, ultimoEntradaResaltar, ultimoFracIni, ultimoFracFin);
+    }
+    if (ultimoEnUltimoCompas) renderizarPreviewSync(ventanaActiva, ultimoSiguiente);
+    // El cursor va SIEMPRE como capa más arriba — si se dibujara antes que
+    // el preview, éste (que pinta un fondo sobre el penúltimo sistema)
+    // podía taparlo cuando el compás actual queda cerca de esa franja.
+    if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
+      renderizarCursorPulso(ventanaActiva, ultimoEntradaResaltar, ultimoPulso, ultimoPulsosPorCompas);
     }
   }
 
@@ -383,23 +971,102 @@
   // geometría, imagen que no carga, etc.): mostrarPulso llama a esto en
   // cada pulso, y una excepción sin capturar ahí adentro frenaría
   // requestAnimationFrame para siempre (avanzar() nunca volvería a
-  // programarse). De ahí el try/catch acá y los .catch() en las promesas.
-  function actualizarScore(numeroActual, numeroSiguiente) {
-    if (!scoreCanvasActual || !scoreGeometria) return;
+  // programarse). De ahí el try/catch acá y el que no se propaga nada.
+  async function actualizarScore(numeroActual, numeroSiguiente, pulsoActual, pulsosPorCompasActual) {
+    if (!scoreVentanaCanvas || !scoreGeometria) return;
     try {
       scoreErrorEl.style.display = 'none';
       const actual = scoreGeometria.porCompas[numeroActual] || null;
       if (!actual) {
         scoreErrorEl.textContent = '{% translate "Esta parte no tiene el compás" %} ' + numeroActual + '.';
         scoreErrorEl.style.display = '';
+        return;
       }
       const siguiente = numeroSiguiente !== null ? (scoreGeometria.porCompas[numeroSiguiente] || null) : null;
-      pintarRecorte(actual, scoreCanvasActual).catch(() => {});
-      pintarRecorte(siguiente, scoreCanvasSiguiente).catch(() => {});
+
+      // ¿Este es el último pulso del compás actual? Si además el compás
+      // siguiente ya no entra en la ventana activa, el cambio de ventana
+      // se adelanta a AHORA (1 pulso antes de que arranque ese compás) en
+      // vez de esperar a que ese compás ya esté sonando.
+      const esUltimoPulsoDelCompas = planCargado &&
+        (idxMostrado + 1 >= pulsos.length || pulsos[idxMostrado + 1].compas !== numeroActual);
+
+      let ancla = actual;
+      let necesitaVentanaNueva = !ventanaContieneCompas(ventanaActiva, actual);
+      let saltoAnticipado = false;
+      if (!necesitaVentanaNueva && esUltimoPulsoDelCompas && siguiente && !ventanaContieneCompas(ventanaActiva, siguiente)) {
+        necesitaVentanaNueva = true;
+        ancla = siguiente;
+        saltoAnticipado = true;
+      }
+
+      if (necesitaVentanaNueva) await activarVentana(ancla);
+      if (!ventanaActiva) return;
+
+      // En el pulso del salto anticipado, "actual" ya no pertenece a la
+      // página que se está mostrando (la ventana ya saltó 1 pulso antes,
+      // ver arriba) — ahí se resalta "siguiente", que es lo que
+      // realmente quedó a la vista, no un compás que ya no se ve.
+      ultimoEntradaResaltar = saltoAnticipado ? siguiente : actual;
+
+      // ¿Sólo se va a tocar una porción de este compás? Puede ser el primer
+      // o el último del rango pedido (si desde_pulso/hasta_pulso lo acotan)
+      // o cualquiera en el MEDIO del plan cuya fila real corte a mitad de
+      // pulso sin que otra la siga cubriendo (ver coberturaCompasEnPosicion,
+      // que fusiona ocurrencias consecutivas del mismo número antes de
+      // decidir si falta algo). En el salto anticipado el índice a mirar es
+      // el del PRÓXIMO tick del plan (el que arranca "siguiente"), no el
+      // que se está mostrando ahora.
+      const idxResaltado = saltoAnticipado ? idxMostrado + 1 : idxMostrado;
+      ultimoFracIni = 0;
+      ultimoFracFin = 1;
+      if (planCargado) {
+        const [, fracIni, fracFin] = coberturaCompasEnPosicion(idxResaltado);
+        ultimoFracIni = fracIni;
+        ultimoFracFin = fracFin;
+      }
+
+      // El preview aparece sólo en el ÚLTIMO COMPÁS de la ventana (no
+      // durante todo el último sistema, que puede tener varios compases) —
+      // "último compás" es el que cierra el último sistema mostrado, o el
+      // último número que cubre si es un silencio de varios compases.
+      const sistemaUltimoVentana = ventanaActiva.sistemas[ventanaActiva.sistemas.length - 1];
+      const compasesUltimoSistema = ventanaActiva.pagina.compases
+        .filter(c => c.sistema_orden === sistemaUltimoVentana.orden)
+        .sort((a, b) => a.x - b.x);
+      const ultimoCompasDeVentana = compasesUltimoSistema[compasesUltimoSistema.length - 1] || null;
+      const ultimoNumeroDeVentana = ultimoCompasDeVentana
+        ? ultimoCompasDeVentana.numero + (ultimoCompasDeVentana.repeticiones || 1) - 1
+        : null;
+      ultimoEnUltimoCompas = ventanaActiva.sistemas.length > 1 &&
+        actual.pagina_numero === ventanaActiva.pagina_numero &&
+        ultimoNumeroDeVentana !== null && numeroActual === ultimoNumeroDeVentana;
+      ultimoSiguiente = siguiente;
+      // Sin datos de pulso (llamada inicial, antes de arrancar la
+      // ejecución en tiempo real) el punto simplemente se centra en el
+      // compás — se ajusta solo apenas haya pulsos reales.
+      ultimoPulso = pulsoActual || 1;
+      ultimoPulsosPorCompas = pulsosPorCompasActual || 1;
+
+      repintarScore();
     } catch (e) {
       // no propagar — ver comentario arriba
     }
   }
+
+  // Cambiar el zoom cambia CUÁNTOS sistemas entran (ver calcularVentanaSync),
+  // así que hay que rearmar la ventana — no alcanza con volver a dibujar
+  // la misma — anclada en lo último resaltado (el compás actual, o el
+  // siguiente si justo se estaba en el pulso del salto anticipado).
+  async function reajustarZoom(nuevoNivel) {
+    nivelZoom = nuevoNivel;
+    if (scoreGeometria && ultimoEntradaResaltar) {
+      await activarVentana(ultimoEntradaResaltar);
+    }
+    repintarScore();
+  }
+  if (btnZoomMas) btnZoomMas.addEventListener('click', () => reajustarZoom(Math.min(ZOOM_MAX, nivelZoom + ZOOM_PASO)));
+  if (btnZoomMenos) btnZoomMenos.addEventListener('click', () => reajustarZoom(Math.max(ZOOM_MIN, nivelZoom - ZOOM_PASO)));
 
   cargarScoreGeometria();
 
@@ -504,7 +1171,11 @@
 
   async function cargarPlanYArrancar() {
     errorEl.style.display = 'none';
-    const params = new URLSearchParams(window.location.search);
+    // Ya no hay botón "Fijar rango" — Ejecutar/Reiniciar toman el rango
+    // directamente de los valores actuales del formulario (no de la URL,
+    // que puede estar desactualizada si el usuario tipeó algo nuevo sin
+    // recargar la página).
+    const params = formRango ? new URLSearchParams(new FormData(formRango)) : new URLSearchParams(window.location.search);
     params.delete('segmento');
     params.delete('compas');
     let data;
@@ -563,12 +1234,67 @@
     rafId = requestAnimationFrame(avanzar);
   }
 
+  // Modo "ensayo con parte": los mismos controles de siempre (mismos
+  // nodos, mismos listeners) se REUBICAN en una sola fila compacta y el
+  // score se queda con casi toda la pantalla — el motor de ejecución
+  // (metrónomo, reloj, plan) no cambia en nada, es puro layout. El otro
+  // modo (controles completos) sigue existiendo tal cual para ensayar sin
+  // mirar la partitura — btnModoScore alterna entre los dos.
+  function alternarModoScore() {
+    const activo = !document.body.classList.contains('modo-partitura');
+    if (activo) {
+      anclasReubicacion.forEach(({ el, destino }) => destino.appendChild(el));
+    } else {
+      anclasReubicacion.forEach(({ el, ancla }) => ancla.parentNode.insertBefore(el, ancla.nextSibling));
+    }
+    document.body.classList.toggle('modo-partitura', activo);
+    btnModoScore.textContent = activo
+      ? '🔙 {% translate "Modo normal" %}'
+      : '🎼 {% translate "Modo partitura" %}';
+    // El panel quedó en otra posición (la fila compacta ocupa menos alto
+    // que los controles completos, o viceversa al volver) y puede haber
+    // cambiado cuántos sistemas entran — se mide de nuevo antes de
+    // recalcular la ventana, no alcanza con re-escalar lo ya dibujado.
+    ajustarAltoContenedorScore();
+    if (!scoreGeometria) return;
+    const numero = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado].compas : {{ compas_actual }};
+    const entrada = scoreGeometria.porCompas[numero];
+    if (!entrada) return;
+    activarVentana(entrada).then(() => { if (ventanaActiva) repintarScore(); }).catch(() => {});
+  }
+  if (btnModoScore) btnModoScore.addEventListener('click', alternarModoScore);
+
   btnPlay.addEventListener('click', cargarPlanYArrancar);
   btnReiniciar.addEventListener('click', cargarPlanYArrancar);
   btnPause.addEventListener('click', pausar);
   btnContinuar.addEventListener('click', continuarDesdePausa);
   btnAnterior.addEventListener('click', irAnterior);
   btnSiguiente.addEventListener('click', irSiguiente);
+
+  // Atajos de teclado: Espacio pausa/continúa, ←/→ van a Anterior/Siguiente
+  // (mismas funciones que los botones, con la misma lógica de saltar en
+  // memoria si ya hay un plan cargado o navegar por URL si no). Se ignoran
+  // por completo si el foco está en un campo de texto/select — si no, "5,2"
+  // en el input de desde_compas dispararía Anterior/Siguiente en vez de
+  // mover el cursor de texto. El estado de reproducción (pausado vs
+  // reproduciendo vs inicial) se lee de qué botón está visible ahora mismo
+  // — mostrarControles() ya es la fuente de verdad de eso, no hace falta
+  // duplicarlo en una variable aparte.
+  document.addEventListener('keydown', function (e) {
+    const foco = document.activeElement;
+    const tagFoco = foco ? foco.tagName : '';
+    if (tagFoco === 'INPUT' || tagFoco === 'TEXTAREA' || tagFoco === 'SELECT') return;
+    if (e.code === 'Space') {
+      if (btnPause.style.display !== 'none') { e.preventDefault(); pausar(); }
+      else if (btnContinuar.style.display !== 'none') { e.preventDefault(); continuarDesdePausa(); }
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      irAnterior();
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      irSiguiente();
+    }
+  });
 })();
 </script>
 

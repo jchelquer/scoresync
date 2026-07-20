@@ -449,7 +449,8 @@ def geometria_partitura(partitura):
     return paginas
 
 
-def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada):
+def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
+                    desde_pulso=None, hasta_pulso=None):
     """Arma la lista de PULSOS (no de compases) entre "desde" y "hasta"
     (mismo criterio de compás+pasada que buscar_posicion), cada uno con su
     propia duración resuelta — pensado para mandarse una sola vez al
@@ -457,6 +458,14 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
     un único reloj absoluto, en vez de pedirle un pulso a la vez al
     servidor a medida que avanza (eso dejaría que la variabilidad de red se
     fuera acumulando como desfasaje de tempo).
+
+    desde_pulso/hasta_pulso (opcionales, notación parsear_compas_pulso) acotan
+    el primer/último compás del rango a partir de un pulso puntual en vez del
+    compás entero — se truncan a entero (mismo criterio que
+    _rango_pulsos_del_compas) porque acá se itera pulso a pulso, no hay
+    fracción de pulso que programar como tick propio. Sólo se aplican en la
+    primera/última iteración del compás, no en los intermedios: si el rango
+    cruza varios compases, todos los del medio se tocan enteros.
 
     Se arma a nivel de pulso, no de compás, por dos motivos:
     - En una fila con accelerando/ritardando (bpm_llegada propio), el tempo
@@ -496,8 +505,10 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
     pulsos = []
     completo = True
     pos = pos_desde
+    primera_iteracion = True
     while pos is not None:
         seg, compas = pos
+        es_ultima_iteracion = (seg.orden, compas) >= (pos_hasta[0].orden, pos_hasta[1])
         info = resueltos_por_id.get(seg.id, {})
         bpm_inicio = info.get('bpm')
         pulsos_compas = info.get('pulsos_por_compas')
@@ -518,10 +529,19 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
             })
         else:
             pulso_ini, pulso_fin = _rango_pulsos_del_compas(seg, compas, pulsos_compas)
+            # pulso_ini/pulso_fin (originales, de la fila) siguen siendo la
+            # base de idx_en_fila más abajo — la interpolación de tempo
+            # tiene que ubicar al pulso en la secuencia real de la fila,
+            # aunque acá se emitan menos pulsos de los que la fila tiene.
+            pulso_ini_emitir, pulso_fin_emitir = pulso_ini, pulso_fin
+            if primera_iteracion and desde_pulso is not None:
+                pulso_ini_emitir = max(pulso_ini, int(desde_pulso))
+            if es_ultima_iteracion and hasta_pulso is not None:
+                pulso_fin_emitir = min(pulso_fin, int(hasta_pulso))
             total_pulsos_fila = _cantidad_pulsos_fila(seg, pulsos_compas)
             offset_compas = _pulsos_antes_del_compas(seg, compas, pulsos_compas)
 
-            for p in range(pulso_ini, pulso_fin + 1):
+            for p in range(pulso_ini_emitir, pulso_fin_emitir + 1):
                 idx_en_fila = offset_compas + (p - pulso_ini)
                 bpm_pulso = bpm_inicio
                 if seg.bpm_llegada and total_pulsos_fila > 1:
@@ -532,7 +552,11 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
                     'compas': compas,
                     'pulso': p,
                     'pulsos_por_compas': int(pulsos_compas),
-                    'es_primer_pulso_compas': p == pulso_ini,
+                    # Primer pulso EMITIDO de este compás (no necesariamente
+                    # el primero de la fila: puede haberse acotado más con
+                    # desde_pulso) — es lo que usa el cliente para saber
+                    # dónde arranca cada ocurrencia de compás en el plan.
+                    'es_primer_pulso_compas': p == pulso_ini_emitir,
                     # El acento del metrónomo (click agudo) es el pulso 1
                     # MUSICAL del compás — no el primer pulso de la fila.
                     # Si la fila arranca a mitad de compás (pulso_ini > 1,
@@ -548,7 +572,8 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
                     'duracion': 60.0 / bpm_pulso,
                 })
 
-        if (seg.orden, compas) >= (pos_hasta[0].orden, pos_hasta[1]):
+        primera_iteracion = False
+        if es_ultima_iteracion:
             break
         pos = avanzar_compas(obra, seg, compas)
 
