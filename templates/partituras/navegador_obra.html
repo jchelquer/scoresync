@@ -77,7 +77,7 @@
 
 <p id="plan-error" class="small text-warning text-center" style="display:none;"></p>
 
-<div class="d-flex justify-content-center gap-2 flex-wrap">
+<div class="d-flex justify-content-center gap-2 flex-wrap mb-3">
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}>← {% translate "Anterior" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %} →</button>
   <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
@@ -93,6 +93,25 @@
     <label class="form-check-label small ms-1" for="metronomo-audio">{% translate "Sonido" %}</label>
   </div>
 </div>
+
+{% if tiene_score %}
+<div class="card border-0 mb-3" style="background: var(--ss-surface)">
+  <div class="card-body">
+    <p class="small mb-2" style="color: var(--ss-text-muted)">{% translate "Score" %} — <span id="score-parte"></span></p>
+    <div class="d-flex gap-3 flex-wrap justify-content-center">
+      <div class="text-center">
+        <canvas id="score-canvas-actual" width="320" height="110" style="background:#222; border-radius:4px; border: 2px solid var(--ss-accent);"></canvas>
+        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">{% translate "actual" %}</p>
+      </div>
+      <div class="text-center">
+        <canvas id="score-canvas-siguiente" width="320" height="110" style="background:#222; border-radius:4px; border: 2px dashed var(--ss-text-muted);"></canvas>
+        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">{% translate "siguiente" %}</p>
+      </div>
+    </div>
+    <p id="score-error" class="small text-warning mt-2 mb-0" style="display:none;"></p>
+  </div>
+</div>
+{% endif %}
 
 <script>
 (function () {
@@ -205,7 +224,184 @@
     setCampo('nav-variacion-wrap', 'nav-variacion', variTxt);
     document.getElementById('nav-tiempo-wrap').style.display = 'none';
     setCampo('nav-descripcion-wrap', 'nav-descripcion', p.descripcion || '');
+    // idxMostrado ya está actualizado por quien llamó a mostrarPulso, así
+    // que indiceCompasActual() (si hay plan cargado) refleja este mismo
+    // pulso — se usa para saber cuál es el compás siguiente real de la
+    // ejecución (no necesariamente compas+1: puede haber un salto).
+    let siguienteNum = null;
+    if (planCargado) {
+      const k = indiceCompasActual();
+      if (k + 1 < compasInicios.length) siguienteNum = pulsos[compasInicios[k + 1]].compas;
+    }
+    actualizarScore(p.compas, siguienteNum);
   }
+
+  // ── Score en pantalla: recorte del compás actual y del siguiente ──
+  // Se muestran como dos imágenes recortadas (canvas), no la página
+  // entera — cada una sale de la página que le corresponda, así que
+  // "siguiente" funciona igual esté en la misma página que "actual", en
+  // otra, o sea el último compás de toda la parte (no hay un "borde de
+  // pantalla" del que depender, ver calcularCaja).
+  const scoreCanvasActual = document.getElementById('score-canvas-actual');
+  const scoreCanvasSiguiente = document.getElementById('score-canvas-siguiente');
+  const scoreErrorEl = document.getElementById('score-error');
+  let scoreGeometria = null; // { porCompas: {numero: {...,pagina_numero,offset,repeticiones}}, porPagina: {numero: pagina} }
+  const imagenesPorPagina = {}; // numero de página -> HTMLImageElement ya cargada (caché)
+  // Canvas no puede leer variables CSS directamente (var(--ss-accent)) —
+  // se resuelve una sola vez acá, con un valor fijo de respaldo por si
+  // por lo que sea la variable no estuviera definida.
+  const colorAcento = (getComputedStyle(document.documentElement).getPropertyValue('--ss-accent') || '#37b6a3').trim() || '#37b6a3';
+
+  async function cargarScoreGeometria() {
+    if (!scoreCanvasActual) return; // tiene_score=False, no se renderizó el panel
+    try {
+      const resp = await fetch('{% url "partituras:score_geometria_obra" obra.pk %}');
+      const data = await resp.json();
+      if (!data.partitura) return;
+      document.getElementById('score-parte').textContent = data.partitura.parte
+        ? `${data.partitura.titulo} — ${data.partitura.parte}` : data.partitura.titulo;
+      const porCompas = {};
+      const porPagina = {};
+      for (const pagina of data.paginas) {
+        porPagina[pagina.numero] = pagina;
+        for (const c of pagina.compases) {
+          // repeticiones > 1 = silencio de varios compases: una sola fila
+          // cubre varios números reales con una única caja ancha en la
+          // página — cada número intermedio (numero+1, numero+2...) no
+          // "no existe": ocupa una porción proporcional de esa misma caja
+          // (offset = qué parte le toca, ver calcularCaja).
+          const repeticiones = c.repeticiones || 1;
+          for (let offset = 0; offset < repeticiones; offset++) {
+            porCompas[c.numero + offset] = Object.assign(
+              { pagina_numero: pagina.numero, offset, repeticiones }, c,
+            );
+          }
+        }
+      }
+      scoreGeometria = { porCompas, porPagina };
+      actualizarScore({{ compas_actual }}, {{ compas_siguiente|default_if_none:"null" }});
+    } catch (e) {
+      scoreErrorEl.textContent = '{% translate "No se pudo obtener la partitura." %}';
+      scoreErrorEl.style.display = '';
+    }
+  }
+
+  function calcularCaja(entrada, pagina) {
+    // entrada viene de porCompas: entrada.numero es el número REAL de la
+    // fila en la base (el primero de la serie si repeticiones > 1), no
+    // necesariamente el número que se pidió. Devuelve la caja COMPLETA
+    // entre barras — entrada.offset (qué parte le toca a este número
+    // puntual) lo usa pintarRecorte para las marcas, no se recorta acá.
+    const compas = pagina.compases.find(c => c.numero === entrada.numero);
+    if (!compas) return null;
+    const sistemas = pagina.sistemas; // ya vienen ordenados por 'orden'
+    const idx = sistemas.findIndex(s => s.orden === compas.sistema_orden);
+    const sistema = sistemas[idx];
+    const anterior = sistemas[idx - 1] || null;
+    const siguienteSistema = sistemas[idx + 1] || null;
+
+    // Sin sistema anterior/siguiente (primero/último de la PÁGINA, no de
+    // "lo visible en pantalla"), el borde es el margen de contenido ya
+    // confirmado — así la caja no depende de qué haya scrolleado/zoomeado
+    // nadie, sale sólo de datos ya guardados.
+    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : pagina.margen_y0;
+    const bottom = siguienteSistema ? (sistema.y + sistema.height + siguienteSistema.y) / 2 : pagina.margen_y1;
+
+    const delMismoSistema = pagina.compases
+      .filter(c => c.sistema_orden === compas.sistema_orden)
+      .sort((a, b) => a.x - b.x);
+    const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
+    const proximoEnSistema = delMismoSistema[posEnSistema + 1] || null;
+
+    const left = compas.x;
+    const right = proximoEnSistema ? proximoEnSistema.x : pagina.margen_x1;
+
+    // Caja completa entre barras — si es un silencio de varios compases
+    // (repeticiones > 1) NO se recorta a la porción de este número puntual:
+    // se muestra todo el tramo, con marcas (ver pintarRecorte) señalando
+    // cuál parte corresponde, igual criterio que el recuadro del metrónomo.
+    return { top, bottom, left, right };
+  }
+
+  function obtenerImagen(pagina) {
+    if (imagenesPorPagina[pagina.numero]) return Promise.resolve(imagenesPorPagina[pagina.numero]);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { imagenesPorPagina[pagina.numero] = img; resolve(img); };
+      img.onerror = reject;
+      img.src = pagina.imagen_url;
+    });
+  }
+
+  async function pintarRecorte(entrada, canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!entrada || !scoreGeometria) return;
+    const pagina = scoreGeometria.porPagina[entrada.pagina_numero];
+    if (!pagina) return;
+    const caja = calcularCaja(entrada, pagina);
+    if (!caja) return;
+    const img = await obtenerImagen(pagina);
+    const sx = caja.left * img.naturalWidth;
+    const sy = caja.top * img.naturalHeight;
+    const sw = Math.max((caja.right - caja.left) * img.naturalWidth, 1);
+    const sh = Math.max((caja.bottom - caja.top) * img.naturalHeight, 1);
+    const escala = Math.min(canvas.width / sw, canvas.height / sh);
+    const dw = sw * escala, dh = sh * escala;
+    const dx = (canvas.width - dw) / 2, dy = (canvas.height - dh) / 2;
+    ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+
+    // Silencio de varios compases (repeticiones > 1): se ve TODO el tramo
+    // entre barras (ya dibujado arriba, sin recortar a una porción) — acá
+    // se marcan las divisiones y se resalta la que corresponde a este
+    // número puntual, mismo criterio que el recuadro del metrónomo.
+    const repeticiones = entrada.repeticiones || 1;
+    if (repeticiones > 1) {
+      const anchoParte = dw / repeticiones;
+      const offset = entrada.offset || 0;
+
+      ctx.fillStyle = 'rgba(55, 182, 163, 0.25)';
+      ctx.fillRect(dx + offset * anchoParte, dy, anchoParte, dh);
+      ctx.strokeStyle = colorAcento;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(dx + offset * anchoParte, dy, anchoParte, dh);
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < repeticiones; i++) {
+        const x = dx + i * anchoParte;
+        ctx.beginPath();
+        ctx.moveTo(x, dy);
+        ctx.lineTo(x, dy + dh);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // El score es un panel informativo — no puede llegar a cortar el reloj
+  // de la ejecución en tiempo real si algo sale mal acá (compás sin
+  // geometría, imagen que no carga, etc.): mostrarPulso llama a esto en
+  // cada pulso, y una excepción sin capturar ahí adentro frenaría
+  // requestAnimationFrame para siempre (avanzar() nunca volvería a
+  // programarse). De ahí el try/catch acá y los .catch() en las promesas.
+  function actualizarScore(numeroActual, numeroSiguiente) {
+    if (!scoreCanvasActual || !scoreGeometria) return;
+    try {
+      scoreErrorEl.style.display = 'none';
+      const actual = scoreGeometria.porCompas[numeroActual] || null;
+      if (!actual) {
+        scoreErrorEl.textContent = '{% translate "Esta parte no tiene el compás" %} ' + numeroActual + '.';
+        scoreErrorEl.style.display = '';
+      }
+      const siguiente = numeroSiguiente !== null ? (scoreGeometria.porCompas[numeroSiguiente] || null) : null;
+      pintarRecorte(actual, scoreCanvasActual).catch(() => {});
+      pintarRecorte(siguiente, scoreCanvasSiguiente).catch(() => {});
+    } catch (e) {
+      // no propagar — ver comentario arriba
+    }
+  }
+
+  cargarScoreGeometria();
 
   function mostrarControles(estado) {
     // estado: 'inicial' | 'reproduciendo' | 'pausado'
@@ -283,8 +479,9 @@
         elapsed -= totalDuracion;
         idxMostrado = -1;
       } else {
-        if (idxMostrado !== pulsos.length - 1) mostrarPulso(pulsos[pulsos.length - 1]);
+        const yaMostrado = idxMostrado === pulsos.length - 1;
         idxMostrado = pulsos.length - 1;
+        if (!yaMostrado) mostrarPulso(pulsos[idxMostrado]);
         actualizarBotonesNav();
         detenerAnimacion();
         mostrarControles('inicial');
@@ -298,8 +495,8 @@
       // tiene que sonar/parpadear — sólo el número en pantalla se pisa con
       // el último, no hace falta mostrar los intermedios.
       for (let j = Math.max(idxMostrado + 1, 0); j <= i; j++) marcarPulso(pulsos[j]);
-      mostrarPulso(pulsos[i]);
       idxMostrado = i;
+      mostrarPulso(pulsos[i]);
       actualizarBotonesNav();
     }
     rafId = requestAnimationFrame(avanzar);

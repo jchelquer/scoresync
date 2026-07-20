@@ -2,6 +2,14 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.2.1"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "Cursor sobre la partitura durante la ejecución: recorte del compás actual y del siguiente, uno al lado del otro, tomados de la parte correspondiente a la obra."
+    - type: mejorado
+      text: "Los silencios de varios compases muestran todo el tramo entre barras, con marcas señalando cuál parte corresponde al compás puntual."
+
 - version: "1.2.0"
   date: "2026-07-20"
   changes:

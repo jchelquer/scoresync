@@ -8,16 +8,18 @@ from django.core.files.base import ContentFile
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .forms import ObraForm, PartituraForm, SegmentoFormSet
 from .models import Barra, Compas, Obra, Pagina, Partitura, Segmento, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
-    avanzar_compas, buscar_posicion, construir_plan, guardar_compases_pagina,
-    invalidar_desde_ancla, invalidar_desde_margenes, invalidar_desde_orientacion,
-    invalidar_desde_sistemas, numero_inicial_pagina, recalcular_tiempos_calculados,
-    renumerar_segmentos, resolver_segmentos, retroceder_compas, segmentos_navegables,
+    avanzar_compas, buscar_posicion, construir_plan, geometria_partitura,
+    guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
+    invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
+    recalcular_tiempos_calculados, renumerar_segmentos, resolver_segmentos,
+    retroceder_compas, segmentos_navegables,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -263,6 +265,18 @@ def _leer_entero(valor, default):
         return default
 
 
+def _partitura_seguida(obra):
+    """La parte de esta obra que se usa para mostrar el score durante la
+    ejecución — por ahora, cualquiera que ya tenga compases confirmados en
+    alguna página (más adelante: preferir la que coincida con el
+    instrumento del usuario logueado, cuando haya más de una parte para
+    elegir — ver notas de diseño del proyecto sobre la elección de parte)."""
+    return next(
+        (p for p in obra.partituras.all() if p.paginas.filter(compases_confirmados=True).exists()),
+        None,
+    )
+
+
 @login_required
 def navegador_obra(request, pk):
     """Navegador manual del itinerario de ejecución: muestra en qué compás
@@ -343,6 +357,8 @@ def navegador_obra(request, pk):
         "desde_compas": desde_compas, "desde_pasada": desde_pasada,
         "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
         "loop": loop,
+        "compas_siguiente": siguiente[1] if siguiente else None,
+        "tiene_score": _partitura_seguida(obra) is not None,
     })
 
 
@@ -367,6 +383,28 @@ def plan_obra(request, pk):
 
     pulsos, completo = construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
     return JsonResponse({"pulsos": pulsos, "completo": completo})
+
+
+@login_required
+def score_geometria_obra(request, pk):
+    """Geometría (sistemas/compases por página) de la parte que se sigue
+    para mostrar el score durante la ejecución — un solo JSON, pedido una
+    vez al arrancar (igual criterio que plan_obra): el cursor sobre el
+    score se dibuja después con esto ya en memoria, sin volver a pedirle
+    la posición de cada compás al servidor."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    partitura = _partitura_seguida(obra)
+    if not partitura:
+        return JsonResponse({"partitura": None, "paginas": []})
+
+    paginas = geometria_partitura(partitura)
+    for p in paginas:
+        p["imagen_url"] = reverse("partituras:pagina_imagen_normalizada", args=[partitura.pk, p["numero"]])
+
+    return JsonResponse({
+        "partitura": {"id": partitura.pk, "titulo": partitura.titulo, "parte": partitura.parte},
+        "paginas": paginas,
+    })
 
 
 @login_required

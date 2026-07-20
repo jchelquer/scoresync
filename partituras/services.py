@@ -402,6 +402,53 @@ def retroceder_compas(obra, segmento, compas_actual):
     return None
 
 
+def geometria_partitura(partitura):
+    """Geometría (sistemas y compases, por página) de toda una partitura —
+    pensado para mandarse una sola vez al cliente como JSON, igual que
+    construir_plan, y que el cursor sobre el score se dibuje ahí con lo
+    que ya tiene en memoria en vez de volver a pedirle al servidor la
+    posición de cada compás a medida que avanza la ejecución.
+
+    Devuelve una lista de dicts, uno por página, con numero/margen_x0/
+    margen_y0/margen_x1/margen_y1 (el recuadro de contenido real ya
+    confirmado, ver Pagina.margen_*_aplicado)/sistemas (orden/y/height)/
+    compases (numero/sistema_orden/x/y/width/height/repeticiones) — sin
+    URL de imagen (eso lo arma la vista, que sí conoce las rutas).
+
+    El margen de la página reemplaza al "borde de lo visible en pantalla"
+    en el cálculo de la caja de un compás (ver calcularCaja en el
+    cliente): así la caja de cualquier compás sale sólo de datos ya
+    confirmados, sin depender de qué esté scrolleado/zoomeado en ese
+    momento — funciona igual esté o no ese compás realmente en pantalla.
+
+    `repeticiones` > 1 es un silencio de varios compases marcado a mano
+    (ver Compas.repeticiones): una sola fila cubre varios números de
+    compás reales con una única caja ancha — el cliente es quien sabe, al
+    buscar un número intermedio, que le corresponde una porción
+    proporcional de esa caja (no que "no existe")."""
+    paginas = []
+    for pagina in partitura.paginas.order_by('numero'):
+        sistemas = []
+        compases = []
+        for sistema in pagina.sistemas.order_by('orden'):
+            sistemas.append({'orden': sistema.orden, 'y': sistema.y, 'height': sistema.height})
+            for compas in sistema.compases.order_by('x'):
+                compases.append({
+                    'numero': compas.numero,
+                    'sistema_orden': sistema.orden,
+                    'x': compas.x, 'y': compas.y,
+                    'width': compas.width, 'height': compas.height,
+                    'repeticiones': compas.repeticiones,
+                })
+        paginas.append({
+            'numero': pagina.numero,
+            'margen_x0': pagina.margen_x0_aplicado, 'margen_y0': pagina.margen_y0_aplicado,
+            'margen_x1': pagina.margen_x1_aplicado, 'margen_y1': pagina.margen_y1_aplicado,
+            'sistemas': sistemas, 'compases': compases,
+        })
+    return paginas
+
+
 def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada):
     """Arma la lista de PULSOS (no de compases) entre "desde" y "hasta"
     (mismo criterio de compás+pasada que buscar_posicion), cada uno con su
