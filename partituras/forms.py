@@ -16,6 +16,22 @@ class PartituraForm(forms.ModelForm):
         }
 
 
+class PartituraEditForm(forms.ModelForm):
+    """Igual que PartituraForm pero sin archivo_original — cambiar el PDF
+    de una partitura ya en uso invalidaría todas las páginas/sistemas/
+    barras/compases ya detectados y confirmados; esto es sólo para
+    corregir el nombre/metadatos."""
+    class Meta:
+        model = Partitura
+        fields = ['titulo', 'compositor', 'instrumento', 'parte']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'instrumento': forms.Select(attrs={'class': 'form-select'}),
+            'parte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Clarinete 2 (opcional)'}),
+        }
+
+
 class ObraForm(forms.ModelForm):
     class Meta:
         model = Obra

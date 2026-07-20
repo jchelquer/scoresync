@@ -1,5 +1,24 @@
 from django.contrib import admin
-from .models import Partitura, Pagina, Sistema, Compas
+from .models import Barra, Compas, Obra, Pagina, Segmento, Sistema, Partitura
+
+
+@admin.register(Obra)
+class ObraAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'compositor', 'arreglista', 'owner', 'creado')
+    search_fields = ('titulo', 'compositor', 'arreglista', 'owner__username')
+
+
+@admin.register(Segmento)
+class SegmentoAdmin(admin.ModelAdmin):
+    list_display = ('obra', 'orden', 'compas_desde', 'compas_hasta', 'indicacion_compas', 'bpm', 'bpm_llegada', 'descripcion')
+    list_filter = ('variacion_tempo',)
+    search_fields = ('obra__titulo', 'descripcion')
+
+
+@admin.register(Barra)
+class BarraAdmin(admin.ModelAdmin):
+    list_display = ('sistema', 'x', 'estado', 'origen')
+    list_filter = ('estado', 'origen')
 
 
 @admin.register(Partitura)

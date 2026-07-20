@@ -191,8 +191,18 @@ def renumerar_segmentos(obra):
     Se hace en dos pasadas: si se asignara el valor final directamente,
     orden=10 podría chocar contra otra fila que hoy YA tiene orden=10 y
     todavía no fue procesada (viola unique_together (obra, orden)). Pasar
-    primero por un rango que no puede colisionar con nada evita eso."""
-    segmentos = list(obra.segmentos.order_by('orden'))
+    primero por un rango que no puede colisionar con nada evita eso.
+
+    La fila de cierre (compas_desde vacío — ver docstring de Segmento)
+    SIEMPRE queda última, sin importar qué valor de orden tenga o le hayan
+    tipeado: si sólo se ordenara por orden a secas, un contenido nuevo con
+    un orden más alto que el de la fila de cierre (fácil de tipear sin
+    querer, esa fila no se distingue a simple vista salvo por tener Desde/
+    Hasta vacíos) la dejaba encajada en el medio — y como resolver_segmentos
+    corta la acumulación de tiempo apenas encuentra la fila de cierre, todo
+    lo que quedara después se perdía en silencio (ni tiempo calculado, ni
+    plan de ejecución)."""
+    segmentos = sorted(obra.segmentos.all(), key=lambda s: (s.compas_desde is None, s.orden))
     OFFSET_TEMPORAL = 10_000_000
     for i, seg in enumerate(segmentos):
         seg.orden = OFFSET_TEMPORAL + i

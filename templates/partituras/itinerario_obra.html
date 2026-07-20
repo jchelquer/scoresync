@@ -53,7 +53,7 @@
           <td>{{ form.bpm_llegada }}</td>
           <td>{{ form.descripcion }}</td>
           <td>{{ form.tiempo_inicio }}</td>
-          <td class="small">{{ form.instance.tiempo_inicio_calculado|default:"—" }}</td>
+          <td class="small">{{ form.instance.tiempo_inicio_calculado|default_if_none:"—" }}</td>
           <td class="text-center">{{ form.DELETE }}</td>
         </tr>
         {% if form.errors %}

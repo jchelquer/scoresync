@@ -2,6 +2,36 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.3.4"
+  date: "2026-07-20"
+  changes:
+    - type: corregido
+      text: "Guardar el itinerario podía romper con «llave duplicada... orden» al tocar una sola fila — el rango temporal que usa la vista para evitar colisiones coincidía con el que usa internamente renumerar_segmentos(), y se pisaban entre sí."
+    - type: nuevo
+      text: "La fila de cierre del itinerario (sin Desde/Hasta, sólo marca dónde termina el último compás real y muestra el tiempo estimado de fin de la obra) se agrega sola al guardar si todavía no existe — antes había que armarla a mano sin ninguna guía."
+    - type: corregido
+      text: "La fila de cierre podía terminar encajada en el medio de la tabla si una fila nueva se guardaba con un número de orden más alto que el suyo (fácil de tipear sin querer, no se distingue a simple vista salvo por tener Desde/Hasta vacíos) — y todo lo que quedara después se perdía en silencio del cálculo de tiempos. Ahora la fila de cierre siempre queda última al guardar, sin importar qué orden se le haya tipeado a las demás."
+    - type: corregido
+      text: "Cambiarle el orden a una sola fila para que pasara antes que las demás (ej. ponerle 5 para que vaya antes que la primera) no hacía nada — se calculaba su nueva posición sólo contra las otras filas tocadas en ese guardado, ignorando dónde debía quedar respecto de las que no se habían tocado."
+    - type: corregido
+      text: "El tiempo calculado de la primera fila aparecía como «—» en vez de 0:00:00 — el filtro del template trataba cualquier valor \"falsy\" (incluido un tiempo de exactamente cero) como si faltara."
+    - type: nuevo
+      text: "Obra, Segmento y Barra ahora están dados de alta en el admin de Django (antes sólo Partitura/Página/Sistema/Compás)."
+
+- version: "1.3.3"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "Borrar una partitura desde la biblioteca (con confirmación, avisando si está vinculada a una obra) — borra también sus archivos del servidor, no sólo el registro."
+    - type: nuevo
+      text: "Editar título, compositor, instrumento y parte de una partitura ya subida, desde la biblioteca — no permite cambiar el archivo, para no invalidar lo ya detectado y confirmado."
+
+- version: "1.3.2"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "Compases al aire (optativo, default 1) antes de la ejecución en tiempo real, con cuenta regresiva desde el número de pulsos hasta 1 en cada uno para fijar la atención. Vuelven a sonar cada vez que se retoma tras una pausa, no sólo al arrancar. Se avisan con un número grande propio en el margen del sistema (no el cursor de pulso normal, para no confundirlos con la obra ya empezada) y siempre visibles; el sonido respeta el switch de metrónomo."
+
 - version: "1.3.1"
   date: "2026-07-20"
   changes:

@@ -44,6 +44,10 @@
   #score-header-extra #control-velocidad { font-size: 0.8rem; }
   #barra-compacta #control-velocidad input[type="range"],
   #score-header-extra #control-velocidad input[type="range"] { width: 4.5rem !important; }
+  #barra-compacta #control-compases-aire,
+  #score-header-extra #control-compases-aire { font-size: 0.8rem; }
+  #barra-compacta #control-compases-aire input,
+  #score-header-extra #control-compases-aire input { width: 3rem !important; }
 
   /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
      final de la fila compacta, empujados a la derecha (todo lo demás
@@ -168,7 +172,7 @@
       <div id="nav-metronomo-punto" style="position: absolute; top: 50%; left: 12.5%; width: 1.5rem; height: 1.5rem; margin-top: -0.75rem; margin-left: -0.75rem; border-radius: 50%; background: var(--ss-accent); opacity: 0.35; transition: left 0.08s linear, opacity 0.06s, transform 0.06s;"></div>
     </div>
     <div class="display-3" id="nav-compas" style="color: var(--ss-text-bright)">{{ compas_actual }}</div>
-    <p class="nav-compas-label small mb-0" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
+    <p class="nav-compas-label small mb-0" id="nav-compas-label" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
 
     <div class="info-extra mt-4 d-flex justify-content-center gap-4 flex-wrap">
       <span id="nav-indicacion-wrap" style="color: var(--ss-text); {% if not indicacion_compas %}display:none;{% endif %}">
@@ -200,6 +204,10 @@
 <div class="fila-botones d-flex justify-content-center gap-2 flex-wrap mb-3">
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "Anterior" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
+  <div class="d-flex align-items-center gap-2" id="control-compases-aire">
+    <label for="compases-aire" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
+    <input type="number" id="compases-aire" min="0" max="4" step="1" value="1" class="form-control form-control-sm" style="width: 3.5rem;">
+  </div>
   <div class="d-flex align-items-center gap-2" id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
     <input type="range" id="velocidad-slider" min="20" max="120" step="5" value="100" style="width: 6.5rem;">
@@ -292,6 +300,8 @@
   const controlVelocidad = document.getElementById('control-velocidad');
   const velocidadSlider = document.getElementById('velocidad-slider');
   const velocidadValor = document.getElementById('velocidad-valor');
+  const controlCompasesAire = document.getElementById('control-compases-aire');
+  const compasesAireInput = document.getElementById('compases-aire');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
@@ -323,9 +333,10 @@
     // al final a medida que se recorre el array). Sólo uno de los cuatro
     // está visible a la vez (ver mostrarControles), así que el orden entre
     // ellos casi no se nota — Ejecutar primero porque es el punto de
-    // entrada antes de que exista un plan cargado. El control de velocidad
-    // va justo antes de ese grupo.
+    // entrada antes de que exista un plan cargado. Los compases al aire y
+    // la velocidad van justo antes de ese grupo.
     { el: formRango, destino: scoreHeaderExtra },
+    { el: controlCompasesAire, destino: scoreHeaderExtra },
     { el: controlVelocidad, destino: scoreHeaderExtra },
     { el: btnPlay, destino: scoreHeaderExtra },
     { el: btnPause, destino: scoreHeaderExtra },
@@ -421,6 +432,103 @@
     });
   }
 
+  // ── Compases al aire (count-in) ─────────────────────────────────────
+  // No es un prefijo fijo pegado una sola vez a pulsos[]: tiene que volver
+  // a sonar cada vez que se arranca de cero Y cada vez que se retoma
+  // después de una pausa (para dar tiempo a prepararse antes de reengachar
+  // en el punto exacto donde se había quedado) — por eso es un mini-reloj
+  // aparte (cuentaAlAire/avanzarCuenta), no parte del pulsos[]/acumulados[]
+  // principal: así nunca hay que insertar/sacar nada de esas listas ni
+  // tocar compasInicios, y "referencia" (de qué compás real se cuenta) es
+  // distinta según el caso — el primer pulso real de todo el plan al
+  // arrancar, o el pulso donde se pausó al continuar.
+  let cuentaAlAire = null; // { pulsos, acumulados, totalDuracion, idx, startTs, numeroDestino, luego } | null
+
+  function leerCompasesAlAire() {
+    if (!compasesAireInput) return 0;
+    const n = parseInt(compasesAireInput.value, 10);
+    return Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0;
+  }
+
+  // Un compás al aire por cada compás pedido, cada uno con su cuenta
+  // regresiva completa (pulsos_por_compas, pulsos_por_compas-1, ..., 1) —
+  // al tempo/indicación del compás real de referencia, así se establece
+  // ANTES de arrancar el tempo al que realmente se va a tocar.
+  function generarPulsosCuentaAlAire(cantidad, referencia) {
+    if (!cantidad || !referencia || !referencia.bpm || !referencia.pulsos_por_compas) return [];
+    const n = referencia.pulsos_por_compas;
+    const pulsos = [];
+    for (let c = 0; c < cantidad; c++) {
+      for (let p = 1; p <= n; p++) {
+        pulsos.push({
+          segmento_id: referencia.segmento_id,
+          compas: null,
+          cuenta_regresiva: n - p + 1,
+          pulso: p,
+          pulsos_por_compas: n,
+          es_primer_pulso_compas: false, // no es una ocurrencia real — no entra en compasInicios
+          acento: p === 1,
+          indicacion_compas: referencia.indicacion_compas,
+          bpm: referencia.bpm,
+          variacion_tempo_display: '',
+          bpm_llegada: null,
+          descripcion: null,
+          duracion: 60 / referencia.bpm,
+        });
+      }
+    }
+    return pulsos;
+  }
+
+  // Arma y arranca la cuenta al aire (si corresponde) y llama a `luego`
+  // cuando termina — si no hay compases al aire configurados, o la
+  // referencia no tiene tempo/indicación resuelta, llama a `luego`
+  // inmediatamente (mismo comportamiento que si nunca hubiera existido
+  // esta función).
+  function construirCuenta(referencia, numeroDestino, luego) {
+    const cantidad = leerCompasesAlAire();
+    const pulsosCuenta = generarPulsosCuentaAlAire(cantidad, referencia);
+    if (!pulsosCuenta.length) { luego(); return; }
+    const acumuladosCuenta = [];
+    let total = 0;
+    pulsosCuenta.forEach(p => {
+      acumuladosCuenta.push(total);
+      total += duracionEscalada(p);
+    });
+    cuentaAlAire = {
+      pulsos: pulsosCuenta, acumulados: acumuladosCuenta, totalDuracion: total,
+      idx: -1, startTs: performance.now(), numeroDestino, luego,
+    };
+    detenerAnimacion();
+    rafId = requestAnimationFrame(avanzarCuenta);
+  }
+
+  function avanzarCuenta(now) {
+    const c = cuentaAlAire;
+    if (!c) return;
+    const elapsed = (now - c.startTs) / 1000;
+    if (elapsed >= c.totalDuracion) {
+      const ultimo = c.pulsos[c.pulsos.length - 1];
+      if (ultimo && c.idx !== c.pulsos.length - 1) {
+        marcarPulso(ultimo);
+        mostrarPulsoCuenta(ultimo, c.numeroDestino);
+      }
+      const luego = c.luego;
+      cuentaAlAire = null;
+      detenerAnimacion();
+      luego();
+      return;
+    }
+    let i = 0;
+    while (i + 1 < c.acumulados.length && elapsed >= c.acumulados[i + 1]) i++;
+    if (i !== c.idx) {
+      for (let j = Math.max(c.idx + 1, 0); j <= i; j++) marcarPulso(c.pulsos[j]);
+      c.idx = i;
+      mostrarPulsoCuenta(c.pulsos[i], c.numeroDestino);
+    }
+    rafId = requestAnimationFrame(avanzarCuenta);
+  }
+
   function click(acento) {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
@@ -485,11 +593,22 @@
   }
 
   function marcarPulso(p) {
-    if (metronomoVisualToggle.checked) {
+    // La cuenta al aire NO reutiliza el mecanismo del metrónomo (ni el
+    // puntito flotante ni el flash del cursor sobre el score) — eso hacía
+    // que se confundiera con "ya empezó a sonar la obra", y además se
+    // quedaba encendido aunque el switch de metrónomo visual estuviera
+    // apagado. Su propio aviso visual (un número grande en el margen del
+    // sistema, ver renderizarCuentaAlAireSync) se dibuja solo, disparado
+    // por mostrarPulsoCuenta → actualizarScore, no desde acá.
+    const esCuentaAlAire = p.cuenta_regresiva != null;
+    if (!esCuentaAlAire && metronomoVisualToggle.checked) {
       posicionarPunto(p.pulso, p.pulsos_por_compas);
       flashVisual(p.acento);
       flashCursorScore(p.acento);
     }
+    // El sonido sí respeta el mismo switch que el resto del metrónomo —
+    // si está encendido, la cuenta al aire suena; si está apagado, queda
+    // muda (sólo el aviso visual).
     if (metronomoAudioToggle.checked) click(p.acento);
   }
 
@@ -532,6 +651,24 @@
     }
   }
 
+  // Muestra un pulso de la cuenta al aire: el número grande pasa a ser la
+  // cuenta regresiva (no el compás), la etiqueta debajo avisa que todavía
+  // no arrancó la obra, y el score se ancla en el compás real al que se va
+  // a entrar (numeroDestino) — así ya se ve/resalta antes de empezar a
+  // tocarlo, sin "siguiente" (no hay anticipación que mostrar durante la
+  // cuenta, el destino YA es lo que se está mirando).
+  function mostrarPulsoCuenta(p, numeroDestino) {
+    document.getElementById('nav-compas').textContent = p.cuenta_regresiva;
+    document.getElementById('nav-compas-label').textContent = '{% translate "al aire" %}';
+    setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
+    const bpmMostrado = bpmEscalado(p.bpm);
+    setCampo('nav-bpm-wrap', 'nav-bpm', bpmMostrado ? (bpmMostrado + ' bpm') : '');
+    setCampo('nav-variacion-wrap', 'nav-variacion', '');
+    document.getElementById('nav-tiempo-wrap').style.display = 'none';
+    setCampo('nav-descripcion-wrap', 'nav-descripcion', '');
+    if (numeroDestino != null) actualizarScore(numeroDestino, null, p.pulso, p.pulsos_por_compas, p.cuenta_regresiva);
+  }
+
   function mostrarPulso(p) {
     // El bpm (y el de llegada, en el paréntesis del accel/rit) se muestran
     // ya pasados por la velocidad vigente — lo que se ve tiene que
@@ -539,6 +676,7 @@
     // "de verdad" guardado en el itinerario (ver bpmEscalado).
     const bpmMostrado = bpmEscalado(p.bpm);
     const bpmLlegadaMostrado = bpmEscalado(p.bpm_llegada);
+    document.getElementById('nav-compas-label').textContent = '{% translate "compás" %}';
     document.getElementById('nav-compas').textContent = p.compas;
     setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
     setCampo('nav-bpm-wrap', 'nav-bpm', bpmMostrado ? (bpmMostrado + ' bpm') : '');
@@ -606,6 +744,13 @@
   let ultimoSiguiente = null;
   let ultimoPulso = 1;
   let ultimoPulsosPorCompas = 1;
+  // Número de la cuenta al aire vigente (null si no estamos en cuenta al
+  // aire) — dispara un dibujo COMPLETAMENTE aparte del cursor de pulso
+  // normal (ver renderizarCuentaAlAireSync/repintarScore), a propósito:
+  // reusar el mismo puntito/flash que el metrónomo de verdad generaba
+  // confusión (¿ya arrancó la obra, o todavía es la cuenta?) y además no
+  // se apagaba con el switch de metrónomo visual.
+  let ultimoCuentaAlAire = null;
   // Fracción [0,1] del compás resaltado que realmente se va a tocar en el
   // plan cargado — 0..1 (compás entero) salvo que sea el primer o el
   // último compás del rango pedido y arranque/corte a mitad de pulso (ver
@@ -975,6 +1120,40 @@
     ctx.fillText(String(p), cx, cy + 1);
   }
 
+  // Cuenta al aire: un número grande en el MARGEN IZQUIERDO del sistema
+  // donde está el compás de destino — a propósito NO es el cursor de pulso
+  // (otro lugar, mucho más grande, otro color de alerta en vez del acento
+  // normal) para que no se pueda confundir con "ya empezó a sonar la
+  // obra". Se dibuja en vez del cursor mientras ultimoCuentaAlAire no sea
+  // null (ver repintarScore).
+  function renderizarCuentaAlAireSync(ventana, entradaDestino, cuenta) {
+    const pagina = ventana.pagina, img = ventana.img;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const escala = ventana.escalaRender;
+    const caja = calcularCaja(entradaDestino, pagina);
+    if (!caja) return;
+
+    const altoSistemaPx = Math.max((caja.bottom - caja.top) * img.naturalHeight * escala, 1);
+    const radio = Math.min(Math.max(altoSistemaPx * 0.4, 22 * nivelZoom), 70 * nivelZoom);
+    const cx = Math.min(radio + 6, canvas.width - radio);
+    const cy = (caja.top - ventana.top) * img.naturalHeight * escala + altoSistemaPx / 2;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radio, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(233, 69, 96, 0.88)'; // rojo de alerta — deliberadamente distinto del accent teal del cursor real
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = `bold ${Math.round(radio * 1.2)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(cuenta), cx, cy + 1);
+  }
+
   function renderizarPreviewSync(ventana, entradaSiguiente) {
     if (!entradaSiguiente || ventana.sistemas.length < 2) return;
     const pagina = ventana.pagina, img = ventana.img;
@@ -1034,11 +1213,18 @@
       renderizarCompasActualSync(ventanaActiva, ultimoEntradaResaltar, ultimoFracIni, ultimoFracFin);
     }
     if (ultimoEnUltimoCompas) renderizarPreviewSync(ventanaActiva, ultimoSiguiente);
-    // El cursor va SIEMPRE como capa más arriba — si se dibujara antes que
-    // el preview, éste (que pinta un fondo sobre el penúltimo sistema)
-    // podía taparlo cuando el compás actual queda cerca de esa franja.
+    // El cursor (o, en su lugar, el número de la cuenta al aire) va SIEMPRE
+    // como capa más arriba — si se dibujara antes que el preview, éste
+    // (que pinta un fondo sobre el penúltimo sistema) podía taparlo cuando
+    // el compás actual queda cerca de esa franja. Nunca los dos juntos:
+    // mientras hay cuenta al aire no se dibuja el cursor de pulso, así no
+    // se confunden (ver comentario de ultimoCuentaAlAire).
     if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
-      renderizarCursorPulso(ventanaActiva, ultimoEntradaResaltar, ultimoPulso, ultimoPulsosPorCompas);
+      if (ultimoCuentaAlAire != null) {
+        renderizarCuentaAlAireSync(ventanaActiva, ultimoEntradaResaltar, ultimoCuentaAlAire);
+      } else {
+        renderizarCursorPulso(ventanaActiva, ultimoEntradaResaltar, ultimoPulso, ultimoPulsosPorCompas);
+      }
     }
   }
 
@@ -1048,7 +1234,7 @@
   // cada pulso, y una excepción sin capturar ahí adentro frenaría
   // requestAnimationFrame para siempre (avanzar() nunca volvería a
   // programarse). De ahí el try/catch acá y el que no se propaga nada.
-  async function actualizarScore(numeroActual, numeroSiguiente, pulsoActual, pulsosPorCompasActual) {
+  async function actualizarScore(numeroActual, numeroSiguiente, pulsoActual, pulsosPorCompasActual, cuentaRegresiva) {
     if (!scoreVentanaCanvas || !scoreGeometria) return;
     try {
       scoreErrorEl.style.display = 'none';
@@ -1123,6 +1309,9 @@
       // compás — se ajusta solo apenas haya pulsos reales.
       ultimoPulso = pulsoActual || 1;
       ultimoPulsosPorCompas = pulsosPorCompasActual || 1;
+      // null/undefined (llamada normal desde mostrarPulso) apaga la cuenta
+      // al aire — así el primer pulso real de verdad ya la borra sola.
+      ultimoCuentaAlAire = cuentaRegresiva != null ? cuentaRegresiva : null;
 
       repintarScore();
     } catch (e) {
@@ -1291,25 +1480,48 @@
     // sólo lo permiten arrancado a partir de un gesto del usuario — este
     // click de "Ejecutar"/"Reiniciar" ya es ese gesto.
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    startTs = performance.now();
     mostrarControles('reproduciendo');
-    detenerAnimacion();
-    rafId = requestAnimationFrame(avanzar);
+    // Compases al aire (si están configurados) antes de arrancar el reloj
+    // de verdad — al tempo/indicación del primer pulso real del plan.
+    construirCuenta(pulsos[0], pulsos[0].compas, () => {
+      startTs = performance.now();
+      detenerAnimacion();
+      rafId = requestAnimationFrame(avanzar);
+    });
   }
 
   function pausar() {
+    if (cuentaAlAire) {
+      // Pausar en medio de una cuenta al aire la aborta sin más — la
+      // posición real (idxMostrado/elapsedAlPausar) es la de ANTES de que
+      // arrancara esa cuenta, que nunca se tocó mientras corría, así que
+      // ya queda todo consistente para "Continuar" sin hacer nada extra.
+      cuentaAlAire = null;
+      detenerAnimacion();
+      mostrarControles('pausado');
+      return;
+    }
     elapsedAlPausar = (performance.now() - startTs) / 1000;
     detenerAnimacion();
     mostrarControles('pausado');
   }
 
   function continuarDesdePausa() {
-    // No vuelve a pedir el plan ni resetea la posición — sólo corre el
-    // reloj hacia atrás lo que ya había transcurrido, así retoma justo
-    // donde se pausó en vez de arrancar de nuevo desde el "desde".
-    startTs = performance.now() - elapsedAlPausar * 1000;
     mostrarControles('reproduciendo');
-    rafId = requestAnimationFrame(avanzar);
+    // Cuenta al aire también acá — da tiempo a prepararse antes de
+    // reengachar en el punto exacto donde se había quedado. Se arma al
+    // tempo/indicación del pulso en el que está pausado (no el del
+    // principio de la obra: puede ser un tramo con otro tempo).
+    const referencia = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado] : pulsos[0];
+    const numeroDestino = referencia ? referencia.compas : null;
+    construirCuenta(referencia, numeroDestino, () => {
+      // No vuelve a pedir el plan ni resetea la posición — sólo corre el
+      // reloj hacia atrás lo que ya había transcurrido, así retoma justo
+      // donde se pausó en vez de arrancar de nuevo desde el "desde".
+      startTs = performance.now() - elapsedAlPausar * 1000;
+      detenerAnimacion();
+      rafId = requestAnimationFrame(avanzar);
+    });
   }
 
   // Modo "ensayo con parte": los mismos controles de siempre (mismos

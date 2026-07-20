@@ -12,15 +12,27 @@
 <div class="row g-3">
   {% for p in partituras %}
   <div class="col-md-4">
-    <a href="{% url 'partituras:detalle' p.pk %}" class="text-decoration-none">
-      <div class="card border-0 h-100" style="background: var(--ss-surface)">
+    <div class="card border-0 h-100 position-relative" style="background: var(--ss-surface)">
+      <div class="position-absolute d-flex gap-1" style="top: 0.6rem; right: 0.6rem; z-index: 2;">
+        <a href="{% url 'partituras:editar_partitura' p.pk %}" class="btn btn-sm btn-outline-light" title="{% translate 'Editar' %}">
+          <i class="bi bi-pencil"></i>
+        </a>
+        <form method="post" action="{% url 'partituras:borrar_partitura' p.pk %}"
+              onsubmit="return confirm('{% if p.obra %}{% blocktranslate with obra=p.obra.titulo %}Está vinculada a la obra {{ obra }}. {% endblocktranslate %}{% endif %}{% translate "¿Borrar esta partitura? No se puede deshacer." %}');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-outline-danger" title="{% translate 'Borrar' %}">
+            <i class="bi bi-trash"></i>
+          </button>
+        </form>
+      </div>
+      <a href="{% url 'partituras:detalle' p.pk %}" class="text-decoration-none stretched-link">
         <div class="card-body">
-          <h6 class="card-title" style="color: var(--ss-text-bright)"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.titulo }}</h6>
+          <h6 class="card-title pe-4" style="color: var(--ss-text-bright)"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.titulo }}</h6>
           <p class="small mb-1" style="color: var(--ss-text-muted)">{{ p.compositor|default:"—" }}</p>
           <p class="small mb-0" style="color: var(--ss-text-muted)">{{ p.instrumento|default:"—" }}{% if p.parte %} · {{ p.parte }}{% endif %}</p>
         </div>
-      </div>
-    </a>
+      </a>
+    </div>
   </div>
   {% endfor %}
 </div>

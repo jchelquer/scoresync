@@ -6,11 +6,13 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Max
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
-from .forms import ObraForm, PartituraForm, SegmentoFormSet
+from .forms import ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
 from .models import Barra, Compas, Obra, Pagina, Partitura, Segmento, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
@@ -97,6 +99,43 @@ def _proximo_paso(partitura):
 def biblioteca(request):
     partituras = Partitura.objects.filter(owner=request.user)
     return render(request, "partituras/biblioteca.html", {"partituras": partituras})
+
+
+@login_required
+@require_POST
+def borrar_partitura(request, pk):
+    """Borra una partitura y todo lo que cuelga de ella (páginas, sistemas,
+    barras, compases — todo en cascada por FK). Los archivos (original y
+    normalizado) no se borran solos con el modelo (Django no lo hace por
+    default), así que se borran del storage a mano antes. Si estaba
+    vinculada a una obra como "parte a seguir", esa obra no se toca —
+    Partitura.obra es SET_NULL, y el navegador ya sabe elegir otra parte
+    disponible (o ninguna) si la que seguía desaparece."""
+    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    titulo = str(partitura)
+    if partitura.archivo_original:
+        partitura.archivo_original.delete(save=False)
+    if partitura.archivo_normalizado:
+        partitura.archivo_normalizado.delete(save=False)
+    partitura.delete()
+    messages.success(request, f'Se borró "{titulo}".')
+    return redirect("partituras:biblioteca")
+
+
+@login_required
+def editar_partitura(request, pk):
+    """Corrige título/compositor/instrumento/parte de una partitura ya
+    subida — no el archivo (ver PartituraEditForm)."""
+    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    if request.method == "POST":
+        form = PartituraEditForm(request.POST, instance=partitura)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Se guardaron los cambios de "{partitura}".')
+            return redirect("partituras:biblioteca")
+    else:
+        form = PartituraEditForm(instance=partitura)
+    return render(request, "partituras/editar.html", {"form": form, "partitura": partitura})
 
 
 @login_required
@@ -205,21 +244,65 @@ def itinerario_obra(request, pk):
                 # limpios.
                 # (deleted_objects sólo queda poblado después de llamar a
                 # save(), así que hay que leerlo recién acá, no antes.)
-                instancias = sorted(formset.save(commit=False), key=lambda i: i.orden)
+                instancias_tocadas = formset.save(commit=False)
                 for eliminada in formset.deleted_objects:
                     eliminada.delete()
 
-                OFFSET_TEMPORAL = 10_000_000
-                for i, instancia in enumerate(instancias):
-                    instancia.obra = obra
-                    instancia.orden = OFFSET_TEMPORAL + i
-                    instancia.save()
+                # El orden EFECTIVO deseado combina las filas tocadas (con el
+                # "orden" que el usuario acaba de tipear, ya aplicado en
+                # memoria por el formset pero todavía sin persistir) y las NO
+                # tocadas (con el que ya tenían guardado) — ordenar sólo las
+                # tocadas entre sí (como hacía antes) ignoraba por completo
+                # dónde debían quedar relativas a las que no cambiaron: pedir
+                # "orden=5" para que una fila pase a ser la primera no hacía
+                # nada, porque esa fila se mandaba a un rango temporal aparte
+                # sin comparar contra el 10/20/30... de las filas intactas.
+                ids_tocados = {i.pk for i in instancias_tocadas if i.pk}
+                no_tocadas = list(Segmento.objects.filter(obra=obra).exclude(pk__in=ids_tocados))
+                orden_deseado = sorted(
+                    list(instancias_tocadas) + no_tocadas,
+                    key=lambda s: (s.compas_desde is None, s.orden),
+                )
+
+                # OJO: este offset temporal tiene que ser DISTINTO del que usa
+                # renumerar_segmentos() puertas adentro (10_000_000) — si
+                # fueran el mismo, la primera fila que renumerar_segmentos()
+                # procesa (la de menor orden actual) intenta escribir
+                # exactamente el valor que una instancia recién guardada acá
+                # ya ocupa (todavía sin reprocesar, porque una fila tocada
+                # siempre queda última en el orden por tener un "orden"
+                # gigante) → IntegrityError. Pasó de verdad, reproducido y
+                # confirmado antes de este fix — con rangos que nunca se
+                # pisan (acá muy por encima de lo que renumerar_segmentos
+                # llega a usar, aun con miles de filas) no puede volver a
+                # pasar. Ahora se guardan TODAS las filas (tocadas y no) en
+                # este rango, ya en el orden deseado calculado arriba, para
+                # que renumerar_segmentos() (que sólo sabe releer el orden
+                # actual de la base) reciba esa posición correcta en vez de
+                # tener que adivinarla.
+                OFFSET_TEMPORAL_VISTA = 50_000_000
+                for i, seg in enumerate(orden_deseado):
+                    seg.obra = obra
+                    seg.orden = OFFSET_TEMPORAL_VISTA + i
+                    seg.save()
 
                 # Vuelve a numerar de a 10 en el orden actual — así una fila
                 # insertada "entre medio" (con un orden como 15) recupera
                 # hueco completo alrededor para la próxima inserción, en vez
                 # de ir agotándose de a poco.
                 renumerar_segmentos(obra)
+
+                # Si todavía no hay fila de cierre (compas_desde vacío, sólo
+                # marca dónde termina el último compás real — ver docstring
+                # de Segmento), se agrega sola: no hay forma intuitiva de
+                # armarla a mano desde la tabla (hay que saber dejar Desde/
+                # Hasta en blanco y no pisar ningún orden existente), y sin
+                # ella nunca se ve el tiempo estimado de fin de la obra.
+                tiene_contenido = Segmento.objects.filter(obra=obra).exists()
+                tiene_cierre = Segmento.objects.filter(obra=obra, compas_desde__isnull=True).exists()
+                if tiene_contenido and not tiene_cierre:
+                    ultimo_orden = Segmento.objects.filter(obra=obra).aggregate(m=Max("orden"))["m"]
+                    Segmento.objects.create(obra=obra, orden=ultimo_orden + 10)
 
                 # Recalcula tiempo_inicio_calculado de toda la obra (no sólo
                 # las filas tocadas: cambiar un bpm más arriba corre el
