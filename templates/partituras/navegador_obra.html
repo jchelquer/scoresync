@@ -1,0 +1,379 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Navegador — {{ obra.titulo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Navegador" %} — {{ obra.titulo }}
+  </h5>
+  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+</div>
+
+{% if sin_contenido %}
+<p class="small" style="color: var(--ss-text-muted)">
+  {% translate "Esta obra todavía no tiene un itinerario de ejecución cargado." %}
+  <a href="{% url 'partituras:itinerario_obra' obra.pk %}" style="color: var(--ss-accent)">{% translate "Cargalo acá" %}</a>.
+</p>
+{% else %}
+
+<form method="get" class="d-flex flex-wrap gap-2 align-items-end mb-4">
+  <div>
+    <label class="form-label small mb-0">{% translate "Desde compás" %}</label>
+    <input type="number" name="desde_compas" value="{{ desde_compas }}" class="form-control form-control-sm" style="width: 6rem;">
+  </div>
+  <div>
+    <label class="form-label small mb-0">{% translate "Vez" %}</label>
+    <input type="number" name="desde_pasada" value="{{ desde_pasada }}" min="1" class="form-control form-control-sm" style="width: 5rem;">
+  </div>
+  <div>
+    <label class="form-label small mb-0">{% translate "Hasta compás" %}</label>
+    <input type="number" name="hasta_compas" value="{{ hasta_compas }}" placeholder="{% translate 'fin' %}" class="form-control form-control-sm" style="width: 6rem;">
+  </div>
+  <div>
+    <label class="form-label small mb-0">{% translate "Vez" %}</label>
+    <input type="number" name="hasta_pasada" value="{{ hasta_pasada }}" min="1" class="form-control form-control-sm" style="width: 5rem;">
+  </div>
+  <div class="form-check mb-1">
+    <input type="checkbox" name="loop" id="loop" class="form-check-input" {% if loop %}checked{% endif %}>
+    <label for="loop" class="form-check-label small">{% translate "Loop" %}</label>
+  </div>
+  <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Fijar rango" %}</button>
+</form>
+
+<div class="card border-0 text-center mb-3" style="background: var(--ss-surface)">
+  <div class="card-body py-5">
+    <div id="nav-metronomo-caja" style="position: relative; width: 12rem; height: 2rem; margin: 0 auto 0.75rem; border: 1px solid var(--ss-text-muted); border-radius: 0.35rem; background: rgba(255,255,255,0.03);">
+      <div id="nav-metronomo-marcas" style="position: absolute; inset: 0;"></div>
+      <div id="nav-metronomo-punto" style="position: absolute; top: 50%; left: 12.5%; width: 1.5rem; height: 1.5rem; margin-top: -0.75rem; margin-left: -0.75rem; border-radius: 50%; background: var(--ss-accent); opacity: 0.35; transition: left 0.08s linear, opacity 0.06s, transform 0.06s;"></div>
+    </div>
+    <div class="display-3" id="nav-compas" style="color: var(--ss-text-bright)">{{ compas_actual }}</div>
+    <p class="small mb-0" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
+
+    <div class="mt-4 d-flex justify-content-center gap-4 flex-wrap">
+      <span id="nav-indicacion-wrap" style="color: var(--ss-text); {% if not indicacion_compas %}display:none;{% endif %}">
+        <i class="bi bi-music-note-beamed me-1"></i><span id="nav-indicacion">{{ indicacion_compas }}</span>
+      </span>
+      <span id="nav-bpm-wrap" style="color: var(--ss-text); {% if not bpm %}display:none;{% endif %}">
+        <i class="bi bi-speedometer2 me-1"></i><span id="nav-bpm">{{ bpm }} bpm</span>
+        <small id="nav-variacion-wrap" style="color: var(--ss-text-muted); {% if not segmento.variacion_tempo %}display:none;{% endif %}">
+          (<span id="nav-variacion">{{ segmento.get_variacion_tempo_display }}{% if segmento.bpm_llegada %} → {{ segmento.bpm_llegada }}{% endif %}</span>)
+        </small>
+      </span>
+      <span id="nav-tiempo-wrap" style="color: var(--ss-text); {% if not segmento.tiempo_inicio_calculado %}display:none;{% endif %}">
+        <i class="bi bi-clock me-1"></i>{{ segmento.tiempo_inicio_calculado }}
+      </span>
+    </div>
+
+    <p class="mt-3 mb-0" id="nav-descripcion-wrap" style="color: var(--ss-text-muted); {% if not segmento.descripcion %}display:none;{% endif %}">
+      <span id="nav-descripcion">{{ segmento.descripcion }}</span>
+    </p>
+
+    {% if en_fin_de_rango %}
+    <p class="mt-3 mb-0 text-warning small">{% translate "Fin del tramo." %}</p>
+    {% endif %}
+  </div>
+</div>
+
+<p id="plan-error" class="small text-warning text-center" style="display:none;"></p>
+
+<div class="d-flex justify-content-center gap-2 flex-wrap">
+  <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}>← {% translate "Anterior" %}</button>
+  <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %} →</button>
+  <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
+  <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
+  <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
+  <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;">↺ {% translate "Reiniciar" %}</button>
+  <div class="form-check form-switch d-flex align-items-center ms-2">
+    <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
+    <label class="form-check-label small ms-1" for="metronomo-visual">{% translate "Metrónomo visual" %}</label>
+  </div>
+  <div class="form-check form-switch d-flex align-items-center">
+    <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
+    <label class="form-check-label small ms-1" for="metronomo-audio">{% translate "Sonido" %}</label>
+  </div>
+</div>
+
+<script>
+(function () {
+  const btnPlay = document.getElementById('btn-play');
+  const btnPause = document.getElementById('btn-pause');
+  const btnContinuar = document.getElementById('btn-continuar');
+  const btnReiniciar = document.getElementById('btn-reiniciar');
+  const btnAnterior = document.getElementById('btn-anterior');
+  const btnSiguiente = document.getElementById('btn-siguiente');
+  const errorEl = document.getElementById('plan-error');
+  const loopEl = document.getElementById('loop');
+  const metronomoCaja = document.getElementById('nav-metronomo-caja');
+  const metronomoPunto = document.getElementById('nav-metronomo-punto');
+  const metronomoMarcas = document.getElementById('nav-metronomo-marcas');
+  const metronomoVisualToggle = document.getElementById('metronomo-visual');
+  const metronomoAudioToggle = document.getElementById('metronomo-audio');
+
+  function actualizarVisibilidadMetronomo() {
+    // Con el visual apagado no tiene sentido dejar el recuadro/punto
+    // congelados en la última posición — se esconde entero, no sólo se
+    // deja de animar.
+    metronomoCaja.style.display = metronomoVisualToggle.checked ? '' : 'none';
+  }
+  metronomoVisualToggle.addEventListener('change', actualizarVisibilidadMetronomo);
+  actualizarVisibilidadMetronomo();
+  let pulsosPorCompasMarcados = 0; // para no regenerar las marcas si no cambió el compás
+
+  // El plan que manda el servidor ya viene a nivel de PULSO (no de
+  // compás): cada entrada trae su propia duración, ya interpolada si la
+  // fila es un accelerando/ritardando — acá sólo se acumulan los offsets
+  // para programar todo contra un único reloj absoluto.
+  let pulsos = [];
+  let acumulados = [];
+  let compasInicios = []; // índices de pulsos[] donde arranca cada compás (uno por ocurrencia, cruzando filas)
+  let totalDuracion = 0;
+  let startTs = 0;
+  let idxMostrado = -1;
+  let rafId = null;
+  let elapsedAlPausar = 0;
+  let audioCtx = null;
+  let planCargado = false;
+
+  function click(acento) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = acento ? 1500 : 1000;
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.05);
+  }
+
+  function generarMarcas(pulsosPorCompas) {
+    if (pulsosPorCompas === pulsosPorCompasMarcados) return;
+    pulsosPorCompasMarcados = pulsosPorCompas;
+    metronomoMarcas.innerHTML = '';
+    // Una línea divisoria entre cada pulso (no hace falta en los bordes
+    // 0%/100%, ya los marca el recuadro) — así se ve de un vistazo cuántos
+    // pulsos tiene el compás, además de dónde está el punto ahora.
+    for (let i = 1; i < pulsosPorCompas; i++) {
+      const marca = document.createElement('div');
+      const pos = (i / pulsosPorCompas) * 100;
+      marca.style.cssText = `position:absolute; top:0; bottom:0; left:${pos}%; width:1px; background: var(--ss-text-muted); opacity:0.35;`;
+      metronomoMarcas.appendChild(marca);
+    }
+  }
+
+  function posicionarPunto(pulso, pulsosPorCompas) {
+    generarMarcas(pulsosPorCompas);
+    // Centrado en el "carril" de su pulso, no pegado a los bordes.
+    const pos = ((pulso - 0.5) / pulsosPorCompas) * 100;
+    metronomoPunto.style.left = pos + '%';
+  }
+
+  function flashVisual(acento) {
+    metronomoPunto.style.opacity = '1';
+    metronomoPunto.style.transform = acento ? 'scale(1.35)' : 'scale(1.1)';
+    setTimeout(() => {
+      metronomoPunto.style.opacity = '0.35';
+      metronomoPunto.style.transform = 'scale(1)';
+    }, 90);
+  }
+
+  function marcarPulso(p) {
+    if (metronomoVisualToggle.checked) {
+      posicionarPunto(p.pulso, p.pulsos_por_compas);
+      flashVisual(p.acento);
+    }
+    if (metronomoAudioToggle.checked) click(p.acento);
+  }
+
+  function setCampo(wrapId, spanId, valor) {
+    const wrap = document.getElementById(wrapId);
+    if (valor) {
+      wrap.style.display = '';
+      if (spanId) document.getElementById(spanId).textContent = valor;
+    } else {
+      wrap.style.display = 'none';
+    }
+  }
+
+  function mostrarPulso(p) {
+    document.getElementById('nav-compas').textContent = p.compas;
+    setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
+    setCampo('nav-bpm-wrap', 'nav-bpm', p.bpm ? (p.bpm + ' bpm') : '');
+    const variTxt = (p.variacion_tempo_display) ?
+      (p.variacion_tempo_display + (p.bpm_llegada ? ' → ' + p.bpm_llegada : '')) : '';
+    setCampo('nav-variacion-wrap', 'nav-variacion', variTxt);
+    document.getElementById('nav-tiempo-wrap').style.display = 'none';
+    setCampo('nav-descripcion-wrap', 'nav-descripcion', p.descripcion || '');
+  }
+
+  function mostrarControles(estado) {
+    // estado: 'inicial' | 'reproduciendo' | 'pausado'
+    btnPlay.style.display = estado === 'inicial' ? '' : 'none';
+    btnPause.style.display = estado === 'reproduciendo' ? '' : 'none';
+    btnContinuar.style.display = estado === 'pausado' ? '' : 'none';
+    btnReiniciar.style.display = estado === 'pausado' ? '' : 'none';
+  }
+
+  // Reposicionan el reloj (elapsedAlPausar) para que "Continuar" retome
+  // justo desde el compás al que se saltó, en vez de desde donde se pausó
+  // originalmente.
+  function irAPulso(idx) {
+    idxMostrado = idx;
+    mostrarPulso(pulsos[idx]);
+    elapsedAlPausar = acumulados[idx];
+    actualizarBotonesNav();
+  }
+
+  function indiceCompasActual() {
+    // Cuál "ocurrencia de compás" (índice en compasInicios) contiene al
+    // pulso actualmente mostrado.
+    let k = 0;
+    while (k + 1 < compasInicios.length && compasInicios[k + 1] <= idxMostrado) k++;
+    return k;
+  }
+
+  function actualizarBotonesNav() {
+    if (!planCargado) return; // antes de cargar el plan, disabled ya viene resuelto del server
+    const k = indiceCompasActual();
+    btnAnterior.disabled = k <= 0;
+    btnSiguiente.disabled = k + 1 >= compasInicios.length;
+  }
+
+  // Un solo botón Anterior/Siguiente para los dos casos, refiriéndose
+  // siempre al MISMO "compás activo" — antes de tocar "Ejecutar" no hay
+  // plan cargado todavía, así que navegan por URL (recarga de página,
+  // como siempre); una vez cargado el plan, saltan en memoria sobre la
+  // posición real de la ejecución, sea que venga de la reproducción o de
+  // un salto anterior — nunca dos nociones de "dónde estoy" en paralelo.
+  function irAnterior() {
+    if (!planCargado) {
+      if (btnAnterior.dataset.url) window.location.href = btnAnterior.dataset.url;
+      return;
+    }
+    if (rafId) pausar(); // saltar con el reloj corriendo no tendría efecto — se pisaría en el próximo frame
+    const k = indiceCompasActual();
+    if (k > 0) irAPulso(compasInicios[k - 1]);
+  }
+
+  function irSiguiente() {
+    if (!planCargado) {
+      if (btnSiguiente.dataset.url) window.location.href = btnSiguiente.dataset.url;
+      return;
+    }
+    if (rafId) pausar();
+    const k = indiceCompasActual();
+    if (k + 1 < compasInicios.length) irAPulso(compasInicios[k + 1]);
+  }
+
+  function detenerAnimacion() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+
+  // Un solo reloj absoluto (startTs) en vez de encadenar setTimeout de a
+  // un pulso por vez: así ni el jitter de red (ya no hay pedidos
+  // intermedios) ni la imprecisión de cada timer individual se acumulan
+  // como desfasaje de tempo a lo largo de la ejecución.
+  function avanzar(now) {
+    let elapsed = (now - startTs) / 1000;
+    if (elapsed >= totalDuracion) {
+      if (loopEl && loopEl.checked) {
+        startTs += totalDuracion * 1000;
+        elapsed -= totalDuracion;
+        idxMostrado = -1;
+      } else {
+        if (idxMostrado !== pulsos.length - 1) mostrarPulso(pulsos[pulsos.length - 1]);
+        idxMostrado = pulsos.length - 1;
+        actualizarBotonesNav();
+        detenerAnimacion();
+        mostrarControles('inicial');
+        return;
+      }
+    }
+    let i = 0;
+    while (i + 1 < acumulados.length && elapsed >= acumulados[i + 1]) i++;
+    if (i !== idxMostrado) {
+      // Cada entrada saltada (si el navegador se atrasó un instante) igual
+      // tiene que sonar/parpadear — sólo el número en pantalla se pisa con
+      // el último, no hace falta mostrar los intermedios.
+      for (let j = Math.max(idxMostrado + 1, 0); j <= i; j++) marcarPulso(pulsos[j]);
+      mostrarPulso(pulsos[i]);
+      idxMostrado = i;
+      actualizarBotonesNav();
+    }
+    rafId = requestAnimationFrame(avanzar);
+  }
+
+  async function cargarPlanYArrancar() {
+    errorEl.style.display = 'none';
+    const params = new URLSearchParams(window.location.search);
+    params.delete('segmento');
+    params.delete('compas');
+    let data;
+    try {
+      const resp = await fetch(`{% url 'partituras:plan_obra' obra.pk %}?${params.toString()}`);
+      data = await resp.json();
+    } catch (e) {
+      errorEl.textContent = '{% translate "No se pudo obtener el plan de ejecución." %}';
+      errorEl.style.display = '';
+      return;
+    }
+    if (!data.pulsos.length) {
+      errorEl.textContent = '{% translate "No hay compases en este rango." %}';
+      errorEl.style.display = '';
+      return;
+    }
+    if (!data.completo) {
+      errorEl.textContent = '{% translate "Falta bpm o indicación de compás en alguna fila del rango — no se puede calcular el tiempo real." %}';
+      errorEl.style.display = '';
+      return;
+    }
+    pulsos = data.pulsos;
+    acumulados = [];
+    compasInicios = [];
+    totalDuracion = 0;
+    pulsos.forEach((p, idx) => {
+      acumulados.push(totalDuracion);
+      totalDuracion += p.duracion;
+      if (p.es_primer_pulso_compas) compasInicios.push(idx);
+    });
+    idxMostrado = -1;
+    planCargado = true;
+    actualizarBotonesNav();
+    // El AudioContext se crea recién acá (no antes) porque los navegadores
+    // sólo lo permiten arrancado a partir de un gesto del usuario — este
+    // click de "Ejecutar"/"Reiniciar" ya es ese gesto.
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    startTs = performance.now();
+    mostrarControles('reproduciendo');
+    detenerAnimacion();
+    rafId = requestAnimationFrame(avanzar);
+  }
+
+  function pausar() {
+    elapsedAlPausar = (performance.now() - startTs) / 1000;
+    detenerAnimacion();
+    mostrarControles('pausado');
+  }
+
+  function continuarDesdePausa() {
+    // No vuelve a pedir el plan ni resetea la posición — sólo corre el
+    // reloj hacia atrás lo que ya había transcurrido, así retoma justo
+    // donde se pausó en vez de arrancar de nuevo desde el "desde".
+    startTs = performance.now() - elapsedAlPausar * 1000;
+    mostrarControles('reproduciendo');
+    rafId = requestAnimationFrame(avanzar);
+  }
+
+  btnPlay.addEventListener('click', cargarPlanYArrancar);
+  btnReiniciar.addEventListener('click', cargarPlanYArrancar);
+  btnPause.addEventListener('click', pausar);
+  btnContinuar.addEventListener('click', continuarDesdePausa);
+  btnAnterior.addEventListener('click', irAnterior);
+  btnSiguiente.addEventListener('click', irSiguiente);
+})();
+</script>
+
+{% endif %}
+{% endblock %}

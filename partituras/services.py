@@ -239,6 +239,51 @@ def _pulsos_por_compas(indicacion):
         return None
 
 
+def _pulso_bounds(seg, pulsos_compas):
+    """(pulso_desde, pulso_hasta) resueltos de TODA la fila — 1 y
+    pulsos_por_compas si vinieron en blanco (mismo criterio que en toda la
+    app: vacío-desde es el primer pulso, vacío-hasta es hasta el último
+    pulso completo del compás)."""
+    pulso_desde = seg.pulso_desde if seg.pulso_desde is not None else 1
+    pulso_hasta = seg.pulso_hasta if seg.pulso_hasta is not None else pulsos_compas
+    return pulso_desde, pulso_hasta
+
+
+def _cantidad_pulsos_fila(seg, pulsos_compas):
+    """Total de pulsos que dura la fila entera, cruzando compases si
+    corresponde."""
+    pulso_desde, pulso_hasta = _pulso_bounds(seg, pulsos_compas)
+    if seg.compas_desde == seg.compas_hasta:
+        return pulso_hasta - pulso_desde + 1
+    compases_completos = seg.compas_hasta - seg.compas_desde - 1
+    return (pulsos_compas - pulso_desde + 1) + (compases_completos * pulsos_compas) + pulso_hasta
+
+
+def _rango_pulsos_del_compas(seg, compas, pulsos_compas):
+    """Pulso inicial y final (ambos inclusive) que le corresponden a UN
+    compás puntual dentro de esta fila — 1..pulsos_compas salvo que sea el
+    primer o el último compás de la fila y pulso_desde/pulso_hasta no lo
+    cubran entero (la fila arranca o corta a mitad de compás)."""
+    pulso_desde, pulso_hasta = _pulso_bounds(seg, pulsos_compas)
+    ini = pulso_desde if compas == seg.compas_desde else 1
+    fin = pulso_hasta if compas == seg.compas_hasta else pulsos_compas
+    return int(ini), int(fin)
+
+
+def _pulsos_antes_del_compas(seg, compas, pulsos_compas):
+    """Cuántos pulsos de la fila (no del compás) ya transcurrieron antes de
+    que arranque este compás puntual — ubica al compás dentro de la
+    secuencia total de pulsos de la fila, para poder interpolar el tempo
+    pulso a pulso en un accelerando/ritardando en vez de saltar de a un
+    tempo fijo por compás."""
+    if compas == seg.compas_desde:
+        return 0
+    ini_primero, fin_primero = _rango_pulsos_del_compas(seg, seg.compas_desde, pulsos_compas)
+    primero = fin_primero - ini_primero + 1
+    completos_entre = max(compas - seg.compas_desde - 1, 0)
+    return primero + completos_entre * int(pulsos_compas)
+
+
 def resolver_segmentos(obra):
     """Recorre los segmentos de la obra en orden, resolviendo lo que en cada
     fila quedó en blanco (hereda de la última fila con un valor propio — ver
@@ -286,24 +331,181 @@ def resolver_segmentos(obra):
         if tiempo_acumulado is None:
             continue  # ya se cortó la acumulación en una fila anterior
 
-        pulso_desde = seg.pulso_desde if seg.pulso_desde is not None else 1
-        pulso_hasta = seg.pulso_hasta if seg.pulso_hasta is not None else pulsos_compas
+        pulso_desde, pulso_hasta = _pulso_bounds(seg, pulsos_compas) if pulsos_compas else (None, None)
 
         if not (bpm_inicio and pulsos_compas and pulso_hasta is not None and seg.compas_hasta is not None):
             tiempo_acumulado = None
             continue
 
-        if seg.compas_desde == seg.compas_hasta:
-            cantidad_pulsos = pulso_hasta - pulso_desde + 1
-        else:
-            compases_completos = seg.compas_hasta - seg.compas_desde - 1
-            cantidad_pulsos = (pulsos_compas - pulso_desde + 1) + (compases_completos * pulsos_compas) + pulso_hasta
-
+        cantidad_pulsos = _cantidad_pulsos_fila(seg, pulsos_compas)
         duracion = max(cantidad_pulsos, 0) * (60.0 / bpm_inicio)
         info['duracion_calculada'] = duracion
         tiempo_acumulado += duracion
 
     return resueltos
+
+
+# ── Navegador manual del itinerario ─────────────────────────────────────
+
+def segmentos_navegables(obra):
+    """Filas de obra.segmentos que se pueden "visitar" — con rango de
+    compases propio completo. Excluye la fila de cierre (compas_desde
+    null, sólo marca dónde termina el último compás) y cualquier fila a
+    medio cargar (compas_hasta todavía vacío)."""
+    return [
+        s for s in obra.segmentos.order_by('orden')
+        if s.compas_desde is not None and s.compas_hasta is not None
+    ]
+
+
+def buscar_posicion(obra, numero_compas, pasada=1):
+    """Busca la posición para "compás X, Nda vez": el compás buscado puede
+    caer en cualquier punto DENTRO del rango de una fila (no sólo en su
+    borde), así que se filtra por contención — no por igualdad contra
+    compas_desde/compas_hasta — y se toma la n-ésima fila navegable (en
+    orden) cuyo rango lo contiene. Devuelve (segmento, numero_compas), o
+    None si no hay ninguna coincidencia (o no llega a haber esa pasada)."""
+    coincidencias = 0
+    for seg in segmentos_navegables(obra):
+        if seg.compas_desde <= numero_compas <= seg.compas_hasta:
+            coincidencias += 1
+            if coincidencias == pasada:
+                return (seg, numero_compas)
+    return None
+
+
+def avanzar_compas(obra, segmento, compas_actual):
+    """Compás siguiente: uno más dentro de la misma fila, o el primero de
+    la próxima fila navegable si ya se llegó al final de ésta. None si
+    era el último compás de toda la obra (no hay nada después)."""
+    if compas_actual < segmento.compas_hasta:
+        return (segmento, compas_actual + 1)
+    navegables = segmentos_navegables(obra)
+    idx = navegables.index(segmento)
+    if idx + 1 < len(navegables):
+        siguiente = navegables[idx + 1]
+        return (siguiente, siguiente.compas_desde)
+    return None
+
+
+def retroceder_compas(obra, segmento, compas_actual):
+    """Simétrico de avanzar_compas: un compás antes, cruzando a la fila
+    navegable previa si hace falta. None si era el primer compás de toda
+    la obra."""
+    if compas_actual > segmento.compas_desde:
+        return (segmento, compas_actual - 1)
+    navegables = segmentos_navegables(obra)
+    idx = navegables.index(segmento)
+    if idx > 0:
+        anterior = navegables[idx - 1]
+        return (anterior, anterior.compas_hasta)
+    return None
+
+
+def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada):
+    """Arma la lista de PULSOS (no de compases) entre "desde" y "hasta"
+    (mismo criterio de compás+pasada que buscar_posicion), cada uno con su
+    propia duración resuelta — pensado para mandarse una sola vez al
+    cliente como JSON y que la ejecución en tiempo real la programe JS con
+    un único reloj absoluto, en vez de pedirle un pulso a la vez al
+    servidor a medida que avanza (eso dejaría que la variabilidad de red se
+    fuera acumulando como desfasaje de tempo).
+
+    Se arma a nivel de pulso, no de compás, por dos motivos:
+    - En una fila con accelerando/ritardando (bpm_llegada propio), el tempo
+      de cada PULSO se interpola linealmente entre bpm y bpm_llegada según
+      su posición en la secuencia total de pulsos de la fila — si se
+      interpolara por compás entero, el cambio de tempo saltaría en
+      escalones en cada borde de compás en vez de sonar continuo.
+    - El primer/último compás de una fila puede no arrancar en el pulso 1
+      ni terminar en el último pulso del compás (pulso_desde/pulso_hasta) —
+      a nivel de pulso eso sale solo, en vez de tener que tratarlo como
+      caso especial en la duración de "ese compás".
+
+    Devuelve (pulsos, completo): pulsos es la lista de dicts (uno por
+    pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
+    es_primer_pulso_compas/acento/indicacion_compas/bpm/
+    variacion_tempo_display/bpm_llegada/descripcion/duracion (duracion en
+    segundos, None si no se pudo resolver bpm o indicación para ese
+    compás; pulso/pulsos_por_compas ubican al pulso DENTRO del compás —
+    p.ej. para mover el punto del metrónomo dentro de un recuadro en vez
+    de sólo flashear en el lugar; es_primer_pulso_compas marca cuándo
+    corresponde refrescar el número de compás en pantalla; acento es el
+    pulso 1 musical real, ver comentario más abajo); completo es False si
+    algún pulso quedó sin duración — el cliente no debería reproducir en tiempo
+    real un plan incompleto."""
+    navegables = segmentos_navegables(obra)
+    if not navegables:
+        return [], True
+
+    resueltos_por_id = {info['segmento'].id: info for info in resolver_segmentos(obra)}
+
+    pos_desde = buscar_posicion(obra, desde_compas, desde_pasada) or (navegables[0], navegables[0].compas_desde)
+    if hasta_compas is not None:
+        pos_hasta = buscar_posicion(obra, hasta_compas, hasta_pasada) or (navegables[-1], navegables[-1].compas_hasta)
+    else:
+        pos_hasta = (navegables[-1], navegables[-1].compas_hasta)
+
+    pulsos = []
+    completo = True
+    pos = pos_desde
+    while pos is not None:
+        seg, compas = pos
+        info = resueltos_por_id.get(seg.id, {})
+        bpm_inicio = info.get('bpm')
+        pulsos_compas = info.get('pulsos_por_compas')
+
+        if not (bpm_inicio and pulsos_compas):
+            completo = False
+            pulsos.append({
+                'segmento_id': seg.id,
+                'compas': compas,
+                'es_primer_pulso_compas': True,
+                'acento': True,
+                'indicacion_compas': info.get('indicacion_compas'),
+                'bpm': bpm_inicio,
+                'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
+                'bpm_llegada': seg.bpm_llegada,
+                'descripcion': seg.descripcion,
+                'duracion': None,
+            })
+        else:
+            pulso_ini, pulso_fin = _rango_pulsos_del_compas(seg, compas, pulsos_compas)
+            total_pulsos_fila = _cantidad_pulsos_fila(seg, pulsos_compas)
+            offset_compas = _pulsos_antes_del_compas(seg, compas, pulsos_compas)
+
+            for p in range(pulso_ini, pulso_fin + 1):
+                idx_en_fila = offset_compas + (p - pulso_ini)
+                bpm_pulso = bpm_inicio
+                if seg.bpm_llegada and total_pulsos_fila > 1:
+                    fraccion = idx_en_fila / (total_pulsos_fila - 1)
+                    bpm_pulso = bpm_inicio + (seg.bpm_llegada - bpm_inicio) * fraccion
+                pulsos.append({
+                    'segmento_id': seg.id,
+                    'compas': compas,
+                    'pulso': p,
+                    'pulsos_por_compas': int(pulsos_compas),
+                    'es_primer_pulso_compas': p == pulso_ini,
+                    # El acento del metrónomo (click agudo) es el pulso 1
+                    # MUSICAL del compás — no el primer pulso de la fila.
+                    # Si la fila arranca a mitad de compás (pulso_ini > 1,
+                    # p.ej. un ritardando que empieza en el pulso 2), ese
+                    # punto de arranque no es el pulso 1 real y no debe
+                    # marcarse como acentuado.
+                    'acento': p == 1,
+                    'indicacion_compas': info.get('indicacion_compas'),
+                    'bpm': round(bpm_pulso),
+                    'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
+                    'bpm_llegada': seg.bpm_llegada,
+                    'descripcion': seg.descripcion,
+                    'duracion': 60.0 / bpm_pulso,
+                })
+
+        if (seg.orden, compas) >= (pos_hasta[0].orden, pos_hasta[1]):
+            break
+        pos = avanzar_compas(obra, seg, compas)
+
+    return pulsos, completo
 
 
 def recalcular_tiempos_calculados(obra):

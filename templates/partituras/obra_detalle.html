@@ -55,6 +55,11 @@
           <a href="{% url 'partituras:itinerario_obra' obra.pk %}" class="btn btn-ss">
             <i class="bi bi-list-ol me-1"></i>{% translate "Itinerario de ejecución" %}
           </a>
+          {% if obra.segmentos.exists %}
+          <a href="{% url 'partituras:navegador_obra' obra.pk %}" class="btn btn-outline-light">
+            <i class="bi bi-play-fill me-1"></i>{% translate "Navegador" %}
+          </a>
+          {% endif %}
           <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light">← {% translate "Volver a Obras" %}</a>
         </div>
       </div>

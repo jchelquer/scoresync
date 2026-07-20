@@ -1,10 +1,12 @@
 import json
+from urllib.parse import urlencode
 
 import cv2
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
-from django.http import HttpResponse, HttpResponseBadRequest
+from django.db import transaction
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import ObraForm, PartituraForm, SegmentoFormSet
@@ -12,9 +14,10 @@ from .models import Barra, Compas, Obra, Pagina, Partitura, Segmento, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
-    guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
-    invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
-    recalcular_tiempos_calculados, renumerar_segmentos,
+    avanzar_compas, buscar_posicion, construir_plan, guardar_compases_pagina,
+    invalidar_desde_ancla, invalidar_desde_margenes, invalidar_desde_orientacion,
+    invalidar_desde_sistemas, numero_inicial_pagina, recalcular_tiempos_calculados,
+    renumerar_segmentos, resolver_segmentos, retroceder_compas, segmentos_navegables,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -180,36 +183,50 @@ def itinerario_obra(request, pk):
     if request.method == "POST":
         formset = SegmentoFormSet(request.POST, queryset=queryset, prefix="segmentos")
         if formset.is_valid():
-            # (obra, orden) es unique_together, así que guardar cada fila con
-            # el "orden" tal cual lo tipeó el usuario puede chocar contra el
-            # de otra fila que todavía no se actualizó (p.ej. insertar una
-            # fila nueva en el medio). Se guarda primero en un rango que no
-            # puede existir todavía — evita cualquier colisión sin importar
-            # el orden de guardado — y recién después renumerar_segmentos()
-            # asigna los valores finales limpios.
-            # (deleted_objects sólo queda poblado después de llamar a save(),
-            # así que hay que leerlo recién acá, no antes.)
-            instancias = sorted(formset.save(commit=False), key=lambda i: i.orden)
-            for eliminada in formset.deleted_objects:
-                eliminada.delete()
+            # Todo el guardado va envuelto en una única transacción: son
+            # varios saves en pasos (offset temporal, renumerar, recalcular
+            # tiempos) y sin atomic() cada uno se commitea solo — si alguno
+            # de la mitad para adelante fallaba (p.ej. la colisión que
+            # describe el comentario de abajo, en un caso límite no
+            # cubierto), lo ya guardado quedaba pegado en la base con
+            # valores de orden temporales, rompiendo cualquier guardado
+            # futuro contra esa fila (pasó una vez, ver el commit que
+            # agregó este comentario).
+            with transaction.atomic():
+                # (obra, orden) es unique_together, así que guardar cada fila
+                # con el "orden" tal cual lo tipeó el usuario puede chocar
+                # contra el de otra fila que todavía no se actualizó (p.ej.
+                # insertar una fila nueva en el medio). Se guarda primero en
+                # un rango que no puede existir todavía — evita cualquier
+                # colisión sin importar el orden de guardado — y recién
+                # después renumerar_segmentos() asigna los valores finales
+                # limpios.
+                # (deleted_objects sólo queda poblado después de llamar a
+                # save(), así que hay que leerlo recién acá, no antes.)
+                instancias = sorted(formset.save(commit=False), key=lambda i: i.orden)
+                for eliminada in formset.deleted_objects:
+                    eliminada.delete()
 
-            OFFSET_TEMPORAL = 10_000_000
-            for i, instancia in enumerate(instancias):
-                instancia.obra = obra
-                instancia.orden = OFFSET_TEMPORAL + i
-                instancia.save()
+                OFFSET_TEMPORAL = 10_000_000
+                for i, instancia in enumerate(instancias):
+                    instancia.obra = obra
+                    instancia.orden = OFFSET_TEMPORAL + i
+                    instancia.save()
 
-            # Vuelve a numerar de a 10 en el orden actual — así una fila
-            # insertada "entre medio" (con un orden como 15) recupera hueco
-            # completo alrededor para la próxima inserción, en vez de ir
-            # agotándose de a poco.
-            renumerar_segmentos(obra)
+                # Vuelve a numerar de a 10 en el orden actual — así una fila
+                # insertada "entre medio" (con un orden como 15) recupera
+                # hueco completo alrededor para la próxima inserción, en vez
+                # de ir agotándose de a poco.
+                renumerar_segmentos(obra)
 
-            # Recalcula tiempo_inicio_calculado de toda la obra (no sólo las
-            # filas tocadas: cambiar un bpm más arriba corre el cálculo de
-            # todo lo que sigue) y de paso avisa — sin bloquear el guardado —
-            # si algún pulso quedó fuera del rango de su indicación de compás.
-            for info in recalcular_tiempos_calculados(obra):
+                # Recalcula tiempo_inicio_calculado de toda la obra (no sólo
+                # las filas tocadas: cambiar un bpm más arriba corre el
+                # cálculo de todo lo que sigue) y de paso avisa — sin
+                # bloquear el guardado — si algún pulso quedó fuera del
+                # rango de su indicación de compás.
+                resueltos = recalcular_tiempos_calculados(obra)
+
+            for info in resueltos:
                 seg = info["segmento"]
                 pulsos_compas = info["pulsos_por_compas"]
                 if not pulsos_compas or seg.compas_desde is None:
@@ -237,6 +254,119 @@ def itinerario_obra(request, pk):
         "obra": obra,
         "formset": formset,
     })
+
+
+def _leer_entero(valor, default):
+    try:
+        return int(valor) if valor not in (None, "") else default
+    except ValueError:
+        return default
+
+
+@login_required
+def navegador_obra(request, pk):
+    """Navegador manual del itinerario de ejecución: muestra en qué compás
+    está parado (entero — todavía no por pulso, decisión explícita para esta
+    primera versión) con la info resuelta de la fila que lo contiene (tempo,
+    indicación de compás, descripción), y deja moverse de a un compás con
+    Anterior/Siguiente. Sin reproducción automática ni referencia visual al
+    score — es la fase 1 del "player" (ver notas de diseño del proyecto):
+    no hay tiempo_inicio real todavía, así que no hay nada que auto-avanzar.
+
+    Todo el estado (posición actual, rango desde-hasta, loop) viaja en la
+    querystring — no hay nada que guardar en sesión ni en la base: esta
+    pantalla es de sólo lectura, no modifica el itinerario."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    navegables = segmentos_navegables(obra)
+    if not navegables:
+        return render(request, "partituras/navegador_obra.html", {
+            "obra": obra, "sin_contenido": True,
+        })
+
+    resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
+
+    desde_compas = _leer_entero(request.GET.get("desde_compas"), navegables[0].compas_desde)
+    desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
+    hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
+    loop = request.GET.get("loop") == "on"
+
+    pos_desde = buscar_posicion(obra, desde_compas, desde_pasada) or (navegables[0], navegables[0].compas_desde)
+    if hasta_compas_raw:
+        pos_hasta = buscar_posicion(obra, _leer_entero(hasta_compas_raw, 0), hasta_pasada) \
+            or (navegables[-1], navegables[-1].compas_hasta)
+    else:
+        pos_hasta = (navegables[-1], navegables[-1].compas_hasta)
+
+    # Posición actual: la que venga en la URL (si es válida), si no la de
+    # arranque del rango — así entrar sin querystring, o cambiar el rango a
+    # mano, siempre lleva a un punto consistente.
+    seg_id = _leer_entero(request.GET.get("segmento"), None)
+    compas_actual = _leer_entero(request.GET.get("compas"), None)
+    segmento_actual = next((s for s in navegables if s.id == seg_id), None) if seg_id else None
+    if not segmento_actual or compas_actual is None or not (
+        segmento_actual.compas_desde <= compas_actual <= segmento_actual.compas_hasta
+    ):
+        segmento_actual, compas_actual = pos_desde
+
+    en_fin_de_rango = (segmento_actual.orden, compas_actual) >= (pos_hasta[0].orden, pos_hasta[1])
+    siguiente = pos_desde if (en_fin_de_rango and loop) else (
+        None if en_fin_de_rango else avanzar_compas(obra, segmento_actual, compas_actual)
+    )
+    anterior = retroceder_compas(obra, segmento_actual, compas_actual)
+
+    base_params = {
+        "desde_compas": desde_compas, "desde_pasada": desde_pasada,
+        "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
+    }
+    if loop:
+        base_params["loop"] = "on"
+
+    def url_para(posicion):
+        if posicion is None:
+            return None
+        seg, compas = posicion
+        params = dict(base_params, segmento=seg.id, compas=compas)
+        return f"?{urlencode(params)}"
+
+    info_actual = resueltos_por_id.get(segmento_actual.id, {})
+
+    return render(request, "partituras/navegador_obra.html", {
+        "obra": obra,
+        "segmento": segmento_actual,
+        "compas_actual": compas_actual,
+        "indicacion_compas": info_actual.get("indicacion_compas"),
+        "bpm": info_actual.get("bpm"),
+        "url_siguiente": url_para(siguiente),
+        "url_anterior": url_para(anterior),
+        "en_fin_de_rango": en_fin_de_rango and not loop,
+        "desde_compas": desde_compas, "desde_pasada": desde_pasada,
+        "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
+        "loop": loop,
+    })
+
+
+@login_required
+def plan_obra(request, pk):
+    """Plan de ejecución (lista de PULSOS, no de compases — ver
+    construir_plan) del rango desde-hasta pedido, en un solo JSON — la
+    ejecución en tiempo real lo pide una sola vez al arrancar y de ahí en
+    más programa todo con un reloj propio en JS, sin volver a pedirle un
+    pulso a la vez al servidor (ver navegador_obra.html: eso dejaría que la
+    variabilidad de red se fuera acumulando como desfasaje de tempo)."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    navegables = segmentos_navegables(obra)
+    if not navegables:
+        return JsonResponse({"pulsos": [], "completo": True})
+
+    desde_compas = _leer_entero(request.GET.get("desde_compas"), navegables[0].compas_desde)
+    desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
+    hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
+    hasta_compas = _leer_entero(hasta_compas_raw, None) if hasta_compas_raw else None
+
+    pulsos, completo = construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada)
+    return JsonResponse({"pulsos": pulsos, "completo": completo})
 
 
 @login_required

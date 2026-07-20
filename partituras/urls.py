@@ -15,6 +15,8 @@ urlpatterns = [
     path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
     path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
     path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),
+    path('obras/<int:pk>/navegador/', views.navegador_obra, name='navegador_obra'),
+    path('obras/<int:pk>/plan/', views.plan_obra, name='plan_obra'),
 
     path('<int:pk>/normalizar/', views.iniciar_normalizacion, name='iniciar_normalizacion'),
     path('<int:pk>/orientacion/<int:numero>/', views.ajuste_orientacion, name='ajuste_orientacion'),
