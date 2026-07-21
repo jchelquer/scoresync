@@ -27,6 +27,16 @@
   .tiempo-real:hover { border-bottom-color: var(--ss-accent); }
   .tiempo-real input { width: 5rem; padding: 0 0.3rem; }
   .btn-paso { min-width: 3.2rem; }
+  /* Ajuste fino: fondo rojo/verde según retrocede o avanza, más intenso
+     cuanto más grande el paso (0,1s pesa más que 0,05s). */
+  .btn-ajuste-neg { background: rgba(233, 69, 96, 0.16); border-color: rgba(233, 69, 96, 0.45); color: var(--ss-text-bright); }
+  .btn-ajuste-neg:hover { background: rgba(233, 69, 96, 0.3); color: var(--ss-text-bright); }
+  .btn-ajuste-neg-fuerte { background: rgba(233, 69, 96, 0.32); border-color: rgba(233, 69, 96, 0.7); }
+  .btn-ajuste-neg-fuerte:hover { background: rgba(233, 69, 96, 0.46); }
+  .btn-ajuste-pos { background: rgba(45, 201, 111, 0.16); border-color: rgba(45, 201, 111, 0.45); color: var(--ss-text-bright); }
+  .btn-ajuste-pos:hover { background: rgba(45, 201, 111, 0.3); color: var(--ss-text-bright); }
+  .btn-ajuste-pos-fuerte { background: rgba(45, 201, 111, 0.32); border-color: rgba(45, 201, 111, 0.7); }
+  .btn-ajuste-pos-fuerte:hover { background: rgba(45, 201, 111, 0.46); }
 </style>
 {% endblock %}
 
@@ -84,6 +94,15 @@
           <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
           <span id="sync-tiempo-total" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body pb-2">
+        <!-- Acá y no junto al reproductor: lo que ajustan es las marcas de
+             la lista, no la reproducción del audio en sí. -->
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <button id="sync-btn-marcar" type="button" class="btn btn-outline-light">{% translate "Marcar (Espacio)" %}</button>
           <button id="sync-btn-saltear" type="button" class="btn btn-outline-light btn-sm">⇥ {% translate "Saltear (Tab)" %}</button>
@@ -92,20 +111,15 @@
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
           <span class="small" style="color: var(--ss-text-muted);">{% translate "Ajuste fino" %}:</span>
-          <button id="sync-btn-ajuste-m1" type="button" class="btn btn-outline-light btn-sm btn-paso">−0,1s</button>
-          <button id="sync-btn-ajuste-m05" type="button" class="btn btn-outline-light btn-sm btn-paso">−0,05s</button>
-          <button id="sync-btn-ajuste-p05" type="button" class="btn btn-outline-light btn-sm btn-paso">+0,05s</button>
-          <button id="sync-btn-ajuste-p1" type="button" class="btn btn-outline-light btn-sm btn-paso">+0,1s</button>
+          <button id="sync-btn-ajuste-m1" type="button" class="btn btn-sm btn-paso btn-ajuste-neg btn-ajuste-neg-fuerte">−0,1s</button>
+          <button id="sync-btn-ajuste-m05" type="button" class="btn btn-sm btn-paso btn-ajuste-neg">−0,05s</button>
+          <button id="sync-btn-ajuste-p05" type="button" class="btn btn-sm btn-paso btn-ajuste-pos">+0,05s</button>
+          <button id="sync-btn-ajuste-p1" type="button" class="btn btn-sm btn-paso btn-ajuste-pos btn-ajuste-pos-fuerte">+0,1s</button>
           <span id="sync-seleccion-label" class="small ms-1" style="color: var(--ss-text-muted);"></span>
         </div>
       </div>
-    </div>
-  </div>
-
-  <div class="col-lg-5">
-    <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-0">
-        <div id="sync-filas" style="max-height: 70vh; overflow-y: auto;">
+        <div id="sync-filas" style="max-height: 60vh; overflow-y: auto;">
           {% for entrada in entradas %}
           <div class="fila-sync"
                data-index="{{ forloop.counter0 }}"
@@ -335,7 +349,7 @@
       // (la fila armada), y hacerlo también acá pelearía contra eso si el
       // tap está más atrás/adelante de lo que suena.
       if (modo === 'reproduccion' && filaSonando) {
-        filaSonando.scrollIntoView({ block: 'nearest' });
+        scrollSiHaceFalta(filaSonando);
       }
       refrescarPanelScore();
     }
@@ -352,11 +366,23 @@
   audio.addEventListener('ended', detenerSeguimientoSonando);
   cargarPlanGlobal();
 
+  // No scrollear si ya se ve entera — sólo cuando hace falta, y ahí sí
+  // llevarla arriba de todo (no al borde más cercano, que la dejaría
+  // apenas asomando).
+  function scrollSiHaceFalta(el) {
+    const cont = document.getElementById('sync-filas');
+    if (!cont) { el.scrollIntoView({ block: 'nearest' }); return; }
+    const contRect = cont.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const visible = elRect.top >= contRect.top && elRect.bottom <= contRect.bottom;
+    if (!visible) el.scrollIntoView({ block: 'start' });
+  }
+
   function armar(idx, opciones) {
     if (idx < 0 || idx >= filas.length) return;
     idxArmada = idx;
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idx));
-    filas[idx].scrollIntoView({ block: 'nearest' });
+    scrollSiHaceFalta(filas[idx]);
     const compas = filas[idx].dataset.compas;
     const pasada = filas[idx].dataset.pasada;
     if (filas[idx].dataset.esCierre === '1') {
@@ -419,6 +445,10 @@
     tiempoEl.dataset.segundos = String(segundos);
     fila.classList.add('marcada');
     historialMarcas.push(idxArmada);
+    // Sin esto, el plan usado por "sonando"/reproducción quedaba con las
+    // duraciones de ANTES de esta marca — el ajuste no se reflejaba hasta
+    // recargar la página.
+    cargarPlanGlobal();
     if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
   }
 
@@ -438,6 +468,7 @@
     tiempoEl.textContent = '—';
     tiempoEl.dataset.segundos = '';
     fila.classList.remove('marcada');
+    cargarPlanGlobal();
     armar(idx);
   }
 
@@ -476,6 +507,7 @@
         tiempoEl.textContent = segundos === null ? '—' : formatearTiempo(segundos);
         tiempoEl.dataset.segundos = segundos === null ? '' : String(segundos);
         fila.classList.toggle('marcada', segundos !== null);
+        cargarPlanGlobal();
       });
     }
 
@@ -555,6 +587,7 @@
       tiempoEl.dataset.segundos = String(nuevo);
       tiempoEl.textContent = formatearTiempo(nuevo);
     });
+    cargarPlanGlobal();
   }
   btnAjusteM1.addEventListener('click', () => ajustarSeleccion(-0.1));
   btnAjusteM05.addEventListener('click', () => ajustarSeleccion(-0.05));
