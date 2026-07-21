@@ -1,0 +1,40 @@
+# /etc/systemd/system/scoresync.service
+# Servicio gunicorn para la app Django "scoresync"
+
+[Unit]
+Description=Gunicorn para scoresync.infedu.com.ar
+After=network.target
+
+[Service]
+User=jchelquer
+Group=www-data
+WorkingDirectory=/var/www/scoresync
+RuntimeDirectory=scoresync
+RuntimeDirectoryMode=0755
+
+# --timeout 120: más generoso que el default de gunicorn (30s) — el
+# procesamiento de PDF (normalizar, detectar sistemas/ancla/barras) es
+# síncrono a propósito (ver notas de arquitectura del proyecto) y puede
+# tardar bastante en una partitura larga. Tiene que ser <= el
+# proxy_read_timeout de nginx (ver scoresync.conf) para que gunicorn corte
+# primero con un error entendible en vez de que nginx devuelva un 502 feo.
+#
+# Los logs van a /var/log/scoresync/, NO a /var/log/nginx/ — esa carpeta es
+# de nginx (root:adm), jchelquer no tiene permiso de escritura ahí (esto
+# rompió el primer arranque real: PermissionError al crear el logfile, el
+# servicio quedaba en crash-loop). Hace falta crear /var/log/scoresync/
+# (dueño jchelquer) ANTES de arrancar el servicio — ver deploy_vps.md.
+ExecStart=/var/www/scoresync/venv/bin/gunicorn \
+    --workers 2 \
+    --timeout 120 \
+    --bind unix:/run/scoresync/gunicorn.sock \
+    --access-logfile /var/log/scoresync/gunicorn.log \
+    --error-logfile  /var/log/scoresync/gunicorn.error.log \
+    config.wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
