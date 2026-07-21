@@ -2,12 +2,36 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.5.0"
+  date: "2026-07-21"
+  changes:
+    - type: nuevo
+      text: "Sincronización con audio real: subí una grabación de referencia por obra y completá Segmento.tiempo_inicio escuchándola, en vez de escribir segundos a mano. Dos formas, que conviven: por fila del itinerario (\"Sincronizar tiempos\") o compás a compás con repeticiones (\"Sincronizar por compás\", nueva) — tap con Espacio, Tab salta un compás sin marcarlo, click en cualquiera para corregir, edición manual, controles finos de audio (±0,1s/±1s), modo Marcado/Reproducción, selección múltiple con ajuste fino (corre varias marcas la misma fracción de segundo), y resaltado en verde/rojo/azul (sonando/próximo a marcar/seleccionado) tanto en la lista como en la partitura."
+    - type: nuevo
+      text: "\"Ejecutar con audio\" en el navegador: el audio de referencia gobierna el cursor en tiempo real mientras suena, en vez del tempo calculado — prioriza automáticamente la marca más precisa disponible en cada tramo (compás > fila > tiempo calculado) sin tener que elegir a mano. Con silenciar aparte, para seguir el tiempo real sin escuchar la grabación."
+    - type: nuevo
+      text: "Click sobre cualquier compás visible de la partitura, durante la ejecución en el navegador, para posicionarse ahí directo (pausa si estaba corriendo, y reubica el audio real si \"Ejecutar con audio\" está activo)."
+    - type: nuevo
+      text: "Números de compás visibles sobre la partitura, con switch para mostrarlos u ocultarlos — en las pantallas de sincronización y en el navegador de ejecución."
+    - type: nuevo
+      text: "La biblioteca pasa a ser una biblioteca de OBRAS: cargar una parte nueva siempre se hace desde la ficha de la obra (ya no hay carga suelta). Borrar una obra borra también sus partes de verdad, con confirmación que avisa cuántas. Las partes que igual queden sueltas (al separarlas, o si ya existían de antes) se ven y se pueden borrar aparte, en \"Partes sueltas\"."
+    - type: nuevo
+      text: "Velocidad de ejecución ampliada de 120% a 150%, con una marca fija en 100% sobre el slider para volver rápido al tempo original."
+    - type: mejorado
+      text: "El menú de navegación no se podía abrir en pantallas chicas (faltaba el botón para desplegarlo en mobile)."
+    - type: mejorado
+      text: "Los archivos (PDFs, audio) se limpian solos del servidor al borrar una parte o una obra, sin importar por dónde se borre — antes sólo pasaba si se usaba el botón de la app; borrar desde el admin de Django dejaba los archivos huérfanos en el servidor."
+    - type: corregido
+      text: "El audio de referencia no se podía buscar/seekear de verdad durante la ejecución ni en las pantallas de sincronización — el servidor de desarrollo nunca soportó pedidos de rango (\"Range requests\"), así que aunque se reposicionara el reproductor, la reproducción arrancaba siempre desde el principio del archivo."
+    - type: corregido
+      text: "El botón de borrar una obra no pedía confirmación — un error de comillas en el mensaje de confirmación rompía el chequeo del lado del navegador, que quedaba ignorado en silencio."
+
 - version: "1.4.0"
   date: "2026-07-20"
   changes:
     - type: nuevo
       text: "El navegador recuerda, por usuario y por obra, el rango desde/hasta, loop, velocidad, compases al aire y la última parte elegida — se autoguarda solo (sin botón) cada vez que se cambia algo, y precompleta todo eso la próxima vez que se entra en vez de arrancar de cero. Un link explícito (ej. Anterior/Siguiente, uno compartido) sigue ganándole a lo guardado."
-    - type: nuevo
+    - type  nuevo
       text: "El zoom preferido también se recuerda, pero por parte (no por obra) — cada parte puede necesitar un nivel distinto según su propia diagramación."
 - version: "1.3.5"
   date: "2026-07-20"

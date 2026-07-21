@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Sincronizar audio — {{ obra.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fila-sync {
+    cursor: pointer;
+    border-bottom: 1px solid #2a4a47;
+    padding: 0.4rem 0.6rem;
+  }
+  .fila-sync:hover { background: rgba(255,255,255,0.04); }
+  .fila-sync.armada {
+    background: rgba(233, 69, 96, 0.18);
+    border-left: 3px solid #e94560;
+  }
+  .fila-sync.marcada .tiempo-real { color: var(--ss-accent); font-weight: 600; }
+  #sync-scrubber { width: 100%; }
+  #sync-btn-marcar { min-width: 8rem; }
+  .tiempo-real { cursor: text; border-bottom: 1px dotted var(--ss-text-muted); color: var(--ss-text-bright); }
+  .tiempo-real:hover { border-bottom-color: var(--ss-accent); }
+  .tiempo-real input { width: 5rem; padding: 0 0.3rem; }
+  .btn-paso { min-width: 3.2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Sincronizar audio" %} — {{ obra.titulo }}
+  </h5>
+  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+</div>
+
+<p class="small mb-3" style="color: var(--ss-text-muted)">
+  {% translate "Escuchá el audio y marcá con Enter (o el botón) el instante donde arranca la fila resaltada. Espacio pausa/continúa, flechas izquierda/derecha ajustan de a 0,1s (con Shift, de a 1s), Backspace deshace la última marca, y podés hacer click en cualquier fila para marcarla directamente. También podés escribir el tiempo a mano haciendo click sobre el valor de cualquier fila." %}
+</p>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card border-0 mb-3" style="background: var(--ss-surface)">
+      <div class="card-body">
+        <div id="sync-score-wrap" style="position: relative; width: 100%; background: #222; border-radius: 4px; min-height: 120px; overflow: hidden;">
+          <canvas id="sync-score-canvas" style="display: block; width: 100%;"></canvas>
+          <p id="sync-score-msg" class="small text-center p-4 mb-0" style="color: var(--ss-text-muted); display:none;"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body">
+        <audio id="sync-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button id="sync-btn-back1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 1 segundo" %}">−1s</button>
+          <button id="sync-btn-back-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 0,1 segundo" %}">−0,1s</button>
+          <button id="sync-btn-playpause" type="button" class="btn btn-ss">▶</button>
+          <button id="sync-btn-fwd-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 0,1 segundo" %}">+0,1s</button>
+          <button id="sync-btn-fwd1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 1 segundo" %}">+1s</button>
+        </div>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <span id="sync-tiempo-actual" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
+          <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
+          <span id="sync-tiempo-total" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button id="sync-btn-marcar" type="button" class="btn btn-outline-light">{% translate "Marcar (Enter)" %}</button>
+          <button id="sync-btn-deshacer" type="button" class="btn btn-outline-light btn-sm">↺ {% translate "Deshacer (Backspace)" %}</button>
+          <span id="sync-armada-label" class="small ms-2" style="color: var(--ss-text-muted);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-0">
+        <div id="sync-filas" style="max-height: 70vh; overflow-y: auto;">
+          {% for fila in filas %}
+          <div class="fila-sync"
+               data-index="{{ forloop.counter0 }}"
+               data-segmento-id="{{ fila.segmento.id }}"
+               data-compas-desde="{{ fila.segmento.compas_desde|default_if_none:'' }}">
+            <div class="d-flex justify-content-between">
+              <span style="color: var(--ss-text-bright)">
+                {% if fila.segmento.compas_desde is None %}
+                  {% translate "— fin de la obra —" %}
+                {% else %}
+                  {{ fila.segmento.desde_texto|default:fila.segmento.compas_desde }}–{{ fila.segmento.hasta_texto|default:fila.segmento.compas_hasta }}
+                {% endif %}
+              </span>
+              <span class="tiempo-real small" data-segundos="{{ fila.tiempo_inicio_segundos|default_if_none:'' }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if fila.segmento.tiempo_inicio %}{{ fila.segmento.tiempo_inicio }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="small" style="color: var(--ss-text-muted);">
+              {{ fila.segmento.descripcion }}{% if fila.indicacion_compas %} · {{ fila.indicacion_compas }}{% endif %}
+              {% if fila.tiempo_inicio_calculado %} · {% translate "calc." %} {{ fila.tiempo_inicio_calculado }}{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const audio = document.getElementById('sync-audio');
+  const btnPlayPause = document.getElementById('sync-btn-playpause');
+  const btnBack1 = document.getElementById('sync-btn-back1');
+  const btnBackFino = document.getElementById('sync-btn-back-fino');
+  const btnFwdFino = document.getElementById('sync-btn-fwd-fino');
+  const btnFwd1 = document.getElementById('sync-btn-fwd1');
+  const scrubber = document.getElementById('sync-scrubber');
+  const tiempoActualEl = document.getElementById('sync-tiempo-actual');
+  const tiempoTotalEl = document.getElementById('sync-tiempo-total');
+  const btnMarcar = document.getElementById('sync-btn-marcar');
+  const btnDeshacer = document.getElementById('sync-btn-deshacer');
+  const armadaLabel = document.getElementById('sync-armada-label');
+  const filas = Array.from(document.querySelectorAll('.fila-sync'));
+  const scoreCanvas = document.getElementById('sync-score-canvas');
+  const scoreMsg = document.getElementById('sync-score-msg');
+
+  function getCookie(nombre) {
+    const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+
+  function formatearTiempo(seg) {
+    if (!isFinite(seg)) return '0:00';
+    const m = Math.floor(seg / 60);
+    const s = (seg % 60).toFixed(1).padStart(4, '0');
+    return `${m}:${s}`;
+  }
+
+  function parsearTiempoManual(texto) {
+    const partes = texto.trim().split(':');
+    if (partes.length === 1) return parseFloat(partes[0]);
+    if (partes.length === 2) {
+      const min = parseInt(partes[0], 10);
+      const seg = parseFloat(partes[1]);
+      return (isNaN(min) || isNaN(seg)) ? NaN : min * 60 + seg;
+    }
+    return NaN;
+  }
+
+  // Al cargar, todas las filas ya marcadas muestran el string crudo de
+  // Django (DurationField) — se reformatea acá para que quede consistente
+  // con lo que muestra el reproductor y lo que se puede reescribir a mano.
+  document.querySelectorAll('.tiempo-real').forEach((el) => {
+    const segundos = el.dataset.segundos;
+    if (segundos !== '') el.textContent = formatearTiempo(parseFloat(segundos));
+  });
+
+  // ── Reproductor ─────────────────────────────────────────────────────
+  let arrastrandoScrubber = false;
+
+  function saltar(delta) {
+    const destino = audio.currentTime + delta;
+    audio.currentTime = Math.max(0, audio.duration ? Math.min(destino, audio.duration) : destino);
+  }
+
+  btnPlayPause.addEventListener('click', () => {
+    if (audio.paused) audio.play(); else audio.pause();
+  });
+  btnBack1.addEventListener('click', () => saltar(-1));
+  btnBackFino.addEventListener('click', () => saltar(-0.1));
+  btnFwdFino.addEventListener('click', () => saltar(0.1));
+  btnFwd1.addEventListener('click', () => saltar(1));
+  audio.addEventListener('play', () => { btnPlayPause.textContent = '⏸'; });
+  audio.addEventListener('pause', () => { btnPlayPause.textContent = '▶'; });
+  audio.addEventListener('loadedmetadata', () => {
+    tiempoTotalEl.textContent = formatearTiempo(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    tiempoActualEl.textContent = formatearTiempo(audio.currentTime);
+    if (!arrastrandoScrubber && audio.duration) {
+      scrubber.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    }
+  });
+  scrubber.addEventListener('input', () => {
+    arrastrandoScrubber = true;
+    if (audio.duration) {
+      const nuevo = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+      tiempoActualEl.textContent = formatearTiempo(nuevo);
+    }
+  });
+  scrubber.addEventListener('change', () => {
+    if (audio.duration) {
+      audio.currentTime = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+    }
+    arrastrandoScrubber = false;
+  });
+
+  // ── Filas / marcado ─────────────────────────────────────────────────
+  let idxArmada = filas.findIndex(f => f.querySelector('.tiempo-real').textContent.trim() === '—');
+  if (idxArmada === -1) idxArmada = filas.length ? filas.length - 1 : -1;
+  const historialMarcas = []; // índices marcados en esta sesión, en orden — para poder deshacer
+
+  function armar(idx) {
+    if (idx < 0 || idx >= filas.length) return;
+    idxArmada = idx;
+    filas.forEach((f, i) => f.classList.toggle('armada', i === idx));
+    filas[idx].scrollIntoView({ block: 'nearest' });
+    const compasDesde = filas[idx].dataset.compasDesde;
+    armadaLabel.textContent = compasDesde
+      ? '{% translate "Marcando el arranque del compás" %} ' + compasDesde
+      : '{% translate "Marcando el fin de la obra" %}';
+    mostrarCompas(compasDesde ? parseInt(compasDesde, 10) : null);
+
+    // Si la fila ya tiene un tiempo guardado, posicionar el reproductor ahí
+    // — así un click sirve para ir a revisar/reescuchar una marca anterior,
+    // no sólo para armar la próxima a marcar.
+    const segundosGuardados = filas[idx].querySelector('.tiempo-real').dataset.segundos;
+    if (segundosGuardados) {
+      const seg = parseFloat(segundosGuardados);
+      if (!isNaN(seg)) {
+        audio.currentTime = Math.max(0, audio.duration ? Math.min(seg, audio.duration) : seg);
+      }
+    }
+  }
+
+  async function guardarTiempo(segmentoId, segundos) {
+    const params = new URLSearchParams();
+    params.set('segmento_id', segmentoId);
+    if (segundos !== null) params.set('segundos', String(segundos));
+    const resp = await fetch('{% url "partituras:marcar_tiempo_segmento" obra.pk %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: params.toString(),
+    });
+    return resp.ok;
+  }
+
+  async function marcarActual() {
+    if (idxArmada < 0) return;
+    const fila = filas[idxArmada];
+    const segundos = audio.currentTime;
+    const ok = await guardarTiempo(fila.dataset.segmentoId, segundos);
+    if (!ok) return;
+    const tiempoEl = fila.querySelector('.tiempo-real');
+    tiempoEl.textContent = formatearTiempo(segundos);
+    tiempoEl.dataset.segundos = String(segundos);
+    fila.classList.add('marcada');
+    historialMarcas.push(idxArmada);
+    if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
+  }
+
+  async function deshacer() {
+    const idx = historialMarcas.pop();
+    if (idx === undefined) return;
+    const fila = filas[idx];
+    await guardarTiempo(fila.dataset.segmentoId, null);
+    const tiempoEl = fila.querySelector('.tiempo-real');
+    tiempoEl.textContent = '—';
+    tiempoEl.dataset.segundos = '';
+    fila.classList.remove('marcada');
+    armar(idx);
+  }
+
+  function iniciarEdicion(idx, tiempoEl) {
+    if (tiempoEl.dataset.editando) return;
+    tiempoEl.dataset.editando = '1';
+    const valorInicial = tiempoEl.textContent.trim() === '—' ? '' : tiempoEl.textContent.trim();
+    tiempoEl.textContent = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm';
+    input.value = valorInicial;
+    input.placeholder = 'm:ss.d';
+    tiempoEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    let terminado = false;
+    function finalizar(guardar) {
+      if (terminado) return;
+      terminado = true;
+      delete tiempoEl.dataset.editando;
+      if (!guardar) {
+        tiempoEl.textContent = valorInicial || '—';
+        return;
+      }
+      const texto = input.value.trim();
+      const segundos = texto === '' ? null : parsearTiempoManual(texto);
+      if (segundos !== null && (isNaN(segundos) || segundos < 0)) {
+        tiempoEl.textContent = valorInicial || '—';
+        return;
+      }
+      guardarTiempo(filas[idx].dataset.segmentoId, segundos).then((ok) => {
+        if (!ok) { tiempoEl.textContent = valorInicial || '—'; return; }
+        tiempoEl.textContent = segundos === null ? '—' : formatearTiempo(segundos);
+        tiempoEl.dataset.segundos = segundos === null ? '' : String(segundos);
+        filas[idx].classList.toggle('marcada', segundos !== null);
+      });
+    }
+
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finalizar(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finalizar(false); }
+    });
+    input.addEventListener('blur', () => finalizar(true));
+  }
+
+  filas.forEach((f, i) => {
+    f.addEventListener('click', () => armar(i));
+    const tiempoEl = f.querySelector('.tiempo-real');
+    tiempoEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      iniciarEdicion(i, tiempoEl);
+    });
+  });
+  btnMarcar.addEventListener('click', marcarActual);
+  btnDeshacer.addEventListener('click', deshacer);
+
+  document.addEventListener('keydown', (e) => {
+    const foco = document.activeElement;
+    // El scrubber también es un <input> (type=range) pero no es texto libre:
+    // si lo dejamos bloquear los atajos, Espacio/Enter quedan muertos apenas
+    // se toca la barra de progreso con el mouse.
+    const esCampoTexto = foco && (foco.tagName === 'TEXTAREA' || foco.tagName === 'SELECT' ||
+      (foco.tagName === 'INPUT' && foco.type !== 'range'));
+    if (esCampoTexto) return;
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (audio.paused) audio.play(); else audio.pause();
+    } else if (e.code === 'Enter') {
+      e.preventDefault();
+      marcarActual();
+    } else if (e.code === 'Backspace') {
+      e.preventDefault();
+      deshacer();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      saltar(e.shiftKey ? -1 : -0.1);
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      saltar(e.shiftKey ? 1 : 0.1);
+    }
+  });
+
+  if (filas.length) armar(idxArmada);
+
+  // ── Panel de partitura (versión chica: un sistema + recuadro, sin
+  // ventana/zoom/cursor de pulso — acá sólo hace falta señalar UN compás
+  // por vez, no seguir la ejecución en tiempo real). ─────────────────────
+  {% if tiene_score %}
+  let geometria = null; // { porCompas, porPagina }
+  const imagenesPorPagina = {};
+
+  async function cargarGeometria() {
+    try {
+      const url = '{% url "partituras:score_geometria_obra" obra.pk %}?parte={{ partitura_seguida.pk }}';
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (!data.partitura) return;
+      const porCompas = {}, porPagina = {};
+      for (const pagina of data.paginas) {
+        porPagina[pagina.numero] = pagina;
+        for (const c of pagina.compases) {
+          const repeticiones = c.repeticiones || 1;
+          for (let offset = 0; offset < repeticiones; offset++) {
+            porCompas[c.numero + offset] = Object.assign({ pagina_numero: pagina.numero, offset, repeticiones }, c);
+          }
+        }
+      }
+      geometria = { porCompas, porPagina };
+      if (idxArmada >= 0) {
+        const compasDesde = filas[idxArmada].dataset.compasDesde;
+        mostrarCompas(compasDesde ? parseInt(compasDesde, 10) : null);
+      }
+    } catch (e) {
+      mostrarErrorScore('{% translate "No se pudo obtener la partitura." %}');
+    }
+  }
+
+  function obtenerImagen(pagina) {
+    if (imagenesPorPagina[pagina.numero]) return Promise.resolve(imagenesPorPagina[pagina.numero]);
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { imagenesPorPagina[pagina.numero] = img; resolve(img); };
+      img.onerror = reject;
+      img.src = pagina.imagen_url;
+    });
+  }
+
+  function mostrarErrorScore(texto) {
+    scoreCanvas.style.display = 'none';
+    scoreMsg.style.display = '';
+    scoreMsg.textContent = texto;
+  }
+
+  // Sistemas a mostrar además del que tiene el compás armado, para "verlo
+  // venir" en vez de mostrar sólo el sistema puntual — se corta dentro de
+  // la misma página nada más (si el sistema armado está sobre el final de
+  // la página, se ve lo que quede; el cambio de página ya es evidente al
+  // marcar la fila siguiente).
+  const SISTEMAS_ADELANTE = 2;
+
+  function limitesSistema(pagina, sistema) {
+    const idx = pagina.sistemas.findIndex(s => s.orden === sistema.orden);
+    const anterior = pagina.sistemas[idx - 1] || null;
+    const siguiente = pagina.sistemas[idx + 1] || null;
+    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : pagina.margen_y0;
+    const bottom = siguiente ? (sistema.y + sistema.height + siguiente.y) / 2 : pagina.margen_y1;
+    return { top, bottom };
+  }
+
+  function limitesFranja(pagina, sistemaInicial) {
+    const idx = pagina.sistemas.findIndex(s => s.orden === sistemaInicial.orden);
+    const anterior = pagina.sistemas[idx - 1] || null;
+    const top = anterior ? (anterior.y + anterior.height + sistemaInicial.y) / 2 : pagina.margen_y0;
+
+    const idxFinal = Math.min(idx + SISTEMAS_ADELANTE, pagina.sistemas.length - 1);
+    const sistemaFinal = pagina.sistemas[idxFinal];
+    const siguiente = pagina.sistemas[idxFinal + 1] || null;
+    const bottom = siguiente ? (sistemaFinal.y + sistemaFinal.height + siguiente.y) / 2 : pagina.margen_y1;
+    return { top, bottom };
+  }
+
+  async function mostrarCompas(numero) {
+    if (!geometria) return;
+    if (numero == null) {
+      mostrarErrorScore('{% translate "(fin de la obra — no hay un compás puntual que mostrar)" %}');
+      return;
+    }
+    const entrada = geometria.porCompas[numero];
+    if (!entrada) {
+      mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numero + '.');
+      return;
+    }
+    const pagina = geometria.porPagina[entrada.pagina_numero];
+    const compas = pagina.compases.find(c => c.numero === entrada.numero);
+    if (!compas) return;
+    const sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
+    const bordesSistema = limitesSistema(pagina, sistema);
+    const bordesFranja = limitesFranja(pagina, sistema);
+
+    const delMismoSistema = pagina.compases
+      .filter(c => c.sistema_orden === compas.sistema_orden)
+      .sort((a, b) => a.x - b.x);
+    const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
+    const proximo = delMismoSistema[posEnSistema + 1] || null;
+    const left = Math.max(compas.x, pagina.margen_x0);
+    const right = proximo ? proximo.x : pagina.margen_x1;
+
+    let img;
+    try {
+      img = await obtenerImagen(pagina);
+    } catch (e) {
+      mostrarErrorScore('{% translate "No se pudo cargar la imagen de la página." %}');
+      return;
+    }
+    scoreCanvas.style.display = 'block';
+    scoreMsg.style.display = 'none';
+
+    const contW = Math.max(scoreCanvas.parentElement.clientWidth, 50);
+    const anchoFrac = pagina.margen_x1 - pagina.margen_x0;
+    const escala = contW / (anchoFrac * img.naturalWidth);
+    const sx = pagina.margen_x0 * img.naturalWidth;
+    const sy = bordesFranja.top * img.naturalHeight;
+    const sw = Math.max(anchoFrac * img.naturalWidth, 1);
+    const sh = Math.max((bordesFranja.bottom - bordesFranja.top) * img.naturalHeight, 1);
+    const w = Math.round(sw * escala), h = Math.round(sh * escala);
+
+    scoreCanvas.width = w;
+    scoreCanvas.height = h;
+    const ctx = scoreCanvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+
+    const repeticiones = entrada.repeticiones || 1;
+    const offset = entrada.offset || 0;
+    const anchoSlot = (right - left) / repeticiones;
+    const leftReal = left + offset * anchoSlot;
+    const x0 = (leftReal - pagina.margen_x0) * img.naturalWidth * escala;
+    const bw = Math.max(anchoSlot * img.naturalWidth * escala, 1);
+    // El recuadro sólo marca la franja vertical del sistema del compás
+    // armado, no toda la franja recortada (que puede incluir sistemas
+    // siguientes mostrados nada más como contexto).
+    const y0 = (bordesSistema.top - bordesFranja.top) * img.naturalHeight * escala;
+    const bh = Math.max((bordesSistema.bottom - bordesSistema.top) * img.naturalHeight * escala, 1);
+
+    ctx.fillStyle = 'rgba(233, 69, 96, 0.28)';
+    ctx.fillRect(x0, y0, bw, bh);
+    ctx.strokeStyle = '#e94560';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x0, y0 + 1, bw, bh - 2);
+  }
+
+  cargarGeometria();
+  {% endif %}
+})();
+</script>
+{% endblock %}

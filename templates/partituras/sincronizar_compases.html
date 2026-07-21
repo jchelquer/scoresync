@@ -1,0 +1,858 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Sincronizar por compás — {{ obra.titulo }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .fila-sync {
+    cursor: pointer;
+    border-bottom: 1px solid #2a4a47;
+    padding: 0.4rem 0.6rem;
+  }
+  .fila-sync:hover { background: rgba(255,255,255,0.04); }
+  .fila-sync.armada {
+    background: rgba(233, 69, 96, 0.18);
+    border-left: 3px solid #e94560;
+  }
+  .fila-sync.marcada .tiempo-real { color: var(--ss-accent); font-weight: 600; }
+  /* Sonando (verde, borde derecho) y seleccionada (contorno azul) usan
+     propiedades distintas de armada (fondo + borde izquierdo rojo) para
+     poder combinarse sin pisarse — un compás puede estar armado, sonando
+     Y seleccionado a la vez. */
+  .fila-sync.sonando { border-right: 4px solid #2dc96f; }
+  .fila-sync.seleccionada { box-shadow: inset 0 0 0 2px rgba(90, 170, 255, 0.8); }
+  #sync-scrubber { width: 100%; }
+  #sync-btn-marcar { min-width: 8rem; }
+  .tiempo-real { cursor: text; border-bottom: 1px dotted var(--ss-text-muted); color: var(--ss-text-bright); }
+  .tiempo-real:hover { border-bottom-color: var(--ss-accent); }
+  .tiempo-real input { width: 5rem; padding: 0 0.3rem; }
+  .btn-paso { min-width: 3.2rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Sincronizar por compás" %} — {{ obra.titulo }}
+  </h5>
+  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+</div>
+
+<p class="small mb-2" style="color: var(--ss-text-muted)">
+  {% translate "Sincronización fina: un tap por CADA compás de la obra (repeticiones incluidas, cada pasada la suya) — convive con la sincronización por fila del itinerario, no la reemplaza; donde marques acá, se usa esto; donde no, cae en lo de la otra pantalla o en el tiempo calculado." %}
+  {% translate "Barra espaciadora marca y avanza (el tap), Enter pausa/continúa el audio, Tab salta el compás actual SIN marcarlo (si te lo perdiste), Backspace deshace la última marca, flechas ajustan el audio de a 0,1s (Shift, 1s), y podés hacer click en cualquier compás para marcarlo o corregirlo directamente (Shift+click para seleccionar un rango, Ctrl/Cmd+click para sumar uno suelto — para el ajuste fino). También podés escribir el tiempo a mano haciendo click sobre el valor." %}
+</p>
+
+<div class="d-flex align-items-center gap-2 mb-3">
+  <span class="small" style="color: var(--ss-text-muted);">{% translate "Modo" %}:</span>
+  <div class="btn-group btn-group-sm" role="group">
+    <button id="modo-btn-marcado" type="button" class="btn btn-ss">{% translate "Marcado" %}</button>
+    <button id="modo-btn-reproduccion" type="button" class="btn btn-outline-light">{% translate "Reproducción" %}</button>
+  </div>
+  <span class="small" style="color: var(--ss-text-muted);">
+    {% translate "Marcado: tap compás a compás. Reproducción: escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo." %}
+  </span>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card border-0 mb-3" style="background: var(--ss-surface)">
+      <div class="card-body">
+        <div class="form-check form-switch d-flex align-items-center mb-2">
+          <input class="form-check-input" type="checkbox" id="sync-toggle-numeros" checked>
+          <label class="form-check-label small ms-1" for="sync-toggle-numeros" style="color: var(--ss-text-muted);">{% translate "Mostrar números de compás" %}</label>
+        </div>
+        <div id="sync-score-wrap" style="position: relative; width: 100%; background: #222; border-radius: 4px; min-height: 120px; overflow: hidden;">
+          <canvas id="sync-score-canvas" style="display: block; width: 100%;"></canvas>
+          <p id="sync-score-msg" class="small text-center p-4 mb-0" style="color: var(--ss-text-muted); display:none;"></p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body">
+        <audio id="sync-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <button id="sync-btn-back1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 1 segundo" %}">−1s</button>
+          <button id="sync-btn-back-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 0,1 segundo" %}">−0,1s</button>
+          <button id="sync-btn-playpause" type="button" class="btn btn-ss" title="{% translate "Pausar/continuar (Enter)" %}">▶</button>
+          <button id="sync-btn-fwd-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 0,1 segundo" %}">+0,1s</button>
+          <button id="sync-btn-fwd1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 1 segundo" %}">+1s</button>
+        </div>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <span id="sync-tiempo-actual" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
+          <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
+          <span id="sync-tiempo-total" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <button id="sync-btn-marcar" type="button" class="btn btn-outline-light">{% translate "Marcar (Espacio)" %}</button>
+          <button id="sync-btn-saltear" type="button" class="btn btn-outline-light btn-sm">⇥ {% translate "Saltear (Tab)" %}</button>
+          <button id="sync-btn-deshacer" type="button" class="btn btn-outline-light btn-sm">↺ {% translate "Deshacer (Backspace)" %}</button>
+          <span id="sync-armada-label" class="small ms-2" style="color: var(--ss-text-muted);"></span>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
+          <span class="small" style="color: var(--ss-text-muted);">{% translate "Ajuste fino" %}:</span>
+          <button id="sync-btn-ajuste-m1" type="button" class="btn btn-outline-light btn-sm btn-paso">−0,1s</button>
+          <button id="sync-btn-ajuste-m05" type="button" class="btn btn-outline-light btn-sm btn-paso">−0,05s</button>
+          <button id="sync-btn-ajuste-p05" type="button" class="btn btn-outline-light btn-sm btn-paso">+0,05s</button>
+          <button id="sync-btn-ajuste-p1" type="button" class="btn btn-outline-light btn-sm btn-paso">+0,1s</button>
+          <span id="sync-seleccion-label" class="small ms-1" style="color: var(--ss-text-muted);"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-0">
+        <div id="sync-filas" style="max-height: 70vh; overflow-y: auto;">
+          {% for entrada in entradas %}
+          <div class="fila-sync"
+               data-index="{{ forloop.counter0 }}"
+               data-compas="{{ entrada.compas|default_if_none:'' }}"
+               data-pasada="{{ entrada.pasada|default_if_none:'' }}"
+               data-segmento-id="{{ entrada.segmento_id }}"
+               data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}">
+            <div class="d-flex justify-content-between">
+              <span style="color: var(--ss-text-bright)">
+                {% if entrada.es_cierre %}
+                  {% translate "— fin de la obra —" %}
+                {% else %}
+                  {% translate "Compás" %} {{ entrada.compas }}{% if entrada.pasada > 1 %} <small style="color: var(--ss-text-muted)">({{ entrada.pasada }}ª {% translate "vez" %})</small>{% endif %}
+                {% endif %}
+              </span>
+              <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:'' }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
+            </div>
+            <div class="small" style="color: var(--ss-text-muted);">
+              {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
+              {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
+              {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} {{ entrada.tiempo_inicio_calculado|floatformat:2 }}s{% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const audio = document.getElementById('sync-audio');
+  const btnPlayPause = document.getElementById('sync-btn-playpause');
+  const btnBack1 = document.getElementById('sync-btn-back1');
+  const btnBackFino = document.getElementById('sync-btn-back-fino');
+  const btnFwdFino = document.getElementById('sync-btn-fwd-fino');
+  const btnFwd1 = document.getElementById('sync-btn-fwd1');
+  const scrubber = document.getElementById('sync-scrubber');
+  const tiempoActualEl = document.getElementById('sync-tiempo-actual');
+  const tiempoTotalEl = document.getElementById('sync-tiempo-total');
+  const btnMarcar = document.getElementById('sync-btn-marcar');
+  const btnSaltear = document.getElementById('sync-btn-saltear');
+  const btnDeshacer = document.getElementById('sync-btn-deshacer');
+  const armadaLabel = document.getElementById('sync-armada-label');
+  const filas = Array.from(document.querySelectorAll('.fila-sync'));
+  const scoreCanvas = document.getElementById('sync-score-canvas');
+  const scoreMsg = document.getElementById('sync-score-msg');
+  const btnModoMarcado = document.getElementById('modo-btn-marcado');
+  const btnModoReproduccion = document.getElementById('modo-btn-reproduccion');
+  const btnAjusteM1 = document.getElementById('sync-btn-ajuste-m1');
+  const btnAjusteM05 = document.getElementById('sync-btn-ajuste-m05');
+  const btnAjusteP05 = document.getElementById('sync-btn-ajuste-p05');
+  const btnAjusteP1 = document.getElementById('sync-btn-ajuste-p1');
+  const labelSeleccion = document.getElementById('sync-seleccion-label');
+  const toggleNumeros = document.getElementById('sync-toggle-numeros');
+
+  function getCookie(nombre) {
+    const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+
+  function formatearTiempo(seg) {
+    if (!isFinite(seg)) return '0:00';
+    const m = Math.floor(seg / 60);
+    const s = (seg % 60).toFixed(2).padStart(5, '0');
+    return `${m}:${s}`;
+  }
+
+  function parsearTiempoManual(texto) {
+    const partes = texto.trim().split(':');
+    if (partes.length === 1) return parseFloat(partes[0]);
+    if (partes.length === 2) {
+      const min = parseInt(partes[0], 10);
+      const seg = parseFloat(partes[1]);
+      return (isNaN(min) || isNaN(seg)) ? NaN : min * 60 + seg;
+    }
+    return NaN;
+  }
+
+  document.querySelectorAll('.tiempo-real').forEach((el) => {
+    const segundos = el.dataset.segundos;
+    if (segundos !== '') el.textContent = formatearTiempo(parseFloat(segundos));
+  });
+
+  // ── Reproductor ─────────────────────────────────────────────────────
+  let arrastrandoScrubber = false;
+
+  function saltar(delta) {
+    const destino = audio.currentTime + delta;
+    audio.currentTime = Math.max(0, audio.duration ? Math.min(destino, audio.duration) : destino);
+  }
+
+  btnPlayPause.addEventListener('click', () => {
+    if (audio.paused) audio.play(); else audio.pause();
+  });
+  btnBack1.addEventListener('click', () => saltar(-1));
+  btnBackFino.addEventListener('click', () => saltar(-0.1));
+  btnFwdFino.addEventListener('click', () => saltar(0.1));
+  btnFwd1.addEventListener('click', () => saltar(1));
+  audio.addEventListener('play', () => { btnPlayPause.textContent = '⏸'; iniciarSeguimientoSonando(); });
+  audio.addEventListener('pause', () => { btnPlayPause.textContent = '▶'; detenerSeguimientoSonando(); });
+  audio.addEventListener('loadedmetadata', () => {
+    tiempoTotalEl.textContent = formatearTiempo(audio.duration);
+  });
+  audio.addEventListener('timeupdate', () => {
+    tiempoActualEl.textContent = formatearTiempo(audio.currentTime);
+    if (!arrastrandoScrubber && audio.duration) {
+      scrubber.value = String(Math.round((audio.currentTime / audio.duration) * 1000));
+    }
+  });
+  scrubber.addEventListener('input', () => {
+    arrastrandoScrubber = true;
+    if (audio.duration) {
+      const nuevo = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+      tiempoActualEl.textContent = formatearTiempo(nuevo);
+    }
+  });
+  scrubber.addEventListener('change', () => {
+    if (audio.duration) {
+      audio.currentTime = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+    }
+    arrastrandoScrubber = false;
+  });
+
+  // ── Filas / marcado ─────────────────────────────────────────────────
+  let idxArmada = filas.findIndex(f => f.querySelector('.tiempo-real').textContent.trim() === '—');
+  if (idxArmada === -1) idxArmada = filas.length ? filas.length - 1 : -1;
+  const historialMarcas = []; // índices efectivamente MARCADOS (no salteados) — para poder deshacer
+
+  // Selección múltiple (para el ajuste fino, ver más abajo) — declarada acá
+  // arriba porque refrescarPanelScore() ya la necesita.
+  let seleccion = new Set();
+  let anclaSeleccion = null;
+
+  // ── Compás "sonando" en vivo ─────────────────────────────────────────
+  // Independiente del modo: mientras el audio suena, se seguye el MISMO
+  // plan que usa "Ejecutar con audio" en el navegador (ya prioriza marcas
+  // de compás sobre las de fila) para saber qué compás está SONANDO en
+  // este instante — no necesariamente el mismo que está armado para tapear.
+  let pulsosGlobal = [];
+  let acumuladosRealesGlobal = [];
+  let primerPulsoTiempoRealGlobal = null;
+  let pasadaPorPulsoGlobal = [];
+  let compasSonando = null; // número puro, para el panel de partitura
+  let claveSonando = null;  // "compas:pasada", para saber qué FILA resaltar
+  let rafSonando = null;
+
+  async function cargarPlanGlobal() {
+    try {
+      const resp = await fetch('{% url "partituras:plan_obra" obra.pk %}');
+      const data = await resp.json();
+      if (!data.pulsos || !data.pulsos.length) return;
+      pulsosGlobal = data.pulsos;
+      primerPulsoTiempoRealGlobal = data.primer_pulso_tiempo_real;
+      acumuladosRealesGlobal = [];
+      pasadaPorPulsoGlobal = [];
+      const contador = {};
+      let total = 0;
+      let pasadaActual = 1;
+      pulsosGlobal.forEach((p) => {
+        if (p.es_primer_pulso_compas) {
+          contador[p.compas] = (contador[p.compas] || 0) + 1;
+          pasadaActual = contador[p.compas];
+        }
+        pasadaPorPulsoGlobal.push(pasadaActual);
+        acumuladosRealesGlobal.push(total);
+        total += (p.duracion_real != null ? p.duracion_real : p.duracion) || 0;
+      });
+    } catch (e) {
+      // Sin esto no hay resaltado en vivo — no es crítico, se puede seguir
+      // marcando/escuchando igual, sólo no se ve el verde.
+    }
+  }
+
+  function pulsoEnTiempo(segundos) {
+    if (!pulsosGlobal.length || primerPulsoTiempoRealGlobal == null) return -1;
+    const elapsed = segundos - primerPulsoTiempoRealGlobal;
+    if (elapsed < 0) return -1;
+    let i = 0;
+    while (i + 1 < acumuladosRealesGlobal.length && elapsed >= acumuladosRealesGlobal[i + 1]) i++;
+    return i;
+  }
+
+  function refrescarPanelScore() {
+    // Compases seleccionados para el ajuste fino (ver más abajo) — se
+    // pintan aparte en la partitura, además del armado/sonando, para ver
+    // de un vistazo a cuáles les va a pegar el próximo ajuste.
+    const numerosSeleccionados = Array.from(seleccion)
+      .map(i => filas[i])
+      .filter(f => f.dataset.esCierre !== '1')
+      .map(f => parseInt(f.dataset.compas, 10));
+
+    if (modo === 'reproduccion') {
+      // Acá no hay nada "armado para marcar" — el recorte se ancla en lo
+      // que está SONANDO (verde), no en el rojo de marcado; si todavía no
+      // arrancó a sonar nada, se apoya en el último armado sólo para no
+      // dejar el panel vacío, pero sin pintar su caja roja (4to parámetro).
+      const numeroCrop = compasSonando != null ? compasSonando
+        : (idxArmada >= 0 && filas[idxArmada].dataset.esCierre !== '1' ? parseInt(filas[idxArmada].dataset.compas, 10) : null);
+      mostrarCompas(numeroCrop, compasSonando, numerosSeleccionados, false);
+      return;
+    }
+
+    if (idxArmada < 0) return;
+    const filaArmada = filas[idxArmada];
+    if (filaArmada.dataset.esCierre === '1') {
+      mostrarCompas(null, compasSonando, numerosSeleccionados);
+    } else {
+      mostrarCompas(parseInt(filaArmada.dataset.compas, 10), compasSonando, numerosSeleccionados);
+    }
+  }
+
+  function actualizarSonando() {
+    const i = pulsoEnTiempo(audio.currentTime);
+    const nuevaClave = i >= 0 ? `${pulsosGlobal[i].compas}:${pasadaPorPulsoGlobal[i]}` : null;
+    if (nuevaClave !== claveSonando) {
+      claveSonando = nuevaClave;
+      compasSonando = i >= 0 ? pulsosGlobal[i].compas : null;
+      let filaSonando = null;
+      filas.forEach((f) => {
+        const esSonando = `${f.dataset.compas}:${f.dataset.pasada}` === claveSonando;
+        f.classList.toggle('sonando', esSonando);
+        if (esSonando) filaSonando = f;
+      });
+      // Sólo en modo reproducción: en marcado el scroll ya lo maneja armar()
+      // (la fila armada), y hacerlo también acá pelearía contra eso si el
+      // tap está más atrás/adelante de lo que suena.
+      if (modo === 'reproduccion' && filaSonando) {
+        filaSonando.scrollIntoView({ block: 'nearest' });
+      }
+      refrescarPanelScore();
+    }
+    rafSonando = requestAnimationFrame(actualizarSonando);
+  }
+
+  function iniciarSeguimientoSonando() {
+    if (!rafSonando) rafSonando = requestAnimationFrame(actualizarSonando);
+  }
+  function detenerSeguimientoSonando() {
+    if (rafSonando) cancelAnimationFrame(rafSonando);
+    rafSonando = null;
+  }
+  audio.addEventListener('ended', detenerSeguimientoSonando);
+  cargarPlanGlobal();
+
+  function armar(idx, opciones) {
+    if (idx < 0 || idx >= filas.length) return;
+    idxArmada = idx;
+    filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idx));
+    filas[idx].scrollIntoView({ block: 'nearest' });
+    const compas = filas[idx].dataset.compas;
+    const pasada = filas[idx].dataset.pasada;
+    if (filas[idx].dataset.esCierre === '1') {
+      armadaLabel.textContent = '{% translate "Marcando el fin de la obra" %}';
+    } else {
+      armadaLabel.textContent = '{% translate "Marcando el compás" %} ' + compas + (pasada > 1 ? ` (${pasada}ª)` : '');
+    }
+    refrescarPanelScore();
+
+    // Reposicionar el audio al tiempo ya guardado SÓLO cuando se arma por
+    // click explícito (ir a revisar/corregir una marca puntual) — no al
+    // avanzar solo (marcar/saltear): en el tap en vivo el audio tiene que
+    // seguir sonando sin cortes aunque el próximo compás ya tenga una
+    // marca vieja, si no cada tap podría hacerlo saltar en el tiempo.
+    if (opciones && opciones.reposicionar) {
+      const segundosGuardados = filas[idx].querySelector('.tiempo-real').dataset.segundos;
+      if (segundosGuardados) {
+        const seg = parseFloat(segundosGuardados);
+        if (!isNaN(seg)) {
+          audio.currentTime = Math.max(0, audio.duration ? Math.min(seg, audio.duration) : seg);
+        }
+      }
+    }
+  }
+
+  async function guardarTiempo(fila, segundos) {
+    const params = new URLSearchParams();
+    let url;
+    if (fila.dataset.esCierre === '1') {
+      // La fila de cierre no es un compás puntual — comparte el mismo
+      // tiempo_inicio que usa sincronizar_audio.html (por fila), no una
+      // MarcaTiempoCompas nueva.
+      url = '{% url "partituras:marcar_tiempo_segmento" obra.pk %}';
+      params.set('segmento_id', fila.dataset.segmentoId);
+    } else {
+      url = '{% url "partituras:marcar_tiempo_compas" obra.pk %}';
+      params.set('compas', fila.dataset.compas);
+      params.set('pasada', fila.dataset.pasada);
+    }
+    if (segundos !== null) params.set('segundos', String(segundos));
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: params.toString(),
+    });
+    return resp.ok;
+  }
+
+  async function marcarActual() {
+    if (idxArmada < 0) return;
+    const fila = filas[idxArmada];
+    const segundos = audio.currentTime;
+    const ok = await guardarTiempo(fila, segundos);
+    if (!ok) return;
+    const tiempoEl = fila.querySelector('.tiempo-real');
+    tiempoEl.textContent = formatearTiempo(segundos);
+    tiempoEl.dataset.segundos = String(segundos);
+    fila.classList.add('marcada');
+    historialMarcas.push(idxArmada);
+    if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
+  }
+
+  function saltear() {
+    // Avanza sin marcar — para cuando te perdiste el compás actual y no
+    // querés que el resto del tap se desalinee: éste queda sin dato y lo
+    // cubre la interpolación entre los compases marcados más cercanos.
+    if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
+  }
+
+  async function deshacer() {
+    const idx = historialMarcas.pop();
+    if (idx === undefined) return;
+    const fila = filas[idx];
+    await guardarTiempo(fila, null);
+    const tiempoEl = fila.querySelector('.tiempo-real');
+    tiempoEl.textContent = '—';
+    tiempoEl.dataset.segundos = '';
+    fila.classList.remove('marcada');
+    armar(idx);
+  }
+
+  function iniciarEdicion(idx, tiempoEl) {
+    if (tiempoEl.dataset.editando) return;
+    tiempoEl.dataset.editando = '1';
+    const valorInicial = tiempoEl.textContent.trim() === '—' ? '' : tiempoEl.textContent.trim();
+    tiempoEl.textContent = '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'form-control form-control-sm';
+    input.value = valorInicial;
+    input.placeholder = 'm:ss.dd';
+    tiempoEl.appendChild(input);
+    input.focus();
+    input.select();
+
+    let terminado = false;
+    function finalizar(guardar) {
+      if (terminado) return;
+      terminado = true;
+      delete tiempoEl.dataset.editando;
+      if (!guardar) {
+        tiempoEl.textContent = valorInicial || '—';
+        return;
+      }
+      const texto = input.value.trim();
+      const segundos = texto === '' ? null : parsearTiempoManual(texto);
+      if (segundos !== null && (isNaN(segundos) || segundos < 0)) {
+        tiempoEl.textContent = valorInicial || '—';
+        return;
+      }
+      const fila = filas[idx];
+      guardarTiempo(fila, segundos).then((ok) => {
+        if (!ok) { tiempoEl.textContent = valorInicial || '—'; return; }
+        tiempoEl.textContent = segundos === null ? '—' : formatearTiempo(segundos);
+        tiempoEl.dataset.segundos = segundos === null ? '' : String(segundos);
+        fila.classList.toggle('marcada', segundos !== null);
+      });
+    }
+
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finalizar(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finalizar(false); }
+    });
+    input.addEventListener('blur', () => finalizar(true));
+  }
+
+  // ── Selección múltiple (para el ajuste fino) ─────────────────────────
+  // Click simple: arma esa fila y la selección pasa a ser sólo ésa (mismo
+  // comportamiento de siempre). Shift+click: extiende un RANGO contiguo
+  // desde el último click simple/shift. Ctrl/Cmd+click: suma o saca esa
+  // fila sola de la selección, sin tocar el resto — no arma ni reposiciona
+  // el audio (evita el mismo salto que ya se evitó para marcar/saltear).
+  function actualizarClasesSeleccion() {
+    filas.forEach((f, i) => f.classList.toggle('seleccionada', seleccion.has(i)));
+    labelSeleccion.textContent = seleccion.size > 1
+      ? seleccion.size + ' {% translate "compases seleccionados" %}'
+      : '';
+    refrescarPanelScore();
+  }
+
+  filas.forEach((f, i) => {
+    f.addEventListener('click', (e) => {
+      if (e.shiftKey && anclaSeleccion !== null) {
+        const ini = Math.min(anclaSeleccion, i), fin = Math.max(anclaSeleccion, i);
+        seleccion = new Set();
+        for (let k = ini; k <= fin; k++) seleccion.add(k);
+        actualizarClasesSeleccion();
+        armar(i, { reposicionar: false });
+      } else if (e.ctrlKey || e.metaKey) {
+        if (seleccion.has(i)) seleccion.delete(i); else seleccion.add(i);
+        anclaSeleccion = i;
+        actualizarClasesSeleccion();
+      } else {
+        seleccion = new Set([i]);
+        anclaSeleccion = i;
+        actualizarClasesSeleccion();
+        armar(i, { reposicionar: true });
+      }
+    });
+    const tiempoEl = f.querySelector('.tiempo-real');
+    tiempoEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      iniciarEdicion(i, tiempoEl);
+    });
+  });
+
+  async function ajustarSeleccion(delta) {
+    const indices = seleccion.size ? Array.from(seleccion) : (idxArmada >= 0 ? [idxArmada] : []);
+    // Sólo tiene sentido correr compases que YA tienen una marca — no hay
+    // nada que desplazar donde no hay dato. La fila de cierre no es una
+    // MarcaTiempoCompas (ver guardarTiempo) — este endpoint no la maneja,
+    // así que queda afuera del ajuste masivo (se puede seguir editando
+    // sola, a mano, como cualquier otra fila).
+    const objetivos = indices.map(i => filas[i])
+      .filter(f => f.dataset.esCierre !== '1' && f.querySelector('.tiempo-real').dataset.segundos !== '');
+    if (!objetivos.length) return;
+    const params = new URLSearchParams();
+    params.set('delta_segundos', String(delta));
+    params.set('compases', objetivos.map(f => `${f.dataset.compas}:${f.dataset.pasada}`).join(','));
+    const resp = await fetch('{% url "partituras:desplazar_tiempos_compases" obra.pk %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: params.toString(),
+    });
+    if (!resp.ok) return;
+    objetivos.forEach((f) => {
+      const tiempoEl = f.querySelector('.tiempo-real');
+      const nuevo = Math.max(parseFloat(tiempoEl.dataset.segundos) + delta, 0);
+      tiempoEl.dataset.segundos = String(nuevo);
+      tiempoEl.textContent = formatearTiempo(nuevo);
+    });
+  }
+  btnAjusteM1.addEventListener('click', () => ajustarSeleccion(-0.1));
+  btnAjusteM05.addEventListener('click', () => ajustarSeleccion(-0.05));
+  btnAjusteP05.addEventListener('click', () => ajustarSeleccion(0.05));
+  btnAjusteP1.addEventListener('click', () => ajustarSeleccion(0.1));
+
+  // ── Modo marcado / reproducción ──────────────────────────────────────
+  // El seguimiento "sonando" (verde) corre siempre que el audio suena, en
+  // los dos modos — lo único que cambia es qué hacen Espacio/Tab/Backspace:
+  // en reproducción no tiene sentido grabar nada, sólo escuchar/revisar.
+  let modo = 'marcado';
+
+  function cambiarModo(nuevo) {
+    modo = nuevo;
+    btnModoMarcado.classList.toggle('btn-ss', modo === 'marcado');
+    btnModoMarcado.classList.toggle('btn-outline-light', modo !== 'marcado');
+    btnModoReproduccion.classList.toggle('btn-ss', modo === 'reproduccion');
+    btnModoReproduccion.classList.toggle('btn-outline-light', modo !== 'reproduccion');
+    btnMarcar.disabled = modo !== 'marcado';
+    btnSaltear.disabled = modo !== 'marcado';
+    btnDeshacer.disabled = modo !== 'marcado';
+    filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idxArmada));
+    refrescarPanelScore();
+  }
+  btnModoMarcado.addEventListener('click', () => cambiarModo('marcado'));
+  btnModoReproduccion.addEventListener('click', () => cambiarModo('reproduccion'));
+  if (toggleNumeros) toggleNumeros.addEventListener('change', refrescarPanelScore);
+
+  btnMarcar.addEventListener('click', marcarActual);
+  btnSaltear.addEventListener('click', saltear);
+  btnDeshacer.addEventListener('click', deshacer);
+
+  document.addEventListener('keydown', (e) => {
+    const foco = document.activeElement;
+    const esCampoTexto = foco && (foco.tagName === 'TEXTAREA' || foco.tagName === 'SELECT' ||
+      (foco.tagName === 'INPUT' && foco.type !== 'range'));
+    if (esCampoTexto) return;
+    if (e.code === 'Space') {
+      // El tap va en Espacio, no en Enter — para marcar cientos de
+      // compases seguidos es la tecla más cómoda (la más grande, bajo los
+      // pulgares); Enter queda para pausar/continuar, mucho menos frecuente.
+      // En modo reproducción no hay nada que grabar — Espacio pasa a ser
+      // play/pause también, ya que Marcar no tiene sentido ahí.
+      e.preventDefault();
+      if (modo === 'marcado') marcarActual();
+      else { if (audio.paused) audio.play(); else audio.pause(); }
+    } else if (e.code === 'Enter') {
+      e.preventDefault();
+      if (audio.paused) audio.play(); else audio.pause();
+    } else if (e.code === 'Tab') {
+      e.preventDefault();
+      if (modo === 'marcado') saltear();
+    } else if (e.code === 'Backspace') {
+      e.preventDefault();
+      if (modo === 'marcado') deshacer();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      saltar(e.shiftKey ? -1 : -0.1);
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      saltar(e.shiftKey ? 1 : 0.1);
+    }
+  });
+
+  if (filas.length) armar(idxArmada, { reposicionar: true });
+
+  // ── Panel de partitura (mismo criterio que sincronizar_audio.html: un
+  // recorte de unos pocos sistemas con el compás armado resaltado). ──────
+  {% if tiene_score %}
+  let geometria = null;
+  const imagenesPorPagina = {};
+  // Tapeando rápido, un mostrarCompas() puede seguir esperando la imagen
+  // cuando ya se armó un compás más nuevo — sin esto, si esa llamada vieja
+  // resuelve DESPUÉS de la nueva, pisa el dibujo correcto con uno viejo
+  // ("dejó de marcar el compás que estoy por tocar"). Cada llamada guarda
+  // su propio número de generación y, al volver de esperar la imagen,
+  // aborta si ya no es la última.
+  let generacionMostrar = 0;
+
+  async function cargarGeometria() {
+    try {
+      const url = '{% url "partituras:score_geometria_obra" obra.pk %}?parte={{ partitura_seguida.pk }}';
+      const resp = await fetch(url);
+      const data = await resp.json();
+      if (!data.partitura) return;
+      const porCompas = {}, porPagina = {};
+      for (const pagina of data.paginas) {
+        porPagina[pagina.numero] = pagina;
+        for (const c of pagina.compases) {
+          const repeticiones = c.repeticiones || 1;
+          for (let offset = 0; offset < repeticiones; offset++) {
+            porCompas[c.numero + offset] = Object.assign({ pagina_numero: pagina.numero, offset, repeticiones }, c);
+          }
+        }
+      }
+      geometria = { porCompas, porPagina };
+      refrescarPanelScore();
+    } catch (e) {
+      mostrarErrorScore('{% translate "No se pudo obtener la partitura." %}');
+    }
+  }
+
+  function obtenerImagen(pagina) {
+    if (imagenesPorPagina[pagina.numero]) return imagenesPorPagina[pagina.numero];
+    // Se cachea la PROMESA (no sólo el resultado ya resuelto): si dos taps
+    // seguidos piden la misma página todavía no cargada, comparten un solo
+    // fetch en vez de disparar uno cada uno.
+    const promesa = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = pagina.imagen_url;
+    });
+    promesa.catch(() => { delete imagenesPorPagina[pagina.numero]; }); // no cachear un fallo — reintentar la próxima vez
+    imagenesPorPagina[pagina.numero] = promesa;
+    return promesa;
+  }
+
+  function mostrarErrorScore(texto) {
+    scoreCanvas.style.display = 'none';
+    scoreMsg.style.display = '';
+    scoreMsg.textContent = texto;
+  }
+
+  const SISTEMAS_ADELANTE = 2;
+
+  function limitesSistema(pagina, sistema) {
+    const idx = pagina.sistemas.findIndex(s => s.orden === sistema.orden);
+    const anterior = pagina.sistemas[idx - 1] || null;
+    const siguiente = pagina.sistemas[idx + 1] || null;
+    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : pagina.margen_y0;
+    const bottom = siguiente ? (sistema.y + sistema.height + siguiente.y) / 2 : pagina.margen_y1;
+    return { top, bottom };
+  }
+
+  function limitesFranja(pagina, sistemaInicial) {
+    const idx = pagina.sistemas.findIndex(s => s.orden === sistemaInicial.orden);
+    const anterior = pagina.sistemas[idx - 1] || null;
+    const top = anterior ? (anterior.y + anterior.height + sistemaInicial.y) / 2 : pagina.margen_y0;
+
+    const idxFinal = Math.min(idx + SISTEMAS_ADELANTE, pagina.sistemas.length - 1);
+    const sistemaFinal = pagina.sistemas[idxFinal];
+    const siguiente = pagina.sistemas[idxFinal + 1] || null;
+    const bottom = siguiente ? (sistemaFinal.y + sistemaFinal.height + siguiente.y) / 2 : pagina.margen_y1;
+    return { top, bottom };
+  }
+
+  // Caja de UN compás dentro de un crop ya recortado (bordesFranja/escala
+  // ya calculados para la página) — null si ese compás no existe en esta
+  // parte, o si su sistema ni siquiera entra en lo recortado (p.ej. el
+  // compás "sonando" quedó en una página distinta a la del armado: ese
+  // caso no se dibuja en la partitura, sólo se ve en la lista).
+  function calcularCajaCompas(pagina, numero, bordesFranja, img, escala) {
+    const entrada = geometria.porCompas[numero];
+    if (!entrada || entrada.pagina_numero !== pagina.numero) return null;
+    const compas = pagina.compases.find(c => c.numero === entrada.numero);
+    if (!compas) return null;
+    const sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
+    if (!sistema) return null;
+    const bordesSistema = limitesSistema(pagina, sistema);
+    if (bordesSistema.bottom <= bordesFranja.top || bordesSistema.top >= bordesFranja.bottom) return null;
+
+    const delMismoSistema = pagina.compases
+      .filter(c => c.sistema_orden === compas.sistema_orden)
+      .sort((a, b) => a.x - b.x);
+    const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
+    const proximo = delMismoSistema[posEnSistema + 1] || null;
+    const left = Math.max(compas.x, pagina.margen_x0);
+    const right = proximo ? proximo.x : pagina.margen_x1;
+
+    const repeticiones = entrada.repeticiones || 1;
+    const offset = entrada.offset || 0;
+    const anchoSlot = (right - left) / repeticiones;
+    const leftReal = left + offset * anchoSlot;
+    const x0 = (leftReal - pagina.margen_x0) * img.naturalWidth * escala;
+    const bw = Math.max(anchoSlot * img.naturalWidth * escala, 1);
+    const y0 = (bordesSistema.top - bordesFranja.top) * img.naturalHeight * escala;
+    const bh = Math.max((bordesSistema.bottom - bordesSistema.top) * img.naturalHeight * escala, 1);
+    return { x0, y0, bw, bh };
+  }
+
+  function dibujarCaja(ctx, caja, relleno, borde) {
+    ctx.fillStyle = relleno;
+    ctx.fillRect(caja.x0, caja.y0, caja.bw, caja.bh);
+    ctx.strokeStyle = borde;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(caja.x0, caja.y0 + 1, caja.bw, caja.bh - 2);
+  }
+
+  // numeroArmado: siempre se intenta mostrar (define el recorte/crop) —
+  // null para la fila de cierre (no hay un compás puntual que recortar).
+  // numeroSonando/numerosSeleccionados: opcionales — cada uno se dibuja
+  // sólo si cae dentro del MISMO recorte que ya se armó para numeroArmado
+  // (ver calcularCajaCompas); si numeroArmado es null no hay recorte
+  // posible, así que ninguno de los dos se llega a dibujar tampoco.
+  // dibujarArmado (default true): en "modo reproducción" numeroArmado sólo
+  // define QUÉ recortar (normalmente el que está sonando) pero no se pinta
+  // de rojo — ahí no hay nada "armado para marcar".
+  async function mostrarCompas(numeroArmado, numeroSonando, numerosSeleccionados, dibujarArmado) {
+    const miGeneracion = ++generacionMostrar;
+    if (!geometria) return;
+    if (numeroArmado == null) {
+      if (miGeneracion === generacionMostrar) {
+        mostrarErrorScore('{% translate "(fin de la obra — no hay un compás puntual que mostrar)" %}');
+      }
+      return;
+    }
+    const entrada = geometria.porCompas[numeroArmado];
+    if (!entrada) {
+      if (miGeneracion === generacionMostrar) {
+        mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numeroArmado + '.');
+      }
+      return;
+    }
+    const pagina = geometria.porPagina[entrada.pagina_numero];
+    const compas = pagina.compases.find(c => c.numero === entrada.numero);
+    if (!compas) return;
+    const sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
+    const bordesFranja = limitesFranja(pagina, sistema);
+
+    let img;
+    try {
+      img = await obtenerImagen(pagina);
+    } catch (e) {
+      if (miGeneracion === generacionMostrar) {
+        mostrarErrorScore('{% translate "No se pudo cargar la imagen de la página." %}');
+      }
+      return;
+    }
+    // Mientras esperábamos la imagen se armó un compás más nuevo — esta
+    // llamada ya quedó obsoleta, no pisar lo que se esté mostrando ahora.
+    if (miGeneracion !== generacionMostrar) return;
+
+    scoreCanvas.style.display = 'block';
+    scoreMsg.style.display = 'none';
+
+    const contW = Math.max(scoreCanvas.parentElement.clientWidth, 50);
+    const anchoFrac = pagina.margen_x1 - pagina.margen_x0;
+    const escala = contW / (anchoFrac * img.naturalWidth);
+    const sx = pagina.margen_x0 * img.naturalWidth;
+    const sy = bordesFranja.top * img.naturalHeight;
+    const sw = Math.max(anchoFrac * img.naturalWidth, 1);
+    const sh = Math.max((bordesFranja.bottom - bordesFranja.top) * img.naturalHeight, 1);
+    const w = Math.round(sw * escala), h = Math.round(sh * escala);
+
+    scoreCanvas.width = w;
+    scoreCanvas.height = h;
+    const ctx = scoreCanvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+
+    // Seleccionados primero (fondo), armada y sonando encima — para que el
+    // contorno rojo/verde no quede tapado por el de selección si coinciden.
+    (numerosSeleccionados || []).forEach((numero) => {
+      if (numero === numeroArmado || isNaN(numero)) return;
+      const caja = calcularCajaCompas(pagina, numero, bordesFranja, img, escala);
+      if (caja) dibujarCaja(ctx, caja, 'rgba(90, 170, 255, 0.22)', '#5aaaff');
+    });
+
+    if (dibujarArmado !== false) {
+      const cajaArmada = calcularCajaCompas(pagina, numeroArmado, bordesFranja, img, escala);
+      if (cajaArmada) dibujarCaja(ctx, cajaArmada, 'rgba(233, 69, 96, 0.28)', '#e94560');
+    }
+
+    if (numeroSonando != null) {
+      const cajaSonando = calcularCajaCompas(pagina, numeroSonando, bordesFranja, img, escala);
+      if (cajaSonando) dibujarCaja(ctx, cajaSonando, 'rgba(45, 201, 111, 0.28)', '#2dc96f');
+    }
+
+    // Números de compás de referencia sobre TODO lo que entra en el
+    // recorte (no sólo lo resaltado) — para ubicarse rápido ahora que el
+    // recorte puede mostrar más de un sistema. Van last, encima de
+    // cualquier resaltado, para que el texto siga siendo legible.
+    // Toggleable (checkbox arriba del panel) — apagado por default no,
+    // arranca prendido, "puede ser útil tenerlos siempre a la vista".
+    if (!toggleNumeros || toggleNumeros.checked) {
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textBaseline = 'top';
+      pagina.compases.forEach((compas) => {
+        const caja = calcularCajaCompas(pagina, compas.numero, bordesFranja, img, escala);
+        if (!caja) return;
+        const repeticiones = compas.repeticiones || 1;
+        const etiqueta = repeticiones > 1 ? `${compas.numero}-${compas.numero + repeticiones - 1}` : String(compas.numero);
+        const px = caja.x0 + 3, py = caja.y0 + 2;
+        // Fondo oscuro fijo detrás del número — el papel de la partitura es
+        // blanco, un texto blanco solo se pierde ahí; así se lee sea cual
+        // sea el color de fondo debajo.
+        const anchoTexto = ctx.measureText(etiqueta).width;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(etiqueta, px, py);
+      });
+    }
+  }
+
+  cargarGeometria();
+  {% endif %}
+})();
+</script>
+{% endblock %}

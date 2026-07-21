@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}Subir partitura — ScoreSync{% endblock %}
+{% block title %}Subir parte — ScoreSync{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
-        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">Subir partitura</h4>
+        <h4 class="card-title mb-1" style="color: var(--ss-text-bright)">{% translate "Cargar parte" %}</h4>
+        <p class="small mb-4" style="color: var(--ss-text-muted)">{% translate "Para la obra" %} — {{ obra.titulo }}</p>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
           {% for field in form %}
@@ -17,7 +18,10 @@
               {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
             </div>
           {% endfor %}
-          <button type="submit" class="btn btn-ss w-100 mt-2">Subir</button>
+          <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-ss flex-fill">{% translate "Subir" %}</button>
+            <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+          </div>
         </form>
       </div>
     </div>

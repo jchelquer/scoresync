@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}Biblioteca — ScoreSync{% endblock %}
+{% block title %}Partes sueltas — ScoreSync{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h4 style="color: var(--ss-text-bright)">Biblioteca de partituras</h4>
-  <a href="{% url 'partituras:subir' %}" class="btn btn-ss"><i class="bi bi-upload me-1"></i>Subir PDF</a>
+<div class="mb-4">
+  <h4 style="color: var(--ss-text-bright)">{% translate "Partes sueltas" %}</h4>
+  <p class="small mb-0" style="color: var(--ss-text-muted)">
+    {% translate "Partes que quedaron sin obra (al separarlas, o si se borró la obra a la que pertenecían) — las partes nuevas se cargan siempre desde la ficha de una obra, no desde acá. Podés adjuntar una a una obra existente (desde la ficha de esa obra) o borrarla directamente." %}
+  </p>
 </div>
 
 {% if partituras %}
@@ -18,7 +20,7 @@
           <i class="bi bi-pencil"></i>
         </a>
         <form method="post" action="{% url 'partituras:borrar_partitura' p.pk %}"
-              onsubmit="return confirm('{% if p.obra %}{% blocktranslate with obra=p.obra.titulo %}Está vinculada a la obra {{ obra }}. {% endblocktranslate %}{% endif %}{% translate "¿Borrar esta partitura? No se puede deshacer." %}');">
+              onsubmit="return confirm('{% translate "¿Borrar esta parte? No se puede deshacer." %}');">
           {% csrf_token %}
           <button type="submit" class="btn btn-sm btn-outline-danger" title="{% translate 'Borrar' %}">
             <i class="bi bi-trash"></i>
@@ -37,6 +39,6 @@
   {% endfor %}
 </div>
 {% else %}
-<p style="color: var(--ss-text-muted)">Todavía no subiste ninguna partitura.</p>
+<p style="color: var(--ss-text-muted)">{% translate "No tenés partes sueltas — todo está prolijamente adjunto a alguna obra." %}</p>
 {% endif %}
 {% endblock %}

@@ -12,12 +12,17 @@ def _upload_path_normalizado(instance, filename):
     return f"partituras/u{instance.owner_id}/{uuid.uuid4().hex}_normalizado.pdf"
 
 
+def _upload_path_audio(instance, filename):
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "mp3"
+    return f"partituras/u{instance.owner_id}/audio_{uuid.uuid4().hex}.{ext}"
+
+
 class Obra(models.Model):
     """La pieza musical en sí, independiente de cualquier instrumento — varias
     Partitura (una por parte/instrumento) pueden pertenecer a la misma Obra.
     Dueña de los datos que son propiedad de la obra y no de una parte en
-    particular (más adelante: itinerario de repeticiones/saltos, grabación de
-    referencia para sincronizar) — ver notas de diseño del proyecto."""
+    particular (itinerario de repeticiones/saltos, grabación de referencia
+    para sincronizar) — ver notas de diseño del proyecto."""
     titulo = models.CharField(max_length=200)
     compositor = models.CharField(max_length=200, blank=True)
     arreglista = models.CharField(max_length=200, blank=True)
@@ -25,6 +30,11 @@ class Obra(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name='obras',
+    )
+    audio = models.FileField(
+        upload_to=_upload_path_audio, null=True, blank=True,
+        help_text="Grabación de referencia (mp3) para sincronizar el itinerario — ver Segmento.tiempo_inicio "
+                   "y la pantalla de sincronización.",
     )
     creado = models.DateTimeField(auto_now_add=True)
 
@@ -129,6 +139,34 @@ class Segmento(models.Model):
         if self.compas_desde is None:
             return f"{self.obra} — cierre"
         return f"{self.obra} — c.{self.compas_desde}–{self.compas_hasta}"
+
+
+class MarcaTiempoCompas(models.Model):
+    """Tiempo real de una ocurrencia PUNTUAL de compás (no de una fila entera
+    del itinerario, ver Segmento.tiempo_inicio) — sincronización fina,
+    compás a compás, marcada escuchando el audio (ver sincronizar_compases).
+    compas+pasada identifica la ocurrencia exacta (si el compás se repite —
+    2da vez, D.C., etc. — cada pasada tiene su propia marca), mismo criterio
+    de "pasada" que usa buscar_posicion.
+
+    Convive con Segmento.tiempo_inicio en vez de reemplazarlo: construir_plan
+    prioriza estas marcas cuando existen (más precisas, punto a punto) y cae
+    en las de Segmento (por fila) donde no las haya, y en el tiempo calculado
+    puro donde no haya ninguna de las dos — una escalera de calidad, no un
+    interruptor que haya que elegir a mano."""
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_tiempo_compas')
+    compas = models.PositiveIntegerField()
+    pasada = models.PositiveIntegerField(default=1)
+    tiempo_inicio = models.DurationField()
+
+    class Meta:
+        unique_together = [('obra', 'compas', 'pasada')]
+        ordering = ['obra', 'compas', 'pasada']
+        verbose_name = 'Marca de tiempo de compás'
+        verbose_name_plural = 'Marcas de tiempo de compás'
+
+    def __str__(self):
+        return f"{self.obra} — c.{self.compas} ({self.pasada}ra vez)"
 
 
 class Partitura(models.Model):
@@ -372,6 +410,11 @@ class PreferenciaObra(models.Model):
     loop = models.BooleanField(default=False)
     velocidad = models.PositiveIntegerField(default=100)
     compases_al_aire = models.PositiveIntegerField(default=1)
+    ejecutar_con_audio = models.BooleanField(
+        default=False,
+        help_text="Si la ejecución sigue el audio de referencia (tiempos reales, velocidad fija) en vez "
+                   "del reloj calculado — ver sincronizar_audio. Se recuerda igual que el resto de estas preferencias.",
+    )
     parte_seguida = models.ForeignKey(
         Partitura, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
         help_text="Última parte elegida explícitamente en el selector — desempata antes que 'mi propia parte'.",

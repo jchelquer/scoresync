@@ -210,9 +210,29 @@
   </div>
   <div class="d-flex align-items-center gap-2" id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
-    <input type="range" id="velocidad-slider" min="20" max="120" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
+    <div style="position: relative; display: inline-block;">
+      <input type="range" id="velocidad-slider" min="20" max="150" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
+      <!-- Marca fija en 100% (velocidad original) — posición calculada sobre
+           el rango 20-150: (100-20)/(150-20) = 61.54%. No se mueve con el
+           valor del slider (a diferencia del thumb), es sólo una referencia
+           visual fija para volver rápido al tempo real. -->
+      <div style="position: absolute; left: 61.54%; top: 50%; width: 2px; height: 0.6rem; margin-top: -0.3rem; background: var(--ss-accent); pointer-events: none;"></div>
+    </div>
     <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
   </div>
+  {% if obra.audio %}
+  <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
+    <div class="form-check form-switch d-flex align-items-center mb-0">
+      <input class="form-check-input" type="checkbox" id="toggle-ejecutar-audio" {% if ejecutar_con_audio_guardado %}checked{% endif %}>
+      <label class="form-check-label small ms-1" for="toggle-ejecutar-audio" style="color: var(--ss-text-muted);">🎧 {% translate "Ejecutar con audio" %}</label>
+    </div>
+    <div class="form-check form-switch d-flex align-items-center mb-0" id="control-mute-audio" style="{% if not ejecutar_con_audio_guardado %}display:none;{% endif %}">
+      <input class="form-check-input" type="checkbox" id="toggle-mute-audio">
+      <label class="form-check-label small ms-1" for="toggle-mute-audio" style="color: var(--ss-text-muted);">🔇 {% translate "Silenciar" %}</label>
+    </div>
+  </div>
+  <audio id="nav-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
+  {% endif %}
   <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
@@ -256,6 +276,10 @@
            en modo normal, donde esos controles siguen en su lugar de
            siempre. -->
       <div id="score-header-extra" class="d-none align-items-end flex-wrap gap-2"></div>
+      <div class="form-check form-switch d-flex align-items-center mb-1">
+        <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
+        <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "Números de compás" %}</label>
+      </div>
       <div class="d-flex align-items-end gap-1" style="margin-left: auto;">
         <button id="btn-sistema-anterior" type="button" class="ss-tecla" title="{% translate 'Subir un sistema' %}">↑</button>
         <button id="btn-sistema-siguiente" type="button" class="ss-tecla" title="{% translate 'Bajar un sistema' %}">↓</button>
@@ -288,6 +312,7 @@
   const btnZoomMenos = document.getElementById('btn-zoom-menos');
   const btnSistemaAnterior = document.getElementById('btn-sistema-anterior');
   const btnSistemaSiguiente = document.getElementById('btn-sistema-siguiente');
+  const toggleNumerosCompas = document.getElementById('toggle-numeros-compas');
   const errorEl = document.getElementById('plan-error');
   const loopEl = document.getElementById('loop');
   const metronomoCaja = document.getElementById('nav-metronomo-caja');
@@ -302,6 +327,11 @@
   const velocidadValor = document.getElementById('velocidad-valor');
   const controlCompasesAire = document.getElementById('control-compases-aire');
   const compasesAireInput = document.getElementById('compases-aire');
+  const controlEjecutarAudio = document.getElementById('control-ejecutar-audio');
+  const toggleEjecutarAudio = document.getElementById('toggle-ejecutar-audio');
+  const controlMuteAudio = document.getElementById('control-mute-audio');
+  const toggleMuteAudio = document.getElementById('toggle-mute-audio');
+  const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
@@ -338,6 +368,7 @@
     { el: formRango, destino: scoreHeaderExtra },
     { el: controlCompasesAire, destino: scoreHeaderExtra },
     { el: controlVelocidad, destino: scoreHeaderExtra },
+    { el: controlEjecutarAudio, destino: scoreHeaderExtra },
     { el: btnPlay, destino: scoreHeaderExtra },
     { el: btnPause, destino: scoreHeaderExtra },
     { el: btnContinuar, destino: scoreHeaderExtra },
@@ -360,7 +391,7 @@
   metronomoVisualToggle.addEventListener('change', actualizarVisibilidadMetronomo);
   actualizarVisibilidadMetronomo();
 
-  // Velocidad de ejecución (20%-120% del tempo original) — se puede tocar
+  // Velocidad de ejecución (20%-150% del tempo original) — se puede tocar
   // en cualquier momento, incluso con el plan ya cargado: si está en pausa,
   // se reconstruyen los tiempos con la nueva velocidad y se reubica
   // elapsedAlPausar en el punto equivalente de la nueva escala, para que
@@ -410,6 +441,7 @@
     params.set('loop', (loopEl && loopEl.checked) ? 'on' : '');
     params.set('velocidad', velocidadSlider ? velocidadSlider.value : '100');
     params.set('compases_al_aire', compasesAireInput ? compasesAireInput.value : '1');
+    params.set('ejecutar_con_audio', ejecutarConAudio ? 'on' : '');
     params.set('zoom', String(nivelZoom));
     fetch('{% url "partituras:guardar_preferencias_obra" obra.pk %}', {
       method: 'POST',
@@ -426,6 +458,42 @@
   if (formRango) formRango.addEventListener('input', programarGuardadoPreferencias);
   if (compasesAireInput) compasesAireInput.addEventListener('input', programarGuardadoPreferencias);
 
+  // ── Ejecutar con audio ──────────────────────────────────────────────
+  // Se recuerda como el resto de las preferencias (ver guardarPreferencias
+  // más arriba); silenciar es sólo de esta sesión, no se guarda.
+  let ejecutarConAudio = toggleEjecutarAudio ? toggleEjecutarAudio.checked : false;
+  if (audioNav && toggleMuteAudio) audioNav.muted = toggleMuteAudio.checked;
+  if (toggleEjecutarAudio) {
+    toggleEjecutarAudio.addEventListener('change', () => {
+      ejecutarConAudio = toggleEjecutarAudio.checked;
+      if (controlMuteAudio) controlMuteAudio.style.display = ejecutarConAudio ? '' : 'none';
+      programarGuardadoPreferencias();
+    });
+  }
+  if (toggleMuteAudio && audioNav) {
+    toggleMuteAudio.addEventListener('change', () => {
+      audioNav.muted = toggleMuteAudio.checked;
+    });
+  }
+  // Sólo tiene sentido elegir esto ANTES de arrancar — cambiarlo a mitad
+  // de una ejecución (corriendo o en pausa) dejaría el reloj usando un
+  // ancla/array que ya no corresponde a lo que se está mostrando.
+  function usarAudioModo() {
+    return ejecutarConAudio && !!audioNav && primerPulsoTiempoReal != null;
+  }
+
+  // Los navegadores ignoran (o resetean más tarde) un currentTime asignado
+  // ANTES de que el audio termine de cargar metadata (duración/seekable
+  // todavía desconocidos) — sin esto, arrancar apenas se entra a la
+  // pantalla podía perder el seek y el audio terminaba sonando desde 0
+  // aunque el plan empezara en un compás bien entrado en la obra.
+  function esperarMetadataAudio() {
+    if (!audioNav || audioNav.readyState >= 1) return Promise.resolve();
+    return new Promise((resolve) => {
+      audioNav.addEventListener('loadedmetadata', () => resolve(), { once: true });
+    });
+  }
+
   let pulsosPorCompasMarcados = 0; // para no regenerar las marcas si no cambió el compás
 
   // El plan que manda el servidor ya viene a nivel de PULSO (no de
@@ -434,6 +502,14 @@
   // para programar todo contra un único reloj absoluto.
   let pulsos = [];
   let acumulados = [];
+  // Contraparte de acumulados/totalDuracion pero con duracion_real (ver
+  // construir_plan) en vez de la calculada — nunca se le aplica velocidad
+  // (el audio es una grabación de tempo fijo, no algo que se pueda
+  // acelerar/frenar sin distorsión) y por eso NO depende de
+  // velocidadActual como sí depende reconstruirTiempos() de acumulados.
+  let acumuladosReales = [];
+  let totalDuracionReal = 0;
+  let primerPulsoTiempoReal = null; // tiempo_inicio real del primer pulso del plan — ancla para usarAudioModo()
   let compasInicios = []; // índices de pulsos[] donde arranca cada compás (uno por ocurrencia, cruzando filas)
   let totalDuracion = 0;
   let startTs = 0;
@@ -442,7 +518,7 @@
   let elapsedAlPausar = 0;
   let audioCtx = null;
   let planCargado = false;
-  // Velocidad de ejecución (20%-120% del tempo original) — pulsos[] guarda
+  // Velocidad de ejecución (20%-150% del tempo original) — pulsos[] guarda
   // SIEMPRE la duración/bpm de verdad tal como los mandó el servidor (el
   // tempo real del itinerario no se toca en ningún lado); duracionEscalada/
   // bpmEscalado son la "lente" que aplica velocidadActual encima, recién al
@@ -454,7 +530,7 @@
 
   function leerVelocidadSlider() {
     if (!velocidadSlider) return 100;
-    return Math.min(120, Math.max(20, parseInt(velocidadSlider.value, 10) || 100));
+    return Math.min(150, Math.max(20, parseInt(velocidadSlider.value, 10) || 100));
   }
 
   function duracionEscalada(p) {
@@ -471,9 +547,13 @@
   function reconstruirTiempos() {
     acumulados = [];
     totalDuracion = 0;
+    acumuladosReales = [];
+    totalDuracionReal = 0;
     pulsos.forEach(p => {
       acumulados.push(totalDuracion);
       totalDuracion += duracionEscalada(p);
+      acumuladosReales.push(totalDuracionReal);
+      totalDuracionReal += (p.duracion_real != null ? p.duracion_real : p.duracion) || 0;
     });
   }
 
@@ -914,6 +994,33 @@
     });
   }
 
+  // Click sobre la partitura → a qué número de compás corresponde ese
+  // punto (o null si cayó fuera de cualquier caja) — inverso del mismo
+  // transform que usa renderizarVentanaBase para dibujar el recorte.
+  function compasEnClick(ventana, evt) {
+    const rect = scoreVentanaCanvas.getBoundingClientRect();
+    // Normalizado contra el tamaño real del buffer del canvas (no el CSS)
+    // por las dudas de que difieran — normalmente coinciden 1:1.
+    const escalaX = scoreVentanaCanvas.width / rect.width;
+    const escalaY = scoreVentanaCanvas.height / rect.height;
+    const px = (evt.clientX - rect.left) * escalaX;
+    const py = (evt.clientY - rect.top) * escalaY;
+
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const xFrac = px / (escala * img.naturalWidth) + pagina.margen_x0;
+    const yFrac = py / (escala * img.naturalHeight) + ventana.top;
+
+    const ordenes = new Set(ventana.sistemas.map(s => s.orden));
+    for (const compas of pagina.compases.filter(c => ordenes.has(c.sistema_orden))) {
+      const caja = calcularCaja({ numero: compas.numero }, pagina);
+      if (caja && xFrac >= caja.left && xFrac <= caja.right && yFrac >= caja.top && yFrac <= caja.bottom) {
+        return compas.numero;
+      }
+    }
+    return null;
+  }
+
   function ventanaContieneCompas(ventana, entrada) {
     if (!ventana || !entrada || entrada.pagina_numero !== ventana.pagina_numero) return false;
     const compas = ventana.pagina.compases.find(c => c.numero === entrada.numero);
@@ -1050,6 +1157,36 @@
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
     ventana.escalaRender = escala; // px en pantalla por unidad de píxel natural de la imagen
+    dibujarNumerosCompas(ventana);
+  }
+
+  // Número de cada compás visible en la ventana (todos, no sólo el
+  // actual/siguiente) — toggleable (switch junto al zoom), para ubicarse
+  // rápido en una ventana que puede mostrar varios sistemas a la vez.
+  // Fondo oscuro semitransparente fijo detrás del número: el papel de la
+  // partitura es claro, texto claro solo ahí se perdería.
+  function dibujarNumerosCompas(ventana) {
+    if (!toggleNumerosCompas || !toggleNumerosCompas.checked) return;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const ordenes = new Set(ventana.sistemas.map(s => s.orden));
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textBaseline = 'top';
+    pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
+      const caja = calcularCaja({ numero: compas.numero }, pagina);
+      if (!caja) return;
+      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3;
+      const py = (caja.top - ventana.top) * img.naturalHeight * escala + 2;
+      const repeticiones = compas.repeticiones || 1;
+      const etiqueta = repeticiones > 1 ? `${compas.numero}-${compas.numero + repeticiones - 1}` : String(compas.numero);
+      const anchoTexto = ctx.measureText(etiqueta).width;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(etiqueta, px, py);
+    });
   }
 
   // Fondo de color sobre el PENÚLTIMO sistema de la ventana (nunca el
@@ -1383,7 +1520,29 @@
   if (btnZoomMas) btnZoomMas.addEventListener('click', () => reajustarZoom(Math.min(ZOOM_MAX, nivelZoom + ZOOM_PASO)));
   if (btnZoomMenos) btnZoomMenos.addEventListener('click', () => reajustarZoom(Math.max(ZOOM_MIN, nivelZoom - ZOOM_PASO)));
 
+  // Click en cualquier compás visible de la partitura → posicionarse ahí
+  // directo, sin tener que llegar por Anterior/Siguiente uno a uno. Pausa
+  // primero si estaba corriendo (mismo criterio que Anterior/Siguiente) y
+  // reposiciona el audio real si "Ejecutar con audio" está activo (ver
+  // irAPulso) — Continuar retoma desde ahí con el audio mandando de nuevo.
+  if (scoreVentanaCanvas) {
+    scoreVentanaCanvas.style.cursor = 'pointer';
+    scoreVentanaCanvas.addEventListener('click', (e) => {
+      if (!planCargado || !ventanaActiva) return;
+      const numero = compasEnClick(ventanaActiva, e);
+      if (numero == null) return;
+      const idx = pulsos.findIndex(p => p.compas === numero && p.es_primer_pulso_compas);
+      if (idx === -1) return; // ese compás no está en el rango cargado
+      if (rafId) pausar();
+      irAPulso(idx);
+    });
+  }
+  if (toggleNumerosCompas) toggleNumerosCompas.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
+
   cargarScoreGeometria();
+  // Modo partitura es el modo por defecto al entrar al navegador — el otro
+  // ("modo compás", controles completos) sigue disponible con el mismo botón.
+  if (btnModoScore) alternarModoScore();
 
   function mostrarControles(estado) {
     // estado: 'inicial' | 'reproduciendo' | 'pausado'
@@ -1391,6 +1550,11 @@
     btnPause.style.display = estado === 'reproduciendo' ? '' : 'none';
     btnContinuar.style.display = estado === 'pausado' ? '' : 'none';
     btnReiniciar.style.display = estado === 'pausado' ? '' : 'none';
+    // A diferencia de la velocidad (ver más abajo), cambiar esto a mitad de
+    // una ejecución (corriendo o en pausa) dejaría el reloj usando un
+    // ancla/array que ya no corresponde a lo que se está mostrando — sólo
+    // se puede elegir antes de arrancar.
+    if (toggleEjecutarAudio) toggleEjecutarAudio.disabled = estado !== 'inicial';
     // El slider de velocidad se deja SIEMPRE habilitado (nunca con el
     // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
     // no recibiría ni el primer evento de interacción, y el listener de
@@ -1400,10 +1564,17 @@
   // Reposicionan el reloj (elapsedAlPausar) para que "Continuar" retome
   // justo desde el compás al que se saltó, en vez de desde donde se pausó
   // originalmente.
-  function irAPulso(idx) {
+  async function irAPulso(idx) {
     idxMostrado = idx;
     mostrarPulso(pulsos[idx]);
     elapsedAlPausar = acumulados[idx];
+    // En modo audio hay que reposicionar el audio también — si no,
+    // "Continuar" después de este salto reengancharía desde donde haya
+    // quedado el audio, no desde el pulso al que se acaba de saltar.
+    if (usarAudioModo() && acumuladosReales[idx] != null) {
+      await esperarMetadataAudio();
+      audioNav.currentTime = primerPulsoTiempoReal + acumuladosReales[idx];
+    }
     actualizarBotonesNav();
   }
 
@@ -1456,13 +1627,24 @@
   // Un solo reloj absoluto (startTs) en vez de encadenar setTimeout de a
   // un pulso por vez: así ni el jitter de red (ya no hay pedidos
   // intermedios) ni la imprecisión de cada timer individual se acumulan
-  // como desfasaje de tempo a lo largo de la ejecución.
+  // como desfasaje de tempo a lo largo de la ejecución. En modo audio, el
+  // "reloj absoluto" pasa a ser directamente audioNav.currentTime — si el
+  // audio está pausado (el usuario le pegó a Pausar, que también pausa el
+  // audio) currentTime no cambia entre frames, así que esto se congela
+  // solo, sin ningún caso especial acá.
   function avanzar(now) {
-    let elapsed = (now - startTs) / 1000;
-    if (elapsed >= totalDuracion) {
+    const modoAudio = usarAudioModo();
+    let elapsed = modoAudio ? (audioNav.currentTime - primerPulsoTiempoReal) : (now - startTs) / 1000;
+    const total = modoAudio ? totalDuracionReal : totalDuracion;
+    const acumuladosUsados = modoAudio ? acumuladosReales : acumulados;
+    if (elapsed >= total) {
       if (loopEl && loopEl.checked) {
-        startTs += totalDuracion * 1000;
-        elapsed -= totalDuracion;
+        if (modoAudio) {
+          audioNav.currentTime = primerPulsoTiempoReal;
+        } else {
+          startTs += totalDuracion * 1000;
+        }
+        elapsed -= total;
         idxMostrado = -1;
       } else {
         const yaMostrado = idxMostrado === pulsos.length - 1;
@@ -1470,12 +1652,13 @@
         if (!yaMostrado) mostrarPulso(pulsos[idxMostrado]);
         actualizarBotonesNav();
         detenerAnimacion();
+        if (modoAudio) audioNav.pause();
         mostrarControles('inicial');
         return;
       }
     }
     let i = 0;
-    while (i + 1 < acumulados.length && elapsed >= acumulados[i + 1]) i++;
+    while (i + 1 < acumuladosUsados.length && elapsed >= acumuladosUsados[i + 1]) i++;
     if (i !== idxMostrado) {
       // Cada entrada saltada (si el navegador se atrasó un instante) igual
       // tiene que sonar/parpadear — sólo el número en pantalla se pisa con
@@ -1517,6 +1700,7 @@
       return;
     }
     pulsos = data.pulsos;
+    primerPulsoTiempoReal = data.primer_pulso_tiempo_real;
     velocidadActual = leerVelocidadSlider();
     compasInicios = [];
     pulsos.forEach((p, idx) => {
@@ -1533,8 +1717,14 @@
     mostrarControles('reproduciendo');
     // Compases al aire (si están configurados) antes de arrancar el reloj
     // de verdad — al tempo/indicación del primer pulso real del plan.
-    construirCuenta(pulsos[0], pulsos[0].compas, () => {
-      startTs = performance.now();
+    construirCuenta(pulsos[0], pulsos[0].compas, async () => {
+      if (usarAudioModo()) {
+        await esperarMetadataAudio();
+        audioNav.currentTime = primerPulsoTiempoReal;
+        audioNav.play().catch(() => {});
+      } else {
+        startTs = performance.now();
+      }
       detenerAnimacion();
       rafId = requestAnimationFrame(avanzar);
     });
@@ -1551,7 +1741,11 @@
       mostrarControles('pausado');
       return;
     }
-    elapsedAlPausar = (performance.now() - startTs) / 1000;
+    if (usarAudioModo()) {
+      audioNav.pause(); // congela solo: currentTime no avanza más hasta reanudar
+    } else {
+      elapsedAlPausar = (performance.now() - startTs) / 1000;
+    }
     detenerAnimacion();
     mostrarControles('pausado');
   }
@@ -1565,10 +1759,17 @@
     const referencia = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado] : pulsos[0];
     const numeroDestino = referencia ? referencia.compas : null;
     construirCuenta(referencia, numeroDestino, () => {
-      // No vuelve a pedir el plan ni resetea la posición — sólo corre el
-      // reloj hacia atrás lo que ya había transcurrido, así retoma justo
-      // donde se pausó en vez de arrancar de nuevo desde el "desde".
-      startTs = performance.now() - elapsedAlPausar * 1000;
+      // No vuelve a pedir el plan ni resetea la posición. En modo audio,
+      // audioNav.currentTime ya está exactamente donde se pausó (o donde
+      // se saltó con Anterior/Siguiente — ver irAPulso), así que sólo hay
+      // que reanudar la reproducción; si no, se corre el reloj calculado
+      // hacia atrás lo que ya había transcurrido, para retomar justo donde
+      // se pausó en vez de arrancar de nuevo desde el "desde".
+      if (usarAudioModo()) {
+        audioNav.play().catch(() => {});
+      } else {
+        startTs = performance.now() - elapsedAlPausar * 1000;
+      }
       detenerAnimacion();
       rafId = requestAnimationFrame(avanzar);
     });
@@ -1589,7 +1790,7 @@
     }
     document.body.classList.toggle('modo-partitura', activo);
     btnModoScore.textContent = activo
-      ? '🔙 {% translate "Modo normal" %}'
+      ? '🔙 {% translate "Modo compás" %}'
       : '🎼 {% translate "Modo partitura" %}';
     // El panel quedó en otra posición (la fila compacta ocupa menos alto
     // que los controles completos, o viceversa al volver) y puede haber

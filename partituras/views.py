@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from urllib.parse import urlencode
 
 import cv2
@@ -13,15 +14,19 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
-from .models import Barra, Compas, Obra, Pagina, Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema
+from .models import (
+    Barra, Compas, MarcaTiempoCompas, Obra, Pagina, Partitura, PreferenciaObra,
+    PreferenciaParte, Segmento, Sistema,
+)
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
-    avanzar_compas, buscar_posicion, construir_plan, geometria_partitura,
-    guardar_compases_pagina, invalidar_desde_ancla, invalidar_desde_margenes,
-    invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
-    parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
-    resolver_segmentos, retroceder_compas, segmentos_navegables,
+    avanzar_compas, buscar_posicion, compases_desenrollados, construir_plan,
+    desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
+    invalidar_desde_ancla, invalidar_desde_margenes, invalidar_desde_orientacion,
+    invalidar_desde_sistemas, numero_inicial_pagina, parsear_compas_pulso,
+    recalcular_tiempos_calculados, renumerar_segmentos, resolver_segmentos,
+    retroceder_compas, segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -96,30 +101,30 @@ def _proximo_paso(partitura):
 
 
 @login_required
-def biblioteca(request):
-    partituras = Partitura.objects.filter(owner=request.user)
-    return render(request, "partituras/biblioteca.html", {"partituras": partituras})
+def partes_sueltas(request):
+    """Partituras propias sin obra — huérfanas por diseño (las partes
+    nuevas siempre se cargan desde la ficha de una obra, ver subir; una
+    parte sólo queda suelta si se la separa o si se borró su obra).
+    Página de limpieza: desde acá se puede editar o borrar cada una."""
+    partituras = Partitura.objects.filter(owner=request.user, obra__isnull=True)
+    return render(request, "partituras/partes_sueltas.html", {"partituras": partituras})
 
 
 @login_required
 @require_POST
 def borrar_partitura(request, pk):
     """Borra una partitura y todo lo que cuelga de ella (páginas, sistemas,
-    barras, compases — todo en cascada por FK). Los archivos (original y
-    normalizado) no se borran solos con el modelo (Django no lo hace por
-    default), así que se borran del storage a mano antes. Si estaba
-    vinculada a una obra como "parte a seguir", esa obra no se toca —
-    Partitura.obra es SET_NULL, y el navegador ya sabe elegir otra parte
-    disponible (o ninguna) si la que seguía desaparece."""
+    barras, compases — todo en cascada por FK); los archivos se limpian
+    solos vía señal post_delete (ver signals.py), no hace falta acá.
+    Vuelve a la ficha de la obra si estaba adjunta, o a partes sueltas si no."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
     titulo = str(partitura)
-    if partitura.archivo_original:
-        partitura.archivo_original.delete(save=False)
-    if partitura.archivo_normalizado:
-        partitura.archivo_normalizado.delete(save=False)
+    obra_id = partitura.obra_id
     partitura.delete()
     messages.success(request, f'Se borró "{titulo}".')
-    return redirect("partituras:biblioteca")
+    if obra_id:
+        return redirect("partituras:obra_detalle", pk=obra_id)
+    return redirect("partituras:partes_sueltas")
 
 
 @login_required
@@ -132,27 +137,35 @@ def editar_partitura(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, f'Se guardaron los cambios de "{partitura}".')
-            return redirect("partituras:biblioteca")
+            if partitura.obra_id:
+                return redirect("partituras:obra_detalle", pk=partitura.obra_id)
+            return redirect("partituras:partes_sueltas")
     else:
         form = PartituraEditForm(instance=partitura)
     return render(request, "partituras/editar.html", {"form": form, "partitura": partitura})
 
 
 @login_required
-def subir(request):
+def subir(request, pk):
+    """Cargar una parte (PDF) — siempre asociada a una obra, no hay carga
+    suelta (ver notas de diseño: "la biblioteca es una biblioteca de
+    obras"). Título/compositor se sugieren desde la obra (una parte
+    normalmente los comparte), editables igual si hace falta."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
     if request.method == "POST":
         form = PartituraForm(request.POST, request.FILES)
         if form.is_valid():
             partitura = form.save(commit=False)
             partitura.owner = request.user
+            partitura.obra = obra
             partitura.save()
             return redirect("partituras:detalle", pk=partitura.pk)
     else:
-        initial = {}
+        initial = {"titulo": obra.titulo, "compositor": obra.compositor}
         if request.user.instrumento_principal_id:
             initial["instrumento"] = request.user.instrumento_principal_id
         form = PartituraForm(initial=initial)
-    return render(request, "partituras/subir.html", {"form": form})
+    return render(request, "partituras/subir.html", {"form": form, "obra": obra})
 
 
 def _contexto_estado(request, partitura):
@@ -203,12 +216,196 @@ def obras(request):
 def obra_detalle(request, pk):
     """Ficha de una obra: sus datos y las partes (partituras) que tiene
     adjuntas, más un formulario para adjuntar otra partitura propia todavía
-    sin obra."""
+    sin obra. También el alta/reemplazo del audio de referencia (para
+    sincronizar tiempo_inicio — ver sincronizar_audio)."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    if request.method == "POST" and request.FILES.get("audio"):
+        if obra.audio:
+            obra.audio.delete(save=False)
+        obra.audio = request.FILES["audio"]
+        obra.save(update_fields=["audio"])
+        messages.success(request, 'Se actualizó el audio de referencia.')
+        return redirect("partituras:obra_detalle", pk=pk)
     return render(request, "partituras/obra_detalle.html", {
         "obra": obra,
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
+
+
+@login_required
+@require_POST
+def borrar_obra(request, pk):
+    """Borra la obra Y todas sus partes DE VERDAD (no sólo las desvincula
+    como separar/gestionar_obra — Partitura.obra es SET_NULL ahí a
+    propósito, así que hay que borrar cada partitura a mano acá, si no
+    obra.delete() sólo las desvincularía). Los archivos (de cada partitura
+    y el audio de la obra) se limpian solos vía señal post_delete (ver
+    signals.py). La confirmación de este botón (ver obra_detalle.html) ya
+    le avisa al usuario cuántas partes se van a perder antes de llegar acá."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    titulo = str(obra)
+    for partitura in obra.partituras.all():
+        partitura.delete()
+    obra.delete()
+    messages.success(request, f'Se borró "{titulo}" y sus partes.')
+    return redirect("partituras:obras")
+
+
+@login_required
+def sincronizar_audio(request, pk):
+    """Pantalla para completar Segmento.tiempo_inicio (el tiempo REAL, no el
+    calculado) escuchando el audio de referencia y marcando con el teclado
+    dónde arranca cada fila del itinerario — en vez de tener que escribir
+    segundos a mano. Incluye la fila de cierre (compas_desde vacío): marcar
+    su tiempo_inicio es marcar dónde termina la obra de verdad."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    if not obra.audio:
+        messages.warning(request, 'Esta obra todavía no tiene un audio de referencia cargado.')
+        return redirect("partituras:obra_detalle", pk=pk)
+
+    segmentos = list(Segmento.objects.filter(obra=obra).order_by("orden"))
+    resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
+
+    filas = []
+    for seg in segmentos:
+        info = resueltos_por_id.get(seg.id, {})
+        filas.append({
+            "segmento": seg,
+            "indicacion_compas": info.get("indicacion_compas"),
+            "tiempo_inicio_calculado": seg.tiempo_inicio_calculado,
+            "tiempo_inicio_segundos": seg.tiempo_inicio.total_seconds() if seg.tiempo_inicio is not None else None,
+        })
+
+    partes_disponibles = _partes_disponibles(obra)
+    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
+
+    return render(request, "partituras/sincronizar_audio.html", {
+        "obra": obra,
+        "filas": filas,
+        "tiene_score": partitura_seguida is not None,
+        "partitura_seguida": partitura_seguida,
+        "partes_disponibles": partes_disponibles,
+    })
+
+
+@login_required
+@require_POST
+def marcar_tiempo_segmento(request, pk):
+    """Guarda (o borra) el tiempo_inicio REAL de una fila puntual — se llama
+    por fetch() desde sincronizar_audio.html en cada marca/deshacer, no hay
+    pantalla ni redirect asociado."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    segmento = get_object_or_404(Segmento, pk=request.POST.get("segmento_id"), obra=obra)
+
+    segundos_raw = request.POST.get("segundos")
+    if segundos_raw in (None, ""):
+        segmento.tiempo_inicio = None
+    else:
+        try:
+            segundos = float(segundos_raw)
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "segundos inválido"}, status=400)
+        segmento.tiempo_inicio = timedelta(seconds=max(segundos, 0))
+    segmento.save(update_fields=["tiempo_inicio"])
+
+    return JsonResponse({
+        "ok": True,
+        "segmento_id": segmento.id,
+        "tiempo_inicio": str(segmento.tiempo_inicio) if segmento.tiempo_inicio is not None else None,
+    })
+
+
+@login_required
+def sincronizar_compases(request, pk):
+    """Pantalla de sincronización FINA: tap compás a compás (cada ocurrencia,
+    repeticiones incluidas — ver MarcaTiempoCompas) en vez de una marca por
+    fila del itinerario (ver sincronizar_audio). Convive con esa pantalla:
+    no la reemplaza, construir_plan prioriza estas marcas donde existen y
+    cae en las de Segmento donde no las haya."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    if not obra.audio:
+        messages.warning(request, 'Esta obra todavía no tiene un audio de referencia cargado.')
+        return redirect("partituras:obra_detalle", pk=pk)
+
+    entradas, _completo = compases_desenrollados(obra)
+    if not entradas:
+        messages.warning(request, 'Esta obra todavía no tiene compases navegables en el itinerario.')
+        return redirect("partituras:obra_detalle", pk=pk)
+    for entrada in entradas:
+        tiempo_inicio = entrada["tiempo_inicio"]
+        entrada["tiempo_inicio_segundos"] = tiempo_inicio.total_seconds() if tiempo_inicio is not None else None
+
+    partes_disponibles = _partes_disponibles(obra)
+    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
+
+    return render(request, "partituras/sincronizar_compases.html", {
+        "obra": obra,
+        "entradas": entradas,
+        "tiene_score": partitura_seguida is not None,
+        "partitura_seguida": partitura_seguida,
+        "partes_disponibles": partes_disponibles,
+    })
+
+
+@login_required
+@require_POST
+def marcar_tiempo_compas(request, pk):
+    """Guarda (o borra) el tiempo real de UNA ocurrencia de compás puntual
+    (compas+pasada) — se llama por fetch() desde sincronizar_compases.html
+    en cada marca/deshacer/edición manual, no hay pantalla ni redirect
+    asociado (mismo criterio que marcar_tiempo_segmento)."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        compas = int(request.POST.get("compas"))
+        pasada = int(request.POST.get("pasada"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "compás/pasada inválido"}, status=400)
+
+    segundos_raw = request.POST.get("segundos")
+    if segundos_raw in (None, ""):
+        MarcaTiempoCompas.objects.filter(obra=obra, compas=compas, pasada=pasada).delete()
+        return JsonResponse({"ok": True, "compas": compas, "pasada": pasada, "tiempo_inicio": None})
+
+    try:
+        segundos = float(segundos_raw)
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "segundos inválido"}, status=400)
+    marca, _creada = MarcaTiempoCompas.objects.update_or_create(
+        obra=obra, compas=compas, pasada=pasada,
+        defaults={"tiempo_inicio": timedelta(seconds=max(segundos, 0))},
+    )
+    return JsonResponse({
+        "ok": True, "compas": compas, "pasada": pasada,
+        "tiempo_inicio": str(marca.tiempo_inicio),
+    })
+
+
+@login_required
+@require_POST
+def desplazar_tiempos_compases(request, pk):
+    """Corre una fracción de segundos las MarcaTiempoCompas de la obra — ver
+    desplazar_marcas_compas. "compases" (POST, opcional) es una lista
+    "compas:pasada,compas:pasada,..." — la selección múltiple hecha en
+    sincronizar_compases.html; sin ese parámetro, se corren TODAS."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        delta = float(request.POST.get("delta_segundos"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "delta inválido"}, status=400)
+
+    objetivos = None
+    compases_raw = request.POST.get("compases")
+    if compases_raw:
+        objetivos = []
+        for par in compases_raw.split(","):
+            try:
+                c, p = par.split(":")
+                objetivos.append((int(c), int(p)))
+            except ValueError:
+                return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
+
+    n = desplazar_marcas_compas(obra, delta, objetivos=objetivos)
+    return JsonResponse({"ok": True, "n": n})
 
 
 @login_required
@@ -537,6 +734,7 @@ def navegador_obra(request, pk):
         "velocidad_guardada": pref.velocidad if pref else 100,
         "compases_al_aire_guardado": pref.compases_al_aire if pref else 1,
         "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
+        "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else False,
     })
 
 
@@ -557,8 +755,9 @@ def guardar_preferencias_obra(request, pk):
         "hasta_compas": (request.POST.get("hasta_compas") or "")[:20],
         "hasta_pasada": _leer_entero(request.POST.get("hasta_pasada"), 1),
         "loop": request.POST.get("loop") == "on",
-        "velocidad": max(20, min(120, _leer_entero(request.POST.get("velocidad"), 100))),
+        "velocidad": max(20, min(150, _leer_entero(request.POST.get("velocidad"), 100))),
         "compases_al_aire": max(0, min(4, _leer_entero(request.POST.get("compases_al_aire"), 1))),
+        "ejecutar_con_audio": request.POST.get("ejecutar_con_audio") == "on",
     }
     PreferenciaObra.objects.update_or_create(usuario=request.user, obra=obra, defaults=defaults)
 
@@ -613,7 +812,20 @@ def plan_obra(request, pk):
         obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
     )
-    return JsonResponse({"pulsos": pulsos, "completo": completo})
+    # Ancla real para "Ejecutar con audio": el tiempo real del primer pulso
+    # del plan (ver tiempo_real_ancla — prioriza MarcaTiempoCompas sobre el
+    # borde de fila, misma prioridad que usa construir_plan) — de ahí en
+    # más, el cliente suma duracion_real (ya viene en cada pulso) para saber
+    # a qué segundo del audio corresponde cualquier otro pulso del plan, sin
+    # tener que resolverlo pulso a pulso acá.
+    primer_pulso_tiempo_real = None
+    if pulsos:
+        primer_pulso_tiempo_real = tiempo_real_ancla(obra, pulsos[0]["segmento_id"], pulsos[0]["compas"])
+    return JsonResponse({
+        "pulsos": pulsos,
+        "completo": completo,
+        "primer_pulso_tiempo_real": primer_pulso_tiempo_real,
+    })
 
 
 @login_required

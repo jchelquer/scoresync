@@ -19,7 +19,11 @@
           {% endfor %}
           <div class="d-flex gap-2 mt-2">
             <button type="submit" class="btn btn-ss flex-fill">{% translate "Guardar" %}</button>
-            <a href="{% url 'partituras:biblioteca' %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+            {% if partitura.obra %}
+            <a href="{% url 'partituras:obra_detalle' partitura.obra_id %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+            {% else %}
+            <a href="{% url 'partituras:partes_sueltas' %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+            {% endif %}
           </div>
         </form>
       </div>
