@@ -2,6 +2,21 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.4.0"
+  date: "2026-07-20"
+  changes:
+    - type: nuevo
+      text: "El navegador recuerda, por usuario y por obra, el rango desde/hasta, loop, velocidad, compases al aire y la última parte elegida — se autoguarda solo (sin botón) cada vez que se cambia algo, y precompleta todo eso la próxima vez que se entra en vez de arrancar de cero. Un link explícito (ej. Anterior/Siguiente, uno compartido) sigue ganándole a lo guardado."
+    - type: nuevo
+      text: "El zoom preferido también se recuerda, pero por parte (no por obra) — cada parte puede necesitar un nivel distinto según su propia diagramación."
+- version: "1.3.5"
+  date: "2026-07-20"
+  changes:
+    - type: mejorado
+      text: "El cambio de ventana en la ejecución con score ya no se adelanta 1 pulso antes de que termine el último compás visible — espera a que ese compás realmente termine de sonar antes de saltar a la próxima."
+    - type: corregido
+      text: "Un salto (a coda, repetición, etc.) que se anunciaba estando todavía en el primer sistema de una ventana recién mostrada no tenía dónde pintar la vista previa del próximo compás — ahora, si no hay sistema anterior disponible, usa el segundo en su lugar."
+
 - version: "1.3.4"
   date: "2026-07-20"
   changes:

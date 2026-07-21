@@ -206,12 +206,12 @@
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
   <div class="d-flex align-items-center gap-2" id="control-compases-aire">
     <label for="compases-aire" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
-    <input type="number" id="compases-aire" min="0" max="4" step="1" value="1" class="form-control form-control-sm" style="width: 3.5rem;">
+    <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
   </div>
   <div class="d-flex align-items-center gap-2" id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
-    <input type="range" id="velocidad-slider" min="20" max="120" step="5" value="100" style="width: 6.5rem;">
-    <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">100%</span>
+    <input type="range" id="velocidad-slider" min="20" max="120" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
+    <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
   </div>
   <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
@@ -379,8 +379,53 @@
         elapsedAlPausar = acumulados[idxMostrado];
         mostrarPulso(pulsos[idxMostrado]); // refresca el bpm mostrado a la nueva velocidad
       }
+      programarGuardadoPreferencias();
     });
   }
+
+  // ── Autoguardado de preferencias (rango, loop, velocidad, compases al
+  // aire, zoom, parte) — por usuario y por obra (el zoom además por
+  // parte, ver guardar_preferencias_obra). Sin botón: se dispara solo,
+  // con un pequeño debounce para no mandar un POST por cada tecla, cada
+  // vez que algo cambia. Silencioso a propósito (catch vacío): si falla
+  // un guardado no hay que interrumpir ni avisar nada, sólo significa que
+  // la próxima visita arranca con los valores de siempre en vez de los
+  // últimos usados.
+  function getCookie(nombre) {
+    const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+  let guardarPrefTimeout = null;
+  function programarGuardadoPreferencias() {
+    if (guardarPrefTimeout) clearTimeout(guardarPrefTimeout);
+    guardarPrefTimeout = setTimeout(guardarPreferencias, 800);
+  }
+  function guardarPreferencias() {
+    if (!formRango) return;
+    const datosForm = new FormData(formRango);
+    const params = new URLSearchParams();
+    ['desde_compas', 'desde_pasada', 'hasta_compas', 'hasta_pasada', 'parte'].forEach(campo => {
+      params.set(campo, datosForm.get(campo) || '');
+    });
+    params.set('loop', (loopEl && loopEl.checked) ? 'on' : '');
+    params.set('velocidad', velocidadSlider ? velocidadSlider.value : '100');
+    params.set('compases_al_aire', compasesAireInput ? compasesAireInput.value : '1');
+    params.set('zoom', String(nivelZoom));
+    fetch('{% url "partituras:guardar_preferencias_obra" obra.pk %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCookie('csrftoken'),
+      },
+      body: params.toString(),
+    }).catch(() => {});
+  }
+  // Delegado en el form entero: cubre desde/hasta compás y pasada (texto y
+  // número) y el checkbox de Loop con un solo listener, sin tener que
+  // engancharse a cada campo por separado.
+  if (formRango) formRango.addEventListener('input', programarGuardadoPreferencias);
+  if (compasesAireInput) compasesAireInput.addEventListener('input', programarGuardadoPreferencias);
+
   let pulsosPorCompasMarcados = 0; // para no regenerar las marcas si no cambió el compás
 
   // El plan que manda el servidor ya viene a nivel de PULSO (no de
@@ -730,7 +775,7 @@
   let scoreGeometria = null; // { porCompas: {numero: {...,pagina_numero,offset,repeticiones}}, porPagina: {numero: pagina} }
   let ventanaActiva = null; // { pagina_numero, sistemas: [...], top, bottom, img, pagina, escalaRender }
   const imagenesPorPagina = {}; // numero de página -> HTMLImageElement ya cargada (caché)
-  let nivelZoom = 1;
+  let nivelZoom = {{ nivel_zoom_guardado|default:1 }};
   // ZOOM_MIN < 1 alcanza a propósito: alejar más allá del ancho completo
   // deja sobrar ancho sin usar, pero cada sistema ocupa menos alto en
   // pantalla — así entran más sistemas en la ventana (ver
@@ -740,7 +785,12 @@
   // preview) — el zoom recalcula la ventana con esto mismo como ancla, no
   // vuelve a decidir nada de la ejecución (ver repintarScore).
   let ultimoEntradaResaltar = null;
-  let ultimoEnUltimoCompas = false;
+  // true cuando el PRÓXIMO compás real no entra en la ventana activa — no
+  // exige que el compás actual esté en el último sistema visible (un tramo
+  // corto puede saltar casi apenas se entra a una ventana nueva, todavía en
+  // su primer sistema); ver renderizarPreviewSync, que decide dónde pintar
+  // el aviso según en qué sistema de la ventana esté el compás actual.
+  let ultimoMostrarPreview = false;
   let ultimoSiguiente = null;
   let ultimoPulso = 1;
   let ultimoPulsosPorCompas = 1;
@@ -1154,22 +1204,40 @@
     ctx.fillText(String(cuenta), cx, cy + 1);
   }
 
-  function renderizarPreviewSync(ventana, entradaSiguiente) {
+  function renderizarPreviewSync(ventana, entradaActual, entradaSiguiente) {
     if (!entradaSiguiente || ventana.sistemas.length < 2) return;
     const pagina = ventana.pagina, img = ventana.img;
     const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
     const escala = ventana.escalaRender;
 
-    const penultimo = ventana.sistemas[ventana.sistemas.length - 2];
-    const ultimoDeVentana = ventana.sistemas[ventana.sistemas.length - 1];
-    const idxPenultimo = pagina.sistemas.findIndex(s => s.orden === penultimo.orden);
-    const anterior = pagina.sistemas[idxPenultimo - 1] || null;
-    const topPenultimo = anterior ? (anterior.y + anterior.height + penultimo.y) / 2 : pagina.margen_y0;
-    const bottomPenultimo = (penultimo.y + penultimo.height + ultimoDeVentana.y) / 2;
+    // El aviso se pinta sobre un sistema ADYACENTE al que se está leyendo
+    // ahora (nunca sobre él, taparía la lectura) — por default el de ANTES
+    // del último de la ventana (el caso normal: el salto se anuncia estando
+    // en el último sistema visible). Si en cambio el compás actual está en
+    // el PRIMER sistema de la ventana (un tramo corto puede saltar casi
+    // apenas se entra a una ventana nueva, antes de llegar a su fondo), no
+    // hay "antes" disponible dentro de esta ventana — se usa el sistema
+    // siguiente (el segundo) en su lugar.
+    const compasActual = pagina.compases.find(c => c.numero === entradaActual.numero);
+    const idxActualEnVentana = compasActual
+      ? ventana.sistemas.findIndex(s => s.orden === compasActual.sistema_orden) : -1;
+    const idxAviso = idxActualEnVentana === 0 ? 1 : ventana.sistemas.length - 2;
+    const sistemaAviso = ventana.sistemas[idxAviso];
+    if (!sistemaAviso) return;
 
-    const py0 = (topPenultimo - ventana.top) * img.naturalHeight * escala;
-    const py1 = (bottomPenultimo - ventana.top) * img.naturalHeight * escala;
+    const idxEnPagina = pagina.sistemas.findIndex(s => s.orden === sistemaAviso.orden);
+    const anteriorEnPagina = pagina.sistemas[idxEnPagina - 1] || null;
+    const siguienteEnPagina = pagina.sistemas[idxEnPagina + 1] || null;
+    const topAviso = anteriorEnPagina
+      ? (anteriorEnPagina.y + anteriorEnPagina.height + sistemaAviso.y) / 2
+      : pagina.margen_y0;
+    const bottomAviso = siguienteEnPagina
+      ? (sistemaAviso.y + sistemaAviso.height + siguienteEnPagina.y) / 2
+      : pagina.margen_y1;
+
+    const py0 = (topAviso - ventana.top) * img.naturalHeight * escala;
+    const py1 = (bottomAviso - ventana.top) * img.naturalHeight * escala;
     const alto = Math.max(py1 - py0, 1);
 
     ctx.fillStyle = 'rgba(20, 20, 20, 0.92)';
@@ -1212,7 +1280,7 @@
     if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
       renderizarCompasActualSync(ventanaActiva, ultimoEntradaResaltar, ultimoFracIni, ultimoFracFin);
     }
-    if (ultimoEnUltimoCompas) renderizarPreviewSync(ventanaActiva, ultimoSiguiente);
+    if (ultimoMostrarPreview) renderizarPreviewSync(ventanaActiva, ultimoEntradaResaltar, ultimoSiguiente);
     // El cursor (o, en su lugar, el número de la cuenta al aire) va SIEMPRE
     // como capa más arriba — si se dibujara antes que el preview, éste
     // (que pinta un fondo sobre el penúltimo sistema) podía taparlo cuando
@@ -1246,40 +1314,27 @@
       }
       const siguiente = numeroSiguiente !== null ? (scoreGeometria.porCompas[numeroSiguiente] || null) : null;
 
-      // ¿Este es el último pulso del compás actual? Si además el compás
-      // siguiente ya no entra en la ventana activa, el cambio de ventana
-      // se adelanta a AHORA (1 pulso antes de que arranque ese compás) en
-      // vez de esperar a que ese compás ya esté sonando.
-      const esUltimoPulsoDelCompas = planCargado &&
-        (idxMostrado + 1 >= pulsos.length || pulsos[idxMostrado + 1].compas !== numeroActual);
-
-      let ancla = actual;
-      let necesitaVentanaNueva = !ventanaContieneCompas(ventanaActiva, actual);
-      let saltoAnticipado = false;
-      if (!necesitaVentanaNueva && esUltimoPulsoDelCompas && siguiente && !ventanaContieneCompas(ventanaActiva, siguiente)) {
-        necesitaVentanaNueva = true;
-        ancla = siguiente;
-        saltoAnticipado = true;
-      }
+      // El cambio de ventana es reactivo, no anticipado: se espera a que el
+      // compás actual realmente no entre más en la ventana vigente (o sea,
+      // a que YA esté sonando) antes de saltar — antes se adelantaba 1
+      // pulso, pero cortaba la lectura del último sistema a mitad de
+      // camino; mejor dejarlo terminar tranquilo y saltar recién cuando
+      // haga falta de verdad.
+      const ancla = actual;
+      const necesitaVentanaNueva = !ventanaContieneCompas(ventanaActiva, actual);
 
       if (necesitaVentanaNueva) await activarVentana(ancla);
       if (!ventanaActiva) return;
 
-      // En el pulso del salto anticipado, "actual" ya no pertenece a la
-      // página que se está mostrando (la ventana ya saltó 1 pulso antes,
-      // ver arriba) — ahí se resalta "siguiente", que es lo que
-      // realmente quedó a la vista, no un compás que ya no se ve.
-      ultimoEntradaResaltar = saltoAnticipado ? siguiente : actual;
+      ultimoEntradaResaltar = actual;
 
       // ¿Sólo se va a tocar una porción de este compás? Puede ser el primer
       // o el último del rango pedido (si desde_pulso/hasta_pulso lo acotan)
       // o cualquiera en el MEDIO del plan cuya fila real corte a mitad de
       // pulso sin que otra la siga cubriendo (ver coberturaCompasEnPosicion,
       // que fusiona ocurrencias consecutivas del mismo número antes de
-      // decidir si falta algo). En el salto anticipado el índice a mirar es
-      // el del PRÓXIMO tick del plan (el que arranca "siguiente"), no el
-      // que se está mostrando ahora.
-      const idxResaltado = saltoAnticipado ? idxMostrado + 1 : idxMostrado;
+      // decidir si falta algo).
+      const idxResaltado = idxMostrado;
       ultimoFracIni = 0;
       ultimoFracFin = 1;
       if (planCargado) {
@@ -1288,21 +1343,15 @@
         ultimoFracFin = fracFin;
       }
 
-      // El preview aparece sólo en el ÚLTIMO COMPÁS de la ventana (no
-      // durante todo el último sistema, que puede tener varios compases) —
-      // "último compás" es el que cierra el último sistema mostrado, o el
-      // último número que cubre si es un silencio de varios compases.
-      const sistemaUltimoVentana = ventanaActiva.sistemas[ventanaActiva.sistemas.length - 1];
-      const compasesUltimoSistema = ventanaActiva.pagina.compases
-        .filter(c => c.sistema_orden === sistemaUltimoVentana.orden)
-        .sort((a, b) => a.x - b.x);
-      const ultimoCompasDeVentana = compasesUltimoSistema[compasesUltimoSistema.length - 1] || null;
-      const ultimoNumeroDeVentana = ultimoCompasDeVentana
-        ? ultimoCompasDeVentana.numero + (ultimoCompasDeVentana.repeticiones || 1) - 1
-        : null;
-      ultimoEnUltimoCompas = ventanaActiva.sistemas.length > 1 &&
+      // El preview se muestra cuando el PRÓXIMO compás real no entra en la
+      // ventana activa — sin importar en qué sistema de la ventana esté el
+      // compás actual (antes exigía que fuera el último sistema visible,
+      // pero un tramo corto puede saltar casi apenas se entra a una
+      // ventana nueva, todavía en su primer sistema, y ahí no había dónde
+      // avisar). renderizarPreviewSync decide dónde pintarlo según eso.
+      ultimoMostrarPreview = ventanaActiva.sistemas.length > 1 && !!siguiente &&
         actual.pagina_numero === ventanaActiva.pagina_numero &&
-        ultimoNumeroDeVentana !== null && numeroActual === ultimoNumeroDeVentana;
+        !ventanaContieneCompas(ventanaActiva, siguiente);
       ultimoSiguiente = siguiente;
       // Sin datos de pulso (llamada inicial, antes de arrancar la
       // ejecución en tiempo real) el punto simplemente se centra en el
@@ -1329,6 +1378,7 @@
       await activarVentana(ultimoEntradaResaltar);
     }
     repintarScore();
+    programarGuardadoPreferencias();
   }
   if (btnZoomMas) btnZoomMas.addEventListener('click', () => reajustarZoom(Math.min(ZOOM_MAX, nivelZoom + ZOOM_PASO)));
   if (btnZoomMenos) btnZoomMenos.addEventListener('click', () => reajustarZoom(Math.max(ZOOM_MIN, nivelZoom - ZOOM_PASO)));

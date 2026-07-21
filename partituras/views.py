@@ -13,7 +13,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .forms import ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
-from .models import Barra, Compas, Obra, Pagina, Partitura, Segmento, Sistema
+from .models import Barra, Compas, Obra, Pagina, Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
@@ -355,13 +355,15 @@ def _partes_disponibles(obra):
     return [p for p in obra.partituras.all() if p.paginas.filter(compases_confirmados=True).exists()]
 
 
-def _partitura_seguida(obra, request):
+def _partitura_seguida(obra, request, pref=None):
     """La parte de esta obra que se usa para mostrar el score durante la
     ejecución. Prioridad: (1) la elegida explícitamente por querystring
     (?parte=<id>), si es válida — así el selector del navegador puede
-    cambiarla; (2) la propia del usuario logueado (Partitura.owner), el
-    default más útil: "mi parte" sin tener que elegir nada; (3) la primera
-    disponible, si ninguna de las anteriores aplica."""
+    cambiarla; (2) la última elegida explícitamente en una visita anterior
+    (PreferenciaObra.parte_seguida), si sigue disponible; (3) la propia del
+    usuario logueado (Partitura.owner), el default más útil: "mi parte" sin
+    tener que elegir nada; (4) la primera disponible, si ninguna de las
+    anteriores aplica."""
     candidatas = _partes_disponibles(obra)
     if not candidatas:
         return None
@@ -370,6 +372,10 @@ def _partitura_seguida(obra, request):
         elegida = next((p for p in candidatas if p.id == partitura_id), None)
         if elegida:
             return elegida
+    if pref and pref.parte_seguida_id:
+        guardada = next((p for p in candidatas if p.id == pref.parte_seguida_id), None)
+        if guardada:
+            return guardada
     propia = next((p for p in candidatas if p.owner_id == request.user.id), None)
     if propia:
         return propia
@@ -398,13 +404,27 @@ def navegador_obra(request, pk):
 
     resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
 
+    # Preferencias guardadas de este usuario para esta obra (rango, loop,
+    # velocidad, compases al aire, última parte elegida) — se usan como
+    # segundo nivel de default, por debajo de la querystring: un link
+    # explícito (Anterior/Siguiente, uno compartido) siempre gana; si la
+    # clave ni siquiera viene en la URL, se completa con lo guardado en vez
+    # de arrancar de cero. Se autoguardan solas desde el JS del navegador
+    # (ver guardar_preferencias_obra), no hay botón de "guardar" acá.
+    pref = PreferenciaObra.objects.filter(usuario=request.user, obra=obra).first()
+
     # desde_compas/hasta_compas aceptan la misma notación "compás,pulso" que
     # desde_texto/hasta_texto en el itinerario (ver parsear_compas_pulso) —
     # el texto crudo se conserva para reponerlo en el input y para armar las
     # URLs de anterior/siguiente; el compás ya parseado (entero) sigue
     # siendo lo que usan buscar_posicion/avanzar_compas/retroceder_compas,
     # que trabajan a nivel de compás, no de pulso.
-    desde_compas_raw = request.GET.get("desde_compas") or ""
+    if "desde_compas" in request.GET:
+        desde_compas_raw = request.GET.get("desde_compas") or ""
+    elif pref and pref.desde_compas:
+        desde_compas_raw = pref.desde_compas
+    else:
+        desde_compas_raw = ""
     try:
         desde_compas, desde_pulso = parsear_compas_pulso(desde_compas_raw, 1)
     except ValueError:
@@ -413,15 +433,29 @@ def navegador_obra(request, pk):
         desde_compas = navegables[0].compas_desde
         desde_pulso = None
         desde_compas_raw = str(desde_compas)
-    desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
+    if "desde_pasada" in request.GET:
+        desde_pasada = _leer_entero(request.GET.get("desde_pasada"), 1)
+    else:
+        desde_pasada = pref.desde_pasada if pref else 1
 
-    hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    if "hasta_compas" in request.GET:
+        hasta_compas_raw = request.GET.get("hasta_compas") or ""
+    elif pref and pref.hasta_compas:
+        hasta_compas_raw = pref.hasta_compas
+    else:
+        hasta_compas_raw = ""
     try:
         hasta_compas, hasta_pulso = parsear_compas_pulso(hasta_compas_raw, None)
     except ValueError:
         hasta_compas, hasta_pulso = None, None
-    hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
-    loop = request.GET.get("loop") == "on"
+    if "hasta_pasada" in request.GET:
+        hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
+    else:
+        hasta_pasada = pref.hasta_pasada if pref else 1
+    if "loop" in request.GET:
+        loop = request.GET.get("loop") == "on"
+    else:
+        loop = pref.loop if pref else False
 
     pos_desde = buscar_posicion(obra, desde_compas, desde_pasada) or (navegables[0], navegables[0].compas_desde)
     if hasta_compas_raw:
@@ -448,7 +482,23 @@ def navegador_obra(request, pk):
     anterior = retroceder_compas(obra, segmento_actual, compas_actual)
 
     partes_disponibles = _partes_disponibles(obra)
-    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
+    partitura_seguida = _partitura_seguida(obra, request, pref) if partes_disponibles else None
+
+    # Si vino una parte elegida A PROPÓSITO por querystring, se recuerda
+    # para la próxima visita — no en cada request (sería reescribir la
+    # misma fila en cada Anterior/Siguiente sin necesidad), sólo cuando
+    # realmente hay una elección explícita en esta URL.
+    parte_id_qs = _leer_entero(request.GET.get("parte"), None)
+    if parte_id_qs and partitura_seguida and partitura_seguida.id == parte_id_qs:
+        PreferenciaObra.objects.update_or_create(
+            usuario=request.user, obra=obra,
+            defaults={"parte_seguida": partitura_seguida},
+        )
+
+    pref_parte = (
+        PreferenciaParte.objects.filter(usuario=request.user, partitura=partitura_seguida).first()
+        if partitura_seguida else None
+    )
 
     base_params = {
         "desde_compas": desde_compas_raw, "desde_pasada": desde_pasada,
@@ -484,7 +534,50 @@ def navegador_obra(request, pk):
         "tiene_score": partitura_seguida is not None,
         "partitura_seguida": partitura_seguida,
         "partes_disponibles": partes_disponibles,
+        "velocidad_guardada": pref.velocidad if pref else 100,
+        "compases_al_aire_guardado": pref.compases_al_aire if pref else 1,
+        "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
     })
+
+
+@login_required
+@require_POST
+def guardar_preferencias_obra(request, pk):
+    """Autoguardado (sin botón, sin redirect) de las preferencias de
+    ejecución del usuario para esta obra — rango, loop, velocidad,
+    compases al aire (PreferenciaObra) y, si viene zoom+parte, también el
+    zoom preferido para esa parte puntual (PreferenciaParte). Lo llama el
+    JS del navegador con un pequeño debounce cada vez que el usuario
+    cambia algo — es un POST "silencioso" desde fetch(), no hay pantalla
+    ni mensaje asociado."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    defaults = {
+        "desde_compas": (request.POST.get("desde_compas") or "")[:20],
+        "desde_pasada": _leer_entero(request.POST.get("desde_pasada"), 1),
+        "hasta_compas": (request.POST.get("hasta_compas") or "")[:20],
+        "hasta_pasada": _leer_entero(request.POST.get("hasta_pasada"), 1),
+        "loop": request.POST.get("loop") == "on",
+        "velocidad": max(20, min(120, _leer_entero(request.POST.get("velocidad"), 100))),
+        "compases_al_aire": max(0, min(4, _leer_entero(request.POST.get("compases_al_aire"), 1))),
+    }
+    PreferenciaObra.objects.update_or_create(usuario=request.user, obra=obra, defaults=defaults)
+
+    parte_id = _leer_entero(request.POST.get("parte"), None)
+    zoom_raw = request.POST.get("zoom")
+    if parte_id and zoom_raw:
+        try:
+            nivel_zoom = float(zoom_raw)
+        except ValueError:
+            nivel_zoom = None
+        if nivel_zoom is not None:
+            partitura = Partitura.objects.filter(pk=parte_id, obra=obra).first()
+            if partitura:
+                PreferenciaParte.objects.update_or_create(
+                    usuario=request.user, partitura=partitura,
+                    defaults={"nivel_zoom": max(0.4, min(3, nivel_zoom))},
+                )
+
+    return JsonResponse({"ok": True})
 
 
 @login_required

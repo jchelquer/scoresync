@@ -18,6 +18,7 @@ urlpatterns = [
     path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
     path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),
     path('obras/<int:pk>/navegador/', views.navegador_obra, name='navegador_obra'),
+    path('obras/<int:pk>/preferencias/', views.guardar_preferencias_obra, name='guardar_preferencias_obra'),
     path('obras/<int:pk>/plan/', views.plan_obra, name='plan_obra'),
     path('obras/<int:pk>/score-geometria/', views.score_geometria_obra, name='score_geometria_obra'),
 

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Barra, Compas, Obra, Pagina, Segmento, Sistema, Partitura
+from .models import Barra, Compas, Obra, Pagina, PreferenciaObra, PreferenciaParte, Segmento, Sistema, Partitura
 
 
 @admin.register(Obra)
@@ -43,3 +43,15 @@ class SistemaAdmin(admin.ModelAdmin):
 class CompasAdmin(admin.ModelAdmin):
     list_display = ('sistema', 'numero', 'x', 'y', 'width', 'height', 'origen', 'confirmado')
     list_filter = ('origen', 'confirmado')
+
+
+@admin.register(PreferenciaObra)
+class PreferenciaObraAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'obra', 'desde_compas', 'hasta_compas', 'loop', 'velocidad', 'compases_al_aire', 'parte_seguida', 'actualizado')
+    search_fields = ('usuario__username', 'obra__titulo')
+
+
+@admin.register(PreferenciaParte)
+class PreferenciaParteAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'partitura', 'nivel_zoom', 'actualizado')
+    search_fields = ('usuario__username', 'partitura__titulo')

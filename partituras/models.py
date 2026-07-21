@@ -353,3 +353,54 @@ class Compas(models.Model):
 
     def __str__(self):
         return f"Compás {self.numero} — {self.sistema}"
+
+
+class PreferenciaObra(models.Model):
+    """Cómo un usuario en particular prefiere ver/ejecutar una obra en el
+    navegador — rango, loop, velocidad, compases al aire y qué parte sigue.
+    Se autoguarda solo (sin botón) cada vez que cambia algo, para
+    precompletar el navegador la próxima vez en vez de arrancar de cero.
+    Separado de PreferenciaParte porque estos campos no dependen de qué
+    parte se esté mirando (el rango que querés tocar es el mismo tramo de
+    la obra sea cual sea la parte)."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preferencias_obra')
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='preferencias_usuario')
+    desde_compas = models.CharField(max_length=20, blank=True)
+    desde_pasada = models.PositiveIntegerField(default=1)
+    hasta_compas = models.CharField(max_length=20, blank=True)
+    hasta_pasada = models.PositiveIntegerField(default=1)
+    loop = models.BooleanField(default=False)
+    velocidad = models.PositiveIntegerField(default=100)
+    compases_al_aire = models.PositiveIntegerField(default=1)
+    parte_seguida = models.ForeignKey(
+        Partitura, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
+        help_text="Última parte elegida explícitamente en el selector — desempata antes que 'mi propia parte'.",
+    )
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('usuario', 'obra')]
+        verbose_name = 'Preferencia de obra'
+        verbose_name_plural = 'Preferencias de obra'
+
+    def __str__(self):
+        return f"{self.usuario} — {self.obra}"
+
+
+class PreferenciaParte(models.Model):
+    """Zoom preferido de un usuario para una parte puntual — aparte de
+    PreferenciaObra porque depende de la diagramación propia de CADA parte
+    (dos partes de la misma obra pueden necesitar zooms bien distintos),
+    no de la obra en general."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='preferencias_parte')
+    partitura = models.ForeignKey(Partitura, on_delete=models.CASCADE, related_name='preferencias_usuario')
+    nivel_zoom = models.FloatField(default=1.0)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('usuario', 'partitura')]
+        verbose_name = 'Preferencia de parte'
+        verbose_name_plural = 'Preferencias de parte'
+
+    def __str__(self):
+        return f"{self.usuario} — {self.partitura}"
