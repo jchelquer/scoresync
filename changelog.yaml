@@ -31,7 +31,7 @@
   changes:
     - type: nuevo
       text: "El navegador recuerda, por usuario y por obra, el rango desde/hasta, loop, velocidad, compases al aire y la última parte elegida — se autoguarda solo (sin botón) cada vez que se cambia algo, y precompleta todo eso la próxima vez que se entra en vez de arrancar de cero. Un link explícito (ej. Anterior/Siguiente, uno compartido) sigue ganándole a lo guardado."
-    - type  nuevo
+    - type: nuevo
       text: "El zoom preferido también se recuerda, pero por parte (no por obra) — cada parte puede necesitar un nivel distinto según su propia diagramación."
 - version: "1.3.5"
   date: "2026-07-20"
