@@ -36,6 +36,11 @@
           <p class="small mb-1" style="color: var(--ss-text-muted)">{{ obra.compositor|default:"—" }}{% if obra.arreglista %} · {% translate "arr." %} {{ obra.arreglista }}{% endif %}</p>
           <p class="small mb-0" style="color: var(--ss-text-muted)">
             {{ obra.partituras.count }} {% translate "parte(s)" %}
+            {% if obra.owner_id == request.user.id %}
+            · {% translate "tuya" %}
+            {% else %}
+            · {{ obra.owner.get_full_name|default:obra.owner.username }}
+            {% endif %}
           </p>
         </div>
       </div>
@@ -44,6 +49,6 @@
   {% endfor %}
 </div>
 {% else %}
-<p style="color: var(--ss-text-muted)">{% translate "Todavía no creaste ninguna obra." %}</p>
+<p style="color: var(--ss-text-muted)">{% translate "Todavía no hay ninguna obra creada." %}</p>
 {% endif %}
 {% endblock %}

@@ -28,14 +28,17 @@
         <p class="small mb-3" style="color: var(--ss-text-muted)">
           {% if partitura.obra %}
           {% translate "Obra" %}: <strong>{{ partitura.obra.titulo }}</strong>
+          {% if es_dueño %}
           <form method="post" action="{% url 'partituras:gestionar_obra' partitura.pk %}" class="d-inline">
             {% csrf_token %}
             <button type="submit" name="accion" value="separar" class="btn btn-outline-light btn-sm ms-1">
               {% translate "Separar de la obra" %}
             </button>
           </form>
+          {% endif %}
           {% else %}
           {% translate "Todavía no pertenece a ninguna obra." %}
+          {% if es_dueño %}
           {% if obras_propias %}
           <form method="post" action="{% url 'partituras:gestionar_obra' partitura.pk %}" class="d-inline-flex gap-1 align-items-center ms-1">
             {% csrf_token %}
@@ -60,6 +63,7 @@
             </form>
           </details>
           {% endif %}
+          {% endif %}
         </p>
 
         <div class="d-flex flex-wrap gap-2 mb-2">
@@ -67,7 +71,7 @@
             <i class="bi bi-box-arrow-up-right me-1"></i>Ver PDF original
           </a>
 
-          {% if partitura.estado_normalizacion == 'pendiente' %}
+          {% if es_dueño and partitura.estado_normalizacion == 'pendiente' %}
           <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
             {% csrf_token %}
             <button type="submit" class="btn btn-ss" data-texto-procesando="Analizando PDF…">Enderezar PDF</button>
@@ -75,7 +79,7 @@
           {% endif %}
         </div>
 
-        {% if partitura.estado_normalizacion != 'pendiente' %}
+        {% if es_dueño and partitura.estado_normalizacion != 'pendiente' %}
         <p class="small mb-2" style="color: var(--ss-text-muted)">
           {% translate "Cada etapa se habilita cuando la anterior está confirmada en todas las páginas." %}
         </p>
@@ -114,13 +118,17 @@
           <button type="button" class="btn btn-outline-secondary" disabled title="{% translate 'Completá el ancla primero' %}">5. Barras y compases</button>
           {% endif %}
         </div>
+        {% elif not es_dueño %}
+        <p class="small mb-2" style="color: var(--ss-text-muted)">
+          {% translate "Sólo quien la subió puede editar el procesamiento de esta parte." %}
+        </p>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
 
-{% if partitura.paginas.exists %}
+{% if es_dueño and partitura.paginas.exists %}
 <div class="row justify-content-center mt-4">
   <div class="col-md-10">
     <h6 style="color: var(--ss-text-bright)">{% translate "Estado por página" %}</h6>

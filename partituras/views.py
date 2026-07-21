@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Max
-from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -106,7 +106,7 @@ def partes_sueltas(request):
     nuevas siempre se cargan desde la ficha de una obra, ver subir; una
     parte sólo queda suelta si se la separa o si se borró su obra).
     Página de limpieza: desde acá se puede editar o borrar cada una."""
-    partituras = Partitura.objects.filter(owner=request.user, obra__isnull=True)
+    partituras = Partitura.objects.filter(owner=request.user, obra__isnull=True).order_by("titulo", "parte")
     return render(request, "partituras/partes_sueltas.html", {"partituras": partituras})
 
 
@@ -150,8 +150,10 @@ def subir(request, pk):
     """Cargar una parte (PDF) — siempre asociada a una obra, no hay carga
     suelta (ver notas de diseño: "la biblioteca es una biblioteca de
     obras"). Título/compositor se sugieren desde la obra (una parte
-    normalmente los comparte), editables igual si hace falta."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    normalmente los comparte), editables igual si hace falta. No hace
+    falta ser dueño de la obra — cualquier usuario puede sumarle su propia
+    parte (queda con owner=el que la sube, ver Partitura.owner)."""
+    obra = get_object_or_404(Obra, pk=pk)
     if request.method == "POST":
         form = PartituraForm(request.POST, request.FILES)
         if form.is_valid():
@@ -171,6 +173,7 @@ def subir(request, pk):
 def _contexto_estado(request, partitura):
     return {
         "partitura": partitura,
+        "es_dueño": partitura.owner_id == request.user.id,
         "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
         "pagina_sistemas": _primera_pendiente_sistemas(partitura),
         "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
@@ -197,8 +200,12 @@ def estado(request, pk):
     """El mismo panel que `detalle`, pero sin el salto automático — para
     volver a ver el estado general a propósito (el botón "Salir" de cada
     etapa apunta acá, no a `detalle`, para no rebotar de vuelta a la misma
-    pantalla que se acaba de dejar)."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    pantalla que se acaba de dejar). No hace falta ser dueño de la parte
+    para entrar acá (es el link que se muestra desde la ficha de la obra a
+    cualquiera) — pero el panel de edición del pipeline (enderezar, ajustar
+    márgenes/sistemas/ancla/barras, separar/adjuntar a obra) queda oculto
+    para quien no es dueño, ver `es_dueño` en el contexto y detalle.html."""
+    partitura = get_object_or_404(Partitura, pk=pk)
     return render(request, "partituras/detalle.html", _contexto_estado(request, partitura))
 
 
@@ -206,9 +213,11 @@ def estado(request, pk):
 
 @login_required
 def obras(request):
-    """Lista de las obras propias — punto de entrada para crear una obra
-    sin depender de tener ya una partitura cargada."""
-    lista = Obra.objects.filter(owner=request.user)
+    """La biblioteca: TODAS las obras (de cualquier usuario, no sólo las
+    propias — ver notas de diseño, cualquiera puede navegar/sumar su parte
+    a cualquier obra) — también punto de entrada para crear una obra sin
+    depender de tener ya una partitura cargada."""
+    lista = Obra.objects.select_related("owner").order_by("titulo")
     return render(request, "partituras/obras.html", {"obras": lista})
 
 
@@ -217,9 +226,20 @@ def obra_detalle(request, pk):
     """Ficha de una obra: sus datos y las partes (partituras) que tiene
     adjuntas, más un formulario para adjuntar otra partitura propia todavía
     sin obra. También el alta/reemplazo del audio de referencia (para
-    sincronizar tiempo_inicio — ver sincronizar_audio)."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    sincronizar tiempo_inicio — ver sincronizar_audio).
+
+    No hace falta ser dueño de la OBRA para entrar — cualquiera logueado
+    puede ver la ficha, elegir qué parte seguir y navegar/ejecutar. Cargar
+    una parte nueva o adjuntar una propia suelta también está abierto (cada
+    parte tiene su propio dueño, independiente del de la obra — ver
+    Partitura.owner). Lo que sí es exclusivo del dueño de la obra: borrar la
+    obra, el audio de referencia y sincronizar tiempos (ver plantilla y las
+    vistas de sincronización, que sí exigen ser dueño)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    es_dueño = obra.owner_id == request.user.id
     if request.method == "POST" and request.FILES.get("audio"):
+        if not es_dueño:
+            return HttpResponseForbidden()
         if obra.audio:
             obra.audio.delete(save=False)
         obra.audio = request.FILES["audio"]
@@ -228,6 +248,8 @@ def obra_detalle(request, pk):
         return redirect("partituras:obra_detalle", pk=pk)
     return render(request, "partituras/obra_detalle.html", {
         "obra": obra,
+        "es_dueño": es_dueño,
+        "partituras": obra.partituras.order_by("parte", "titulo"),
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
 
@@ -591,8 +613,12 @@ def navegador_obra(request, pk):
 
     Todo el estado (posición actual, rango desde-hasta, loop) viaja en la
     querystring — no hay nada que guardar en sesión ni en la base: esta
-    pantalla es de sólo lectura, no modifica el itinerario."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    pantalla es de sólo lectura, no modifica el itinerario.
+
+    No hace falta ser dueño de la obra — cualquier usuario logueado puede
+    navegar/ejecutar cualquier obra (ver obra_detalle); lo único que se
+    guarda es PreferenciaObra del propio usuario, no algo de la obra."""
+    obra = get_object_or_404(Obra, pk=pk)
     navegables = segmentos_navegables(obra)
     if not navegables:
         return render(request, "partituras/navegador_obra.html", {
@@ -747,8 +773,9 @@ def guardar_preferencias_obra(request, pk):
     zoom preferido para esa parte puntual (PreferenciaParte). Lo llama el
     JS del navegador con un pequeño debounce cada vez que el usuario
     cambia algo — es un POST "silencioso" desde fetch(), no hay pantalla
-    ni mensaje asociado."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    ni mensaje asociado. No hace falta ser dueño de la obra: esto guarda
+    la preferencia del usuario que la llama, no algo de la obra en sí."""
+    obra = get_object_or_404(Obra, pk=pk)
     defaults = {
         "desde_compas": (request.POST.get("desde_compas") or "")[:20],
         "desde_pasada": _leer_entero(request.POST.get("desde_pasada"), 1),
@@ -786,8 +813,9 @@ def plan_obra(request, pk):
     ejecución en tiempo real lo pide una sola vez al arrancar y de ahí en
     más programa todo con un reloj propio en JS, sin volver a pedirle un
     pulso a la vez al servidor (ver navegador_obra.html: eso dejaría que la
-    variabilidad de red se fuera acumulando como desfasaje de tempo)."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    variabilidad de red se fuera acumulando como desfasaje de tempo). No
+    hace falta ser dueño de la obra — ver navegador_obra."""
+    obra = get_object_or_404(Obra, pk=pk)
     navegables = segmentos_navegables(obra)
     if not navegables:
         return JsonResponse({"pulsos": [], "completo": True})
@@ -834,8 +862,9 @@ def score_geometria_obra(request, pk):
     para mostrar el score durante la ejecución — un solo JSON, pedido una
     vez al arrancar (igual criterio que plan_obra): el cursor sobre el
     score se dibuja después con esto ya en memoria, sin volver a pedirle
-    la posición de cada compás al servidor."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    la posición de cada compás al servidor. No hace falta ser dueño de la
+    obra — ver navegador_obra."""
+    obra = get_object_or_404(Obra, pk=pk)
     partitura = _partitura_seguida(obra, request)
     if not partitura:
         return JsonResponse({"partitura": None, "paginas": []})
@@ -879,8 +908,11 @@ def crear_obra(request):
 @login_required
 def adjuntar_a_obra(request, pk):
     """Adjunta una partitura propia (todavía sin obra) a esta obra, desde
-    la propia ficha de la obra — el otro sentido de gestionar_obra."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    la propia ficha de la obra — el otro sentido de gestionar_obra. No hace
+    falta ser dueño de la OBRA (cualquiera puede sumar su propia parte a
+    cualquier obra, ver obra_detalle) — la partitura sí tiene que ser
+    propia, eso no cambia."""
+    obra = get_object_or_404(Obra, pk=pk)
     if request.method == "POST":
         partitura = Partitura.objects.filter(
             pk=request.POST.get("partitura_id"), owner=request.user, obra__isnull=True,
@@ -893,17 +925,15 @@ def adjuntar_a_obra(request, pk):
 
 @login_required
 def gestionar_obra(request, pk):
-    """Adjunta o separa esta partitura de una obra. Por ahora sólo entre las
-    obras propias — todavía no hay una forma de ver/elegir obras de otros
-    usuarios (no hace falta aprobación del owner para sumar una parte, según
-    lo hablado, pero eso requiere primero un mecanismo para *ver* obras
-    ajenas, que no existe todavía)."""
+    """Adjunta o separa esta partitura de una obra — de cualquier obra, no
+    sólo las propias (no hace falta aprobación del dueño para sumar una
+    parte propia a una obra ajena, ver obra_detalle/adjuntar_a_obra)."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
     if request.method != "POST":
         return redirect("partituras:estado", pk=pk)
     accion = request.POST.get("accion")
     if accion == "adjuntar":
-        obra = Obra.objects.filter(pk=request.POST.get("obra_id"), owner=request.user).first()
+        obra = Obra.objects.filter(pk=request.POST.get("obra_id")).first()
         if obra:
             partitura.obra = obra
             partitura.save(update_fields=["obra"])
@@ -956,8 +986,12 @@ def iniciar_normalizacion(request, pk):
 
 @login_required
 def pagina_imagen_normalizada(request, pk, numero):
-    """PNG de la página con la rotación/desalineado PROPUESTOS (o ya confirmados) aplicados."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    """PNG de la página con la rotación/desalineado PROPUESTOS (o ya
+    confirmados) aplicados. No exige ser dueño de la partitura: además de
+    usarse en la edición propia, score_geometria_obra arma URLs acá para
+    mostrar el score durante la ejecución, y ahí puede ser una parte de
+    otro usuario (ver navegador_obra)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
     img = rasterizar_pagina(partitura.archivo_original.path, numero, dpi=DPI)
     corregida = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)

@@ -2,6 +2,30 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.6.0"
+  date: "2026-07-21"
+  changes:
+    - type: nuevo
+      text: "Las obras dejan de ser privadas para navegar: cualquier usuario logueado que tenga el link puede ver la ficha, elegir qué parte seguir y ejecutar/navegar, sin ser el dueño. También puede cargar su propia parte a esa obra (con su propio dueño, independiente del de la obra) y editarla o borrarla — pero no la de otro. Lo que sigue siendo exclusivo del dueño de la obra: borrar la obra, el itinerario, el audio de referencia y sincronizar tiempos."
+    - type: nuevo
+      text: "Se puede editar el título, compositor, instrumento y parte de una partitura ya adjunta a una obra directamente desde la ficha de la obra (antes sólo se llegaba ahí desde \"Partes sueltas\")."
+    - type: nuevo
+      text: "La biblioteca ahora muestra las obras de TODOS los usuarios, no sólo las propias — cada tarjeta indica \"tuya\" o el nombre de quien la creó."
+    - type: corregido
+      text: "En la ficha de una obra, hacer clic en una parte que no era propia daba error (como si no existiera). Ahora se puede ver el estado de cualquier parte; sólo quien la subió ve los botones para editarla o reprocesarla."
+    - type: mejorado
+      text: "Las obras (en la biblioteca) y las partes (dentro de cada obra) ahora se listan en orden alfabético."
+
+- version: "1.5.2"
+  date: "2026-07-21"
+  changes:
+    - type: corregido
+      text: "En \"Sincronizar por compás\", marcar, deshacer, editar a mano o usar el ajuste fino no actualizaba el plan que usa el seguimiento \"sonando\"/modo Reproducción — el ajuste quedaba invisible ahí hasta recargar la página."
+    - type: corregido
+      text: "La lista de compases scrolleaba de más (llevaba la fila arriba de todo aunque ya estuviera visible) y de menos (no scrolleaba cuando la fila activa dejaba de verse) — ahora sólo scrollea cuando hace falta, y en ese caso la lleva arriba de todo en vez de dejarla apenas asomando."
+    - type: mejorado
+      text: "Los botones de ajuste fino (±0,1s/±0,05s) ahora tienen fondo rojo o verde según retroceden o avanzan el tiempo, con más intensidad en el paso grande (0,1s) que en el chico (0,05s)."
+
 - version: "1.5.1"
   date: "2026-07-21"
   changes:
