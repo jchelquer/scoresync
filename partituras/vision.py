@@ -157,6 +157,22 @@ def _mejor_corrida(col_bool, r0, r1):
     return mejor
 
 
+def _corrida_en_ventana(imagen_bool, x_centro, r0, r1, ventana=3):
+    """Como _mejor_corrida, pero por fila busca tinta en una ventana angosta
+    alrededor de x_centro en vez de en una única columna fija. Una barra de
+    compás real casi siempre tiene alguna inclinación residual, por mínima
+    que sea (incluso después del deskew) — una columna fija la "pierde" a
+    medida que la línea se corre unos píxeles hacia un lado, cortando la
+    corrida mucho antes del extremo real del pentagrama y devolviendo un
+    ancla mucho más baja que la barra completa. Mismo criterio de tolerancia
+    que ya usa _inclinacion_barra para medir el ángulo, aplicado acá para
+    medir el largo."""
+    w = imagen_bool.shape[1]
+    x0v, x1v = max(0, x_centro - ventana), min(w, x_centro + ventana + 1)
+    fila_con_tinta = (imagen_bool[:, x0v:x1v] > 0).any(axis=1)
+    return _mejor_corrida(fila_con_tinta, r0, r1)
+
+
 def _extremos_pentagrama(banda):
     """
     Dentro de la banda (ya recortada) de un sistema, encuentra la fila donde
@@ -451,7 +467,7 @@ def encontrar_ancla(img_bgr):
                 # que el segmento mostrado acá no coincidiera con el que
                 # encuentra buscar_barra_en_rectangulo (que sí mide la
                 # corrida real) al pedir "Buscar" sobre el mismo rectángulo.
-                _, ini_rel, fin_rel = _mejor_corrida(binaria[:, x], sistema['y0'], sistema['y1'])
+                _, ini_rel, fin_rel = _corrida_en_ventana(binaria, x, sistema['y0'], sistema['y1'])
                 return {
                     'x': x,
                     'y0': sistema['y0'] + ini_rel,
@@ -530,14 +546,14 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1, sistema_px=None):
     for x_local in orden:
         if largos[x_local] < umbral_largo:
             break
-        _, ini_rel, fin_rel = _mejor_corrida(recorte[:, x_local], r0, r1)
+        _, ini_rel, fin_rel = _corrida_en_ventana(recorte, x_local, r0, r1)
         y_ini_abs, y_fin_abs = y0 + r0 + ini_rel, y0 + r0 + fin_rel
         if _es_barra_limpia(binaria, x0 + x_local, y_ini_abs, y_fin_abs, margen, radio_nota, ventana):
             mejor_x, mejor_ini, mejor_fin = int(x_local), ini_rel, fin_rel
             break
     if mejor_x is None:
         mejor_x = int(orden[0])
-        _, mejor_ini, mejor_fin = _mejor_corrida(recorte[:, mejor_x], r0, r1)
+        _, mejor_ini, mejor_fin = _corrida_en_ventana(recorte, mejor_x, r0, r1)
 
     if mejor_ini == mejor_fin:
         return None

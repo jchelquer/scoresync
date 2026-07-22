@@ -11,6 +11,11 @@
         <p class="small mb-4" style="color: var(--ss-text-muted)">{% translate "Para la obra" %} — {{ obra.titulo }}</p>
         <form method="post" enctype="multipart/form-data">
           {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label" style="color: var(--ss-text)">{% translate "Título" %}</label>
+            <input type="text" class="form-control" value="{{ obra.titulo }}" disabled>
+            <div class="form-text" style="color: var(--ss-text-muted)">{% translate "Es el título de la obra — no se puede cambiar por parte." %}</div>
+          </div>
           {% for field in form %}
             <div class="mb-3">
               <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>

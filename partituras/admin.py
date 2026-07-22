@@ -23,9 +23,9 @@ class BarraAdmin(admin.ModelAdmin):
 
 @admin.register(Partitura)
 class PartituraAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'compositor', 'instrumento', 'parte', 'owner', 'estado_normalizacion', 'estado_analisis', 'creado')
+    list_display = ('titulo', 'instrumento', 'parte', 'owner', 'estado_normalizacion', 'estado_analisis', 'creado')
     list_filter = ('estado_normalizacion', 'estado_analisis', 'instrumento')
-    search_fields = ('titulo', 'compositor', 'owner__username')
+    search_fields = ('titulo', 'owner__username')
 
 
 @admin.register(Pagina)

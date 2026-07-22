@@ -16,8 +16,7 @@
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
         <p class="small mb-3" style="color: var(--ss-text-muted)">
-          {{ partitura.compositor|default:"—" }}
-          {% if partitura.instrumento %} · {{ partitura.instrumento }}{% endif %}
+          {{ partitura.instrumento|default:"—" }}
           {% if partitura.parte %} · {{ partitura.parte }}{% endif %}
         </p>
         <p style="color: var(--ss-text-muted)">

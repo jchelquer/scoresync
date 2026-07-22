@@ -4,32 +4,44 @@ from .services import parsear_compas_pulso, validar_indicacion_compas
 
 
 class PartituraForm(forms.ModelForm):
+    """Cargar una parte nueva — siempre dentro de una obra (ver views.subir),
+    así que el título no se pide acá: se toma directo de la obra. El orden
+    de 'fields' es el orden de renderizado del form: el archivo va
+    inmediatamente después del título (mostrado aparte, de sólo lectura, en
+    el template) — ver subir.html."""
     class Meta:
         model = Partitura
-        fields = ['titulo', 'compositor', 'instrumento', 'parte', 'archivo_original']
+        fields = ['archivo_original', 'instrumento', 'parte']
         widgets = {
-            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'instrumento': forms.Select(attrs={'class': 'form-select'}),
-            'parte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Clarinete 2 (opcional)'}),
+            'parte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Clarinete 2 (opcional; si se deja vacío se usa el instrumento)'}),
             'archivo_original': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': 'application/pdf'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['instrumento'].required = True
 
 
 class PartituraEditForm(forms.ModelForm):
     """Igual que PartituraForm pero sin archivo_original — cambiar el PDF
     de una partitura ya en uso invalidaría todas las páginas/sistemas/
     barras/compases ya detectados y confirmados; esto es sólo para
-    corregir el nombre/metadatos."""
+    corregir el nombre/metadatos. El título sólo se deja editable para
+    partes sueltas (ver editar_partitura, que deshabilita el campo si la
+    parte ya pertenece a una obra — ahí el título es el de la obra)."""
     class Meta:
         model = Partitura
-        fields = ['titulo', 'compositor', 'instrumento', 'parte']
+        fields = ['titulo', 'instrumento', 'parte']
         widgets = {
             'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'instrumento': forms.Select(attrs={'class': 'form-select'}),
-            'parte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Clarinete 2 (opcional)'}),
+            'parte': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Clarinete 2 (opcional; si se deja vacío se usa el instrumento)'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['instrumento'].required = True
 
 
 class ObraForm(forms.ModelForm):

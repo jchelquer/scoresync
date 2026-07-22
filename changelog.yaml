@@ -14,7 +14,31 @@
     - type: corregido
       text: "En la ficha de una obra, hacer clic en una parte que no era propia daba error (como si no existiera). Ahora se puede ver el estado de cualquier parte; sólo quien la subió ve los botones para editarla o reprocesarla."
     - type: mejorado
-      text: "Las obras (en la biblioteca) y las partes (dentro de cada obra) ahora se listan en orden alfabético."
+      text: "Las obras (en la biblioteca), las partes (dentro de cada obra) y el selector de parte del navegador ahora se listan en orden alfabético."
+    - type: mejorado
+      text: "Repaso de los datos de una parte: el título ya no se puede editar si la parte pertenece a una obra (usa el de la obra); si no se cargó un nombre de parte se muestra el instrumento en su lugar; el instrumento pasa a ser obligatorio; se sacó el campo de compositor por parte (ya está a nivel obra); y al cargar una parte, el selector de archivo va inmediatamente después del título."
+    - type: corregido
+      text: "El ancla detectada automáticamente podía quedar mucho más baja que el pentagrama real (una barra de compás casi nunca es perfectamente vertical, y la medición seguía una única columna de píxeles en vez de tolerar ese desvío) — el rectángulo del ancla ahora cubre la altura real de la barra."
+    - type: mejorado
+      text: "Pantalla \"Ajustar sistemas\": el botón de agregar ahora deja elegir dónde con un clic sobre la partitura, en vez de agregarlo siempre al final. Se puede mover un sistema completo arrastrando su centro (antes sólo se podían redimensionar los bordes), y duplicar uno existente (se ubica desplazado del original para poder distinguirlos, y después se mueve a su posición final arrastrándolo)."
+    - type: corregido
+      text: "El orden alfabético de las partes (dentro de una obra, en partes sueltas y en el selector del navegador) no quedaba bien cuando no tenían nombre de parte cargado: se ordenaba por ese campo vacío en vez de por el instrumento que termina mostrándose en su lugar."
+    - type: mejorado
+      text: "En la ficha de una obra: la sección de \"Partes\" (que puede ser larga) se movió después del audio de referencia y los botones de ejecución/sincronización, y \"Borrar obra\" queda al final, separado. Borrar una obra ahora exige escribir \"borrar <nombre de la obra>\" exactamente antes de habilitar el botón, en vez de un cuadro de confirmación del navegador."
+    - type: mejorado
+      text: "Al ejecutar una obra con el audio de referencia, el sonido del metrónomo arranca silenciado por default (se puede reactivar igual) — sonar junto con la música real quedaba mal."
+    - type: mejorado
+      text: "El aviso del próximo compás (el que va a cambiar la ventana de la partitura) ahora aparece hasta 4 compases antes, no recién en el último — cuando hay margen para eso; si el tramo es corto, avisa apenas se pueda. Además ahora identifica correctamente CUÁL es ese compás (el que hace falta que cambie la ventana, no siempre el inmediato siguiente) y lo mantiene fijo durante toda la anticipación."
+    - type: corregido
+      text: "Cuando el rango arrancaba cerca del final de una página, la ventana podía quedar con un solo sistema visible y el aviso de próximo compás no tenía dónde mostrarse (necesitaba un segundo sistema adyacente). Ahora en ese caso usa el espacio libre que queda debajo, dentro del mismo panel, al mismo tamaño con el que se lee el resto de la partitura (no estirado para ocupar todo ese espacio)."
+    - type: corregido
+      text: "Cambiar la velocidad de reproducción no tenía efecto real al ejecutar con el audio de referencia: el audio sonaba siempre a su ritmo original, sólo la cuenta al aire respetaba la velocidad elegida. Ahora también se le aplica al audio."
+    - type: nuevo
+      text: "Botón junto al slider de velocidad para volver directo a 100%."
+    - type: mejorado
+      text: "En modo partitura, \"Ejecutar con audio\" y \"Silenciar\" se movieron a la fila compacta de arriba, a continuación del bpm y el metrónomo (antes estaban en la otra fila, junto a Ejecutar/rango/zoom)."
+    - type: nuevo
+      text: "Botón \"Detener\": corta la ejecución y vuelve al estado inicial sin volver a arrancar sola (a diferencia de \"Reiniciar\", que sí arranca). Antes, una vez elegido \"Ejecutar con audio\" no había forma de cambiarlo sin recargar la página — ese campo (y otros que sólo se pueden tocar antes de arrancar) sólo se habilita en el estado inicial."
 
 - version: "1.5.2"
   date: "2026-07-21"

@@ -182,7 +182,6 @@ class Partitura(models.Model):
     ]
 
     titulo = models.CharField(max_length=200)
-    compositor = models.CharField(max_length=200, blank=True)
     obra = models.ForeignKey(
         Obra,
         null=True, blank=True,
@@ -215,7 +214,15 @@ class Partitura(models.Model):
         verbose_name_plural = 'Partituras'
 
     def __str__(self):
-        return f"{self.titulo} ({self.parte})" if self.parte else self.titulo
+        nombre = self.nombre_parte
+        return f"{self.titulo} ({nombre})" if nombre else self.titulo
+
+    @property
+    def nombre_parte(self):
+        """Lo que distingue a esta parte de las demás de la misma obra: el
+        nombre de parte si se cargó (ej. "Clarinete 2"), si no el
+        instrumento — nunca queda en blanco si hay instrumento cargado."""
+        return self.parte or (str(self.instrumento) if self.instrumento_id else "")
 
     def _paginas_activas(self):
         return self.paginas.filter(ignorada=False)

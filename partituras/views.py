@@ -106,7 +106,10 @@ def partes_sueltas(request):
     nuevas siempre se cargan desde la ficha de una obra, ver subir; una
     parte sólo queda suelta si se la separa o si se borró su obra).
     Página de limpieza: desde acá se puede editar o borrar cada una."""
-    partituras = Partitura.objects.filter(owner=request.user, obra__isnull=True).order_by("titulo", "parte")
+    partituras = sorted(
+        Partitura.objects.filter(owner=request.user, obra__isnull=True),
+        key=lambda p: (p.titulo.lower(), p.nombre_parte.lower()),
+    )
     return render(request, "partituras/partes_sueltas.html", {"partituras": partituras})
 
 
@@ -129,11 +132,14 @@ def borrar_partitura(request, pk):
 
 @login_required
 def editar_partitura(request, pk):
-    """Corrige título/compositor/instrumento/parte de una partitura ya
-    subida — no el archivo (ver PartituraEditForm)."""
+    """Corrige instrumento/parte de una partitura ya subida (y el título,
+    sólo si es una parte suelta — si ya pertenece a una obra, el título es
+    el de la obra y no se toca acá) — no el archivo (ver PartituraEditForm)."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
     if request.method == "POST":
         form = PartituraEditForm(request.POST, instance=partitura)
+        if partitura.obra_id:
+            form.fields['titulo'].disabled = True
         if form.is_valid():
             form.save()
             messages.success(request, f'Se guardaron los cambios de "{partitura}".')
@@ -142,6 +148,8 @@ def editar_partitura(request, pk):
             return redirect("partituras:partes_sueltas")
     else:
         form = PartituraEditForm(instance=partitura)
+        if partitura.obra_id:
+            form.fields['titulo'].disabled = True
     return render(request, "partituras/editar.html", {"form": form, "partitura": partitura})
 
 
@@ -149,10 +157,10 @@ def editar_partitura(request, pk):
 def subir(request, pk):
     """Cargar una parte (PDF) — siempre asociada a una obra, no hay carga
     suelta (ver notas de diseño: "la biblioteca es una biblioteca de
-    obras"). Título/compositor se sugieren desde la obra (una parte
-    normalmente los comparte), editables igual si hace falta. No hace
-    falta ser dueño de la obra — cualquier usuario puede sumarle su propia
-    parte (queda con owner=el que la sube, ver Partitura.owner)."""
+    obras"). El título no se pide: se toma directo de la obra (una parte
+    siempre lo comparte). No hace falta ser dueño de la obra — cualquier
+    usuario puede sumarle su propia parte (queda con owner=el que la sube,
+    ver Partitura.owner)."""
     obra = get_object_or_404(Obra, pk=pk)
     if request.method == "POST":
         form = PartituraForm(request.POST, request.FILES)
@@ -160,10 +168,11 @@ def subir(request, pk):
             partitura = form.save(commit=False)
             partitura.owner = request.user
             partitura.obra = obra
+            partitura.titulo = obra.titulo
             partitura.save()
             return redirect("partituras:detalle", pk=partitura.pk)
     else:
-        initial = {"titulo": obra.titulo, "compositor": obra.compositor}
+        initial = {}
         if request.user.instrumento_principal_id:
             initial["instrumento"] = request.user.instrumento_principal_id
         form = PartituraForm(initial=initial)
@@ -249,7 +258,7 @@ def obra_detalle(request, pk):
     return render(request, "partituras/obra_detalle.html", {
         "obra": obra,
         "es_dueño": es_dueño,
-        "partituras": obra.partituras.order_by("parte", "titulo"),
+        "partituras": sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower()),
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
 
@@ -570,8 +579,12 @@ def _leer_entero(valor, default):
 def _partes_disponibles(obra):
     """Partes de esta obra que se pueden seguir en la ejecución — sólo las
     que ya tienen compases confirmados en alguna página (mostrar una parte
-    a medio procesar sería peor que no mostrar nada)."""
-    return [p for p in obra.partituras.all() if p.paginas.filter(compases_confirmados=True).exists()]
+    a medio procesar sería peor que no mostrar nada). Alfabético por
+    nombre_parte (no por el campo 'parte' en crudo — está vacío en varias
+    partes, y ordenar por ahí las agrupa todas al principio en vez de por
+    el instrumento que se termina mostrando)."""
+    partituras = sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower())
+    return [p for p in partituras if p.paginas.filter(compases_confirmados=True).exists()]
 
 
 def _partitura_seguida(obra, request, pref=None):
@@ -753,7 +766,6 @@ def navegador_obra(request, pk):
         "desde_compas": desde_compas_raw, "desde_pasada": desde_pasada,
         "hasta_compas": hasta_compas_raw, "hasta_pasada": hasta_pasada,
         "loop": loop,
-        "compas_siguiente": siguiente[1] if siguiente else None,
         "tiene_score": partitura_seguida is not None,
         "partitura_seguida": partitura_seguida,
         "partes_disponibles": partes_disponibles,
@@ -874,7 +886,7 @@ def score_geometria_obra(request, pk):
         p["imagen_url"] = reverse("partituras:pagina_imagen_normalizada", args=[partitura.pk, p["numero"]])
 
     return JsonResponse({
-        "partitura": {"id": partitura.pk, "titulo": partitura.titulo, "parte": partitura.parte},
+        "partitura": {"id": partitura.pk, "titulo": partitura.titulo, "parte": partitura.nombre_parte},
         "paginas": paginas,
     })
 

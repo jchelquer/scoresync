@@ -12,6 +12,7 @@
     border-top: 2px solid var(--ss-accent);
     border-bottom: 2px solid var(--ss-accent);
     box-sizing: border-box;
+    cursor: grab;
   }
   .banda.manual { border-color: #ffb347; background: rgba(255, 179, 71, 0.22); }
   .asa { position: absolute; left: 0; right: 0; height: 10px; cursor: ns-resize; }
@@ -22,6 +23,12 @@
     background: #c0392b; color: #fff; border: none; border-radius: 4px;
     width: 22px; height: 22px; line-height: 1; font-size: 0.9rem; cursor: pointer;
   }
+  .banda-duplicar {
+    position: absolute; right: 30px; top: 2px; z-index: 5;
+    background: #2a4a47; color: #fff; border: none; border-radius: 4px;
+    width: 22px; height: 22px; line-height: 1; font-size: 0.8rem; cursor: pointer;
+  }
+  .lienzo.modo-agregar { cursor: crosshair; }
   .panel-control { background: var(--ss-surface); border-radius: 8px; padding: 1rem; }
 
   .lienzo-wrapper { overflow: auto; }
@@ -102,11 +109,14 @@
   <div class="col-lg-3">
     <div class="panel-control">
       <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Arrastrá los bordes de cada sistema para ajustarlo. Usá los botones para agregar o quitar." %}
+        {% translate "Arrastrá los bordes de un sistema para redimensionarlo, o el centro para moverlo. El botón de copia duplica un sistema (desplazado, para distinguirlo del original) y después se puede mover igual que los demás." %}
       </p>
       <button type="button" id="btn-agregar" class="btn btn-outline-light w-100 mb-3">
         <i class="bi bi-plus-lg"></i> {% translate "Agregar sistema" %}
       </button>
+      <p class="small d-none" id="hint-agregar" style="color: var(--ss-accent)">
+        {% translate "Hacé clic en la partitura para ubicar el sistema nuevo." %}
+      </p>
       <form method="post" id="form-confirmar">
         {% csrf_token %}
         <input type="hidden" name="accion" value="confirmar">
@@ -149,6 +159,10 @@ function render() {
     banda.style.top = (s.y * 100) + '%';
     banda.style.height = (s.height * 100) + '%';
     banda.dataset.key = s._key;
+    banda.addEventListener('mousedown', e => {
+      if (e.target !== banda) return;
+      iniciarMover(e, s);
+    });
 
     const asaTop = document.createElement('div');
     asaTop.className = 'asa asa-top';
@@ -157,6 +171,13 @@ function render() {
     const asaBottom = document.createElement('div');
     asaBottom.className = 'asa asa-bottom';
     asaBottom.addEventListener('mousedown', e => iniciarArrastre(e, s, 'bottom'));
+
+    const duplicar = document.createElement('button');
+    duplicar.type = 'button';
+    duplicar.className = 'banda-duplicar';
+    duplicar.title = '{% translate "Duplicar" %}';
+    duplicar.innerHTML = '<i class="bi bi-copy"></i>';
+    duplicar.addEventListener('click', () => duplicarSistema(s));
 
     const borrar = document.createElement('button');
     borrar.type = 'button';
@@ -169,6 +190,7 @@ function render() {
 
     banda.appendChild(asaTop);
     banda.appendChild(asaBottom);
+    banda.appendChild(duplicar);
     banda.appendChild(borrar);
     lienzo.appendChild(banda);
   });
@@ -176,6 +198,7 @@ function render() {
 
 function iniciarArrastre(e, sistema, borde) {
   e.preventDefault();
+  e.stopPropagation();
   const alturaLienzo = lienzo.getBoundingClientRect().height;
 
   function mover(ev) {
@@ -198,10 +221,60 @@ function iniciarArrastre(e, sistema, borde) {
   document.addEventListener('mouseup', soltar);
 }
 
-document.getElementById('btn-agregar').addEventListener('click', () => {
-  const ultimo = sistemas[sistemas.length - 1];
-  const y = ultimo ? Math.min(ultimo.y + ultimo.height + 0.02, 0.9) : 0.05;
-  sistemas.push({ id: null, y, height: 0.08, _key: 'nuevo-' + Math.random() });
+function iniciarMover(e, sistema) {
+  e.preventDefault();
+  const alturaLienzo = lienzo.getBoundingClientRect().height;
+  const yInicial = sistema.y;
+  const startY = e.clientY;
+
+  function mover(ev) {
+    const deltaFrac = (ev.clientY - startY) / alturaLienzo;
+    sistema.y = Math.min(Math.max(yInicial + deltaFrac, 0), 1 - sistema.height);
+    render();
+  }
+  function soltar() {
+    document.removeEventListener('mousemove', mover);
+    document.removeEventListener('mouseup', soltar);
+  }
+  document.addEventListener('mousemove', mover);
+  document.addEventListener('mouseup', soltar);
+}
+
+function duplicarSistema(sistema) {
+  // Desplazado respecto del original (debajo si entra, si no arriba) para
+  // que se note que son dos sistemas distintos, no uno solo — el usuario
+  // lo mueve a la posición final arrastrándolo (iniciarMover).
+  const offset = Math.max(sistema.height * 0.5, 0.03);
+  let y = sistema.y + sistema.height + offset;
+  if (y + sistema.height > 1) {
+    y = Math.max(sistema.y - sistema.height - offset, 0);
+  }
+  sistemas.push({ id: null, y, height: sistema.height, _key: 'nuevo-' + Math.random() });
+  render();
+}
+
+const btnAgregar = document.getElementById('btn-agregar');
+const hintAgregar = document.getElementById('hint-agregar');
+let modoAgregar = false;
+
+function alternarModoAgregar(activo) {
+  modoAgregar = activo;
+  btnAgregar.classList.toggle('btn-ss', modoAgregar);
+  btnAgregar.classList.toggle('btn-outline-light', !modoAgregar);
+  hintAgregar.classList.toggle('d-none', !modoAgregar);
+  lienzo.classList.toggle('modo-agregar', modoAgregar);
+}
+
+btnAgregar.addEventListener('click', () => alternarModoAgregar(!modoAgregar));
+
+lienzo.addEventListener('click', e => {
+  if (!modoAgregar || e.target !== lienzo) return;
+  const rect = lienzo.getBoundingClientRect();
+  const frac = Math.min(Math.max((e.clientY - rect.top) / rect.height, 0), 1);
+  const height = 0.08;
+  const y = Math.min(Math.max(frac - height / 2, 0), 1 - height);
+  sistemas.push({ id: null, y, height, _key: 'nuevo-' + Math.random() });
+  alternarModoAgregar(false);
   render();
 });
 

@@ -14,6 +14,9 @@
             <div class="mb-3">
               <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
               {{ field }}
+              {% if field.name == 'titulo' and field.field.disabled %}
+              <div class="form-text" style="color: var(--ss-text-muted)">{% translate "Es el título de la obra — separá la parte para poder cambiarlo." %}</div>
+              {% endif %}
               {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
             </div>
           {% endfor %}

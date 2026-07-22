@@ -48,6 +48,7 @@
   #score-header-extra #control-compases-aire { font-size: 0.8rem; }
   #barra-compacta #control-compases-aire input,
   #score-header-extra #control-compases-aire input { width: 3rem !important; }
+  #barra-compacta #control-ejecutar-audio { font-size: 0.8rem; }
 
   /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
      final de la fila compacta, empujados a la derecha (todo lo demás
@@ -219,6 +220,7 @@
       <div style="position: absolute; left: 61.54%; top: 50%; width: 2px; height: 0.6rem; margin-top: -0.3rem; background: var(--ss-accent); pointer-events: none;"></div>
     </div>
     <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
+    <button type="button" id="btn-velocidad-reset" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate 'Volver a 100%' %}">100%</button>
   </div>
   {% if obra.audio %}
   <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
@@ -237,6 +239,7 @@
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
   <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;">↺ {% translate "Reiniciar" %}</button>
+  <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;">⏹ {% translate "Detener" %}</button>
   <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
     <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
     <label class="form-check-label small ms-1" for="metronomo-visual" style="color: var(--ss-text-muted);">{% translate "Metrónomo visual" %}</label>
@@ -263,7 +266,7 @@
         <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
           {% for p in partes_disponibles %}
           <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
-            {{ p.titulo }}{% if p.parte %} — {{ p.parte }}{% endif %}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
+            {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
           </option>
           {% endfor %}
         </select>
@@ -289,6 +292,12 @@
     </div>
     <div id="score-ventana-contenedor" style="position: relative; width: 100%; background: #222; border-radius: 4px; overflow: auto;">
       <canvas id="score-ventana-canvas" style="display: block;"></canvas>
+      <!-- Aviso de "próximo compás" cuando la ventana activa tiene un solo
+           sistema (no hay un segundo sistema adyacente para superponer el
+           aviso encima, ver renderizarPreviewSync) — usa el espacio libre
+           que queda debajo del canvas dentro del contenedor (el canvas se
+           dimensiona al contenido real, no al alto completo disponible). -->
+      <canvas id="score-preview-abajo" style="display:none; position:absolute; left:0;"></canvas>
     </div>
     <p id="score-error" class="small text-warning mt-2 mb-0" style="display:none;"></p>
   </div>
@@ -301,6 +310,7 @@
   const btnPause = document.getElementById('btn-pause');
   const btnContinuar = document.getElementById('btn-continuar');
   const btnReiniciar = document.getElementById('btn-reiniciar');
+  const btnDetener = document.getElementById('btn-detener');
   const btnAnterior = document.getElementById('btn-anterior');
   const btnSiguiente = document.getElementById('btn-siguiente');
   const btnModoScore = document.getElementById('btn-modo-score');
@@ -355,6 +365,10 @@
     { el: navBpmWrap, destino: barraCompacta },
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
+    // "Ejecutar con audio" (con "Silenciar" anidado adentro, se mueve con
+    // él) va a continuación del metrónomo — mismo grupo temático ("qué
+    // suena mientras se ejecuta"), en la misma fila compacta.
+    { el: controlEjecutarAudio, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
     // Ejecutar/Pausar/Continuar/Reiniciar van en la MISMA fila que el rango
@@ -368,11 +382,11 @@
     { el: formRango, destino: scoreHeaderExtra },
     { el: controlCompasesAire, destino: scoreHeaderExtra },
     { el: controlVelocidad, destino: scoreHeaderExtra },
-    { el: controlEjecutarAudio, destino: scoreHeaderExtra },
     { el: btnPlay, destino: scoreHeaderExtra },
     { el: btnPause, destino: scoreHeaderExtra },
     { el: btnContinuar, destino: scoreHeaderExtra },
     { el: btnReiniciar, destino: scoreHeaderExtra },
+    { el: btnDetener, destino: scoreHeaderExtra },
     { el: btnAnterior, destino: scoreHeaderExtra },
     { el: btnSiguiente, destino: scoreHeaderExtra },
   ].filter(r => r.el && r.destino);
@@ -399,18 +413,36 @@
   // cambio está sonando, el primer toque la pausa antes de aplicar nada —
   // cambiarla a mitad de un pulso en pleno reloj corriendo no tiene un
   // punto de reanudación consistente.
+  // El audio real no sigue la velocidad sola: currentTime avanza a paso
+  // nativo salvo que se le pida explícitamente otro playbackRate. Como
+  // acumuladosReales está indexado en segundos reales de la grabación (no
+  // escala con la velocidad, a diferencia de acumulados/duracionEscalada),
+  // ajustar playbackRate alcanza y sobra — currentTime sigue significando
+  // lo mismo (posición dentro del audio), sólo cambia qué tan rápido avanza
+  // por segundo de reloj real.
+  function aplicarVelocidadAudio() {
+    if (audioNav) audioNav.playbackRate = velocidadActual / 100;
+  }
   if (velocidadSlider && velocidadValor) {
     velocidadSlider.addEventListener('input', () => {
       velocidadValor.textContent = velocidadSlider.value + '%';
       if (!planCargado) return;
       if (rafId) pausar();
       velocidadActual = leerVelocidadSlider();
+      aplicarVelocidadAudio();
       reconstruirTiempos();
       if (idxMostrado >= 0 && idxMostrado < acumulados.length) {
         elapsedAlPausar = acumulados[idxMostrado];
         mostrarPulso(pulsos[idxMostrado]); // refresca el bpm mostrado a la nueva velocidad
       }
       programarGuardadoPreferencias();
+    });
+  }
+  const btnVelocidadReset = document.getElementById('btn-velocidad-reset');
+  if (btnVelocidadReset && velocidadSlider) {
+    btnVelocidadReset.addEventListener('click', () => {
+      velocidadSlider.value = 100;
+      velocidadSlider.dispatchEvent(new Event('input'));
     });
   }
 
@@ -463,10 +495,16 @@
   // más arriba); silenciar es sólo de esta sesión, no se guarda.
   let ejecutarConAudio = toggleEjecutarAudio ? toggleEjecutarAudio.checked : false;
   if (audioNav && toggleMuteAudio) audioNav.muted = toggleMuteAudio.checked;
+  // Ejecutar con música real de fondo y encima el click del metrónomo suena
+  // mal — se arranca con el sonido del metrónomo silenciado por default (el
+  // usuario lo puede volver a activar si igual lo quiere). Sólo el sonido,
+  // no el metrónomo visual (el punto/flash sigue sirviendo como referencia).
+  if (ejecutarConAudio && metronomoAudioToggle) metronomoAudioToggle.checked = false;
   if (toggleEjecutarAudio) {
     toggleEjecutarAudio.addEventListener('change', () => {
       ejecutarConAudio = toggleEjecutarAudio.checked;
       if (controlMuteAudio) controlMuteAudio.style.display = ejecutarConAudio ? '' : 'none';
+      if (ejecutarConAudio && metronomoAudioToggle) metronomoAudioToggle.checked = false;
       programarGuardadoPreferencias();
     });
   }
@@ -514,6 +552,7 @@
   let totalDuracion = 0;
   let startTs = 0;
   let idxMostrado = -1;
+  const COMPASES_AVISO_PREVIO = 4; // ver mostrarPulso/actualizarScore: cuánto antes de un cambio de ventana se muestra el aviso, cuando hay margen
   let rafId = null;
   let elapsedAlPausar = 0;
   let audioCtx = null;
@@ -791,7 +830,7 @@
     setCampo('nav-variacion-wrap', 'nav-variacion', '');
     document.getElementById('nav-tiempo-wrap').style.display = 'none';
     setCampo('nav-descripcion-wrap', 'nav-descripcion', '');
-    if (numeroDestino != null) actualizarScore(numeroDestino, null, p.pulso, p.pulsos_por_compas, p.cuenta_regresiva);
+    if (numeroDestino != null) actualizarScore(numeroDestino, p.pulso, p.pulsos_por_compas, p.cuenta_regresiva);
   }
 
   function mostrarPulso(p) {
@@ -812,14 +851,12 @@
     setCampo('nav-descripcion-wrap', 'nav-descripcion', p.descripcion || '');
     // idxMostrado ya está actualizado por quien llamó a mostrarPulso, así
     // que indiceCompasActual() (si hay plan cargado) refleja este mismo
-    // pulso — se usa para saber cuál es el compás siguiente real de la
-    // ejecución (no necesariamente compas+1: puede haber un salto).
-    let siguienteNum = null;
-    if (planCargado) {
-      const k = indiceCompasActual();
-      if (k + 1 < compasInicios.length) siguienteNum = pulsos[compasInicios[k + 1]].compas;
-    }
-    actualizarScore(p.compas, siguienteNum, p.pulso, p.pulsos_por_compas);
+    // pulso — actualizarScore lo usa para encontrar el compás que va a
+    // inaugurar la ventana siguiente (no necesariamente el próximo
+    // inmediato: puede haber varios compases más en el sistema actual
+    // todavía visible antes de llegar al que de verdad hace falta cambiar
+    // de ventana).
+    actualizarScore(p.compas, p.pulso, p.pulsos_por_compas);
   }
 
   // ── Score en pantalla: ventana de sistemas que entran en el viewport ──
@@ -833,6 +870,7 @@
   // ese compás ya empezó, para que la vista nueva ya esté lista.
   const scoreVentanaContenedor = document.getElementById('score-ventana-contenedor');
   const scoreVentanaCanvas = document.getElementById('score-ventana-canvas');
+  const scorePreviewAbajo = document.getElementById('score-preview-abajo');
   const scoreErrorEl = document.getElementById('score-error');
 
   // El panel no arranca en el borde superior de la pantalla (tiene el
@@ -934,7 +972,7 @@
         }
       }
       scoreGeometria = { porCompas, porPagina };
-      actualizarScore({{ compas_actual }}, {{ compas_siguiente|default_if_none:"null" }});
+      actualizarScore({{ compas_actual }});
     } catch (e) {
       scoreErrorEl.textContent = '{% translate "No se pudo obtener la partitura." %}';
       scoreErrorEl.style.display = '';
@@ -1342,7 +1380,16 @@
   }
 
   function renderizarPreviewSync(ventana, entradaActual, entradaSiguiente) {
-    if (!entradaSiguiente || ventana.sistemas.length < 2) return;
+    if (!entradaSiguiente) return;
+    // Con un solo sistema en la ventana activa no hay ningún sistema
+    // ADYACENTE dentro de ella para superponer el aviso sin tapar lo único
+    // que se está leyendo (pasa seguido si el rango arranca cerca del final
+    // de una página: no queda más contenido hacia adelante para completar
+    // la ventana) — se usa el espacio libre debajo del canvas en su lugar.
+    if (ventana.sistemas.length < 2) {
+      renderizarPreviewAbajo(ventana, entradaSiguiente);
+      return;
+    }
     const pagina = ventana.pagina, img = ventana.img;
     const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
@@ -1385,6 +1432,11 @@
 
     const paginaSiguiente = scoreGeometria.porPagina[entradaSiguiente.pagina_numero];
     if (!paginaSiguiente) return;
+    // El compás puntual que va a cambiar la ventana (el siguiente real,
+    // fijo durante toda la anticipación de COMPASES_AVISO_PREVIO — no un
+    // sistema entero, eso resultó menos útil de lo esperado: lo que importa
+    // es saber exactamente dónde cae la próxima nota, no ver todo el
+    // sistema de encabezado).
     const cajaSiguiente = calcularCaja(entradaSiguiente, paginaSiguiente);
     if (!cajaSiguiente) return;
 
@@ -1407,6 +1459,60 @@
     else obtenerImagen(paginaSiguiente).then(dibujarRecorte).catch(() => {});
   }
 
+  // Alternativa a renderizarPreviewSync cuando la ventana tiene un solo
+  // sistema: usa el espacio libre debajo del canvas dentro del contenedor
+  // (que existe porque el canvas se dimensiona al contenido real — ver
+  // renderizarVentanaBase — no al alto completo disponible, fijado en
+  // ajustarAltoContenedorScore). Sin margen suficiente ahí tampoco, no se
+  // muestra nada — mejor eso que un recorte ilegible.
+  function renderizarPreviewAbajo(ventana, entradaSiguiente) {
+    if (!scorePreviewAbajo) return;
+    const canvas = scoreVentanaCanvas;
+    const alturaDisponible = Math.round(scoreVentanaContenedor.clientHeight - canvas.height);
+    const UMBRAL_MINIMO = 40;
+    if (alturaDisponible < UMBRAL_MINIMO) return;
+
+    const paginaSiguiente = scoreGeometria.porPagina[entradaSiguiente.pagina_numero];
+    if (!paginaSiguiente) return;
+    const cajaSiguiente = calcularCaja(entradaSiguiente, paginaSiguiente);
+    if (!cajaSiguiente) return;
+
+    const dibujarRecorte = (imgSig) => {
+      const sx = cajaSiguiente.left * imgSig.naturalWidth;
+      const sy = cajaSiguiente.top * imgSig.naturalHeight;
+      const sw = Math.max((cajaSiguiente.right - cajaSiguiente.left) * imgSig.naturalWidth, 1);
+      const sh = Math.max((cajaSiguiente.bottom - cajaSiguiente.top) * imgSig.naturalHeight, 1);
+      // Misma escala que el resto de la partitura (ventana.escalaRender), no
+      // "lo que sea que entre" en el espacio libre — si no, el compás se ve
+      // desproporcionadamente grande comparado con cómo se lee el resto del
+      // score. Sólo se ocupa tanto alto como haga falta a ese tamaño natural
+      // (acotado al espacio realmente libre), no todo lo disponible.
+      const escala = ventana.escalaRender;
+      const dw = Math.min(sw * escala, canvas.width - 16);
+      const dh = Math.min(sh * escala, alturaDisponible - 16);
+      const w = canvas.width, h = Math.min(alturaDisponible, Math.ceil(dh) + 16);
+      scorePreviewAbajo.width = w;
+      scorePreviewAbajo.height = h;
+      scorePreviewAbajo.style.width = w + 'px';
+      scorePreviewAbajo.style.height = h + 'px';
+      scorePreviewAbajo.style.top = canvas.height + 'px';
+      scorePreviewAbajo.style.display = '';
+      const ctx = scorePreviewAbajo.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(20, 20, 20, 0.92)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = colorAcento;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, Math.max(w - 2, 1), Math.max(h - 2, 1));
+
+      const dx = (w - dw) / 2, dy = (h - dh) / 2; // centrado, acá no hay "hacia dónde se lee"
+      ctx.drawImage(imgSig, sx, sy, sw, sh, dx, dy, dw, dh);
+    };
+    const imgCacheada = imagenesPorPagina[paginaSiguiente.numero];
+    if (imgCacheada) dibujarRecorte(imgCacheada);
+    else obtenerImagen(paginaSiguiente).then(dibujarRecorte).catch(() => {});
+  }
+
   // Vuelve a dibujar con el ÚLTIMO estado ya decidido por actualizarScore
   // (qué compás resaltar, si hay preview) — el botón de zoom llama a esto
   // directamente: cambiar el nivel de zoom no cambia nada de la decisión
@@ -1414,6 +1520,7 @@
   function repintarScore() {
     if (!ventanaActiva) return;
     renderizarVentanaBase(ventanaActiva);
+    if (scorePreviewAbajo) scorePreviewAbajo.style.display = 'none'; // se reactiva sola si hace falta, ver renderizarPreviewSync
     if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
       renderizarCompasActualSync(ventanaActiva, ultimoEntradaResaltar, ultimoFracIni, ultimoFracFin);
     }
@@ -1439,7 +1546,7 @@
   // cada pulso, y una excepción sin capturar ahí adentro frenaría
   // requestAnimationFrame para siempre (avanzar() nunca volvería a
   // programarse). De ahí el try/catch acá y el que no se propaga nada.
-  async function actualizarScore(numeroActual, numeroSiguiente, pulsoActual, pulsosPorCompasActual, cuentaRegresiva) {
+  async function actualizarScore(numeroActual, pulsoActual, pulsosPorCompasActual, cuentaRegresiva) {
     if (!scoreVentanaCanvas || !scoreGeometria) return;
     try {
       scoreErrorEl.style.display = 'none';
@@ -1449,7 +1556,6 @@
         scoreErrorEl.style.display = '';
         return;
       }
-      const siguiente = numeroSiguiente !== null ? (scoreGeometria.porCompas[numeroSiguiente] || null) : null;
 
       // El cambio de ventana es reactivo, no anticipado: se espera a que el
       // compás actual realmente no entre más en la ventana vigente (o sea,
@@ -1480,16 +1586,35 @@
         ultimoFracFin = fracFin;
       }
 
-      // El preview se muestra cuando el PRÓXIMO compás real no entra en la
-      // ventana activa — sin importar en qué sistema de la ventana esté el
-      // compás actual (antes exigía que fuera el último sistema visible,
-      // pero un tramo corto puede saltar casi apenas se entra a una
-      // ventana nueva, todavía en su primer sistema, y ahí no había dónde
-      // avisar). renderizarPreviewSync decide dónde pintarlo según eso.
-      ultimoMostrarPreview = ventanaActiva.sistemas.length > 1 && !!siguiente &&
-        actual.pagina_numero === ventanaActiva.pagina_numero &&
-        !ventanaContieneCompas(ventanaActiva, siguiente);
-      ultimoSiguiente = siguiente;
+      // El compás que va a INAUGURAR la ventana siguiente — no el próximo
+      // inmediato: puede haber varios compases más del sistema actual
+      // todavía visibles antes de llegar al que de verdad hace falta que
+      // cambie la ventana. Se busca hacia adelante en la secuencia real
+      // (pulsos/compasInicios, respeta saltos y repeticiones) el primero
+      // que ya no entra en la ventana VIGENTE — ese es fijo durante toda la
+      // anticipación (no se recalcula a "uno más adelante" en cada pulso),
+      // así el aviso siempre señala el mismo compás, sea que falten 4 o 1.
+      // Sólo se busca hasta COMPASES_AVISO_PREVIO pasos: más lejos que eso
+      // no hace falta avisar todavía.
+      let inaugurador = null;
+      if (planCargado && cuentaRegresiva == null) {
+        const kActual = indiceCompasActual();
+        for (let k = kActual + 1; k <= kActual + COMPASES_AVISO_PREVIO && k < compasInicios.length; k++) {
+          const numero = pulsos[compasInicios[k]].compas;
+          const entrada = scoreGeometria.porCompas[numero] || null;
+          if (entrada && !ventanaContieneCompas(ventanaActiva, entrada)) {
+            inaugurador = entrada;
+            break;
+          }
+        }
+      }
+      // Sin importar en qué sistema de la ventana esté el compás actual
+      // (antes exigía que fuera el último sistema visible, pero un tramo
+      // corto puede saltar casi apenas se entra a una ventana nueva,
+      // todavía en su primer sistema, y ahí no había dónde avisar).
+      // renderizarPreviewSync decide dónde pintarlo.
+      ultimoMostrarPreview = !!inaugurador && actual.pagina_numero === ventanaActiva.pagina_numero;
+      ultimoSiguiente = inaugurador;
       // Sin datos de pulso (llamada inicial, antes de arrancar la
       // ejecución en tiempo real) el punto simplemente se centra en el
       // compás — se ajusta solo apenas haya pulsos reales.
@@ -1550,6 +1675,13 @@
     btnPause.style.display = estado === 'reproduciendo' ? '' : 'none';
     btnContinuar.style.display = estado === 'pausado' ? '' : 'none';
     btnReiniciar.style.display = estado === 'pausado' ? '' : 'none';
+    // Detener está disponible siempre que NO se esté en 'inicial' (tanto
+    // corriendo como en pausa) — es la única forma de volver a 'inicial'
+    // sin esperar a que el plan termine solo, así se puede volver a elegir
+    // "Ejecutar con audio" (ver más abajo, sólo habilitado en 'inicial') sin
+    // recargar la página. A diferencia de Reiniciar, no vuelve a arrancar
+    // sola — deja todo listo para tocar Ejecutar cuando se quiera.
+    if (btnDetener) btnDetener.style.display = estado === 'inicial' ? 'none' : '';
     // A diferencia de la velocidad (ver más abajo), cambiar esto a mitad de
     // una ejecución (corriendo o en pausa) dejaría el reloj usando un
     // ancla/array que ya no corresponde a lo que se está mostrando — sólo
@@ -1559,6 +1691,22 @@
     // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
     // no recibiría ni el primer evento de interacción, y el listener de
     // 'input' no podría pausar antes de aplicar el cambio (ver más arriba).
+  }
+
+  // Corta todo (reloj, audio) y vuelve al estado 'inicial' sin arrancar de
+  // nuevo — a diferencia de Reiniciar (que implica un play implícito), esto
+  // deja la pantalla lista para cambiar "Ejecutar con audio" u otras
+  // opciones que sólo se pueden tocar antes de arrancar, y recién ahí
+  // apretar Ejecutar si se quiere.
+  function detener() {
+    cuentaAlAire = null;
+    detenerAnimacion();
+    if (audioNav && !audioNav.paused) audioNav.pause();
+    idxMostrado = -1;
+    elapsedAlPausar = 0;
+    planCargado = false;
+    actualizarBotonesNav();
+    mostrarControles('inicial');
   }
 
   // Reposicionan el reloj (elapsedAlPausar) para que "Continuar" retome
@@ -1702,6 +1850,7 @@
     pulsos = data.pulsos;
     primerPulsoTiempoReal = data.primer_pulso_tiempo_real;
     velocidadActual = leerVelocidadSlider();
+    aplicarVelocidadAudio();
     compasInicios = [];
     pulsos.forEach((p, idx) => {
       if (p.es_primer_pulso_compas) compasInicios.push(idx);
@@ -1807,6 +1956,7 @@
 
   btnPlay.addEventListener('click', cargarPlanYArrancar);
   btnReiniciar.addEventListener('click', cargarPlanYArrancar);
+  if (btnDetener) btnDetener.addEventListener('click', detener);
   btnPause.addEventListener('click', pausar);
   btnContinuar.addEventListener('click', continuarDesdePausa);
   btnAnterior.addEventListener('click', irAnterior);

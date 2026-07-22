@@ -30,8 +30,7 @@
       <a href="{% url 'partituras:detalle' p.pk %}" class="text-decoration-none stretched-link">
         <div class="card-body">
           <h6 class="card-title pe-4" style="color: var(--ss-text-bright)"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.titulo }}</h6>
-          <p class="small mb-1" style="color: var(--ss-text-muted)">{{ p.compositor|default:"—" }}</p>
-          <p class="small mb-0" style="color: var(--ss-text-muted)">{{ p.instrumento|default:"—" }}{% if p.parte %} · {{ p.parte }}{% endif %}</p>
+          <p class="small mb-0" style="color: var(--ss-text-muted)">{{ p.nombre_parte|default:"—" }}</p>
         </div>
       </a>
     </div>
