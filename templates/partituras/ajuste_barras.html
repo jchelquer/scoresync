@@ -270,8 +270,21 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
     for (let k = i + 1; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] - pesoBorrado);
     return resultado;
   }
+  // Más de un cambio a la vez (p.ej. "Volver a detectar de cero"): no hay
+  // un único punto de divergencia para insertar/borrar puntualmente, así
+  // que se resecuencia desde numeroInicial — pero cada compás que ya
+  // existía antes (identificado por su barra, no por posición) tiene que
+  // seguir valiendo lo que valía (repeticionesViejos), si no un silencio de
+  // varios compases marcado a mano se pisa con +1 en vez de +repeticiones
+  // apenas pasa cualquier cambio grande.
+  const repeticionesPorClave = new Map();
+  clavesViejas.forEach((k, idx) => repeticionesPorClave.set(k, repeticionesViejos[idx]));
   let n = numeroInicial;
-  return clavesNuevas.map(() => n++);
+  return clavesNuevas.map((k) => {
+    const numero = n;
+    n += repeticionesPorClave.get(k) ?? 1;
+    return numero;
+  });
 }
 
 // Muchas partituras no tienen una barra de compás pegada al borde derecho
