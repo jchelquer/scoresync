@@ -438,16 +438,25 @@ def _inclinacion_barra(binaria, x_aprox, y0, y1, ventana=12):
     return float(np.degrees(np.arctan(pendiente)))
 
 
-def encontrar_ancla(img_bgr):
+def encontrar_ancla(img_bgr, sistemas=None):
     """
     Encuentra una barra de compás confiable para usar como "ancla": no hace
     falta que sea la última del primer sistema (alcanza con cualquiera bien
     formada) — se evita la primera del sistema porque queda pegada a
     clave/armadura/compás, zona visualmente más sucia.
+
+    sistemas: lista opcional de {'y0','y1'} en píxeles (mismo formato que
+    devuelve detectar_sistemas), ya confirmados/corregidos por el usuario.
+    Si se pasa, se usa tal cual — no tiene sentido volver a proponer
+    sistemas que el usuario ya corrigió, mismo criterio que orientación o
+    márgenes ya confirmados. Si no se pasa (None), cae en detectar_sistemas
+    como antes (diagnósticos/tests sin sistemas confirmados a mano).
+
     Devuelve None si no se encontró ninguna, o un dict con posición,
     extremos del pentagrama e inclinación medida.
     """
-    sistemas = detectar_sistemas(img_bgr)
+    if sistemas is None:
+        sistemas = detectar_sistemas(img_bgr)
     if not sistemas:
         return None
     binaria = _binarizar(img_bgr)

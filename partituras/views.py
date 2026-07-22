@@ -1292,7 +1292,17 @@ def _detectar_ancla_pagina(partitura, pagina):
     por "volver a detectar de cero"."""
     normalizada, recortada, (offset_x, offset_y) = _pagina_normalizada_recortada(partitura, pagina)
     h, w = normalizada.shape[:2]
-    ancla = encontrar_ancla(recortada)
+    # Los Sistema de esta página ya están confirmados a esta altura (ver
+    # ajuste_ancla, exige partitura.sistemas_completos) — no tiene sentido
+    # que encontrar_ancla vuelva a correr detectar_sistemas de cero e
+    # ignore la corrección del usuario. Sistema.y/height son relativos a la
+    # página normalizada COMPLETA (ver _detectar_sistemas_pagina); acá hace
+    # falta convertirlos a píxeles de la imagen recortada que usa encontrar_ancla.
+    sistemas_confirmados = [
+        {"y0": int(s.y * h - offset_y), "y1": int((s.y + s.height) * h - offset_y)}
+        for s in pagina.sistemas.order_by("orden")
+    ]
+    ancla = encontrar_ancla(recortada, sistemas=sistemas_confirmados)
     if ancla:
         x = ancla['x'] + offset_x
         y0 = ancla['y0'] + offset_y
