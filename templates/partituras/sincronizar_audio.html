@@ -57,6 +57,12 @@
           <button id="sync-btn-fwd-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 0,1 segundo" %}">+0,1s</button>
           <button id="sync-btn-fwd1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 1 segundo" %}">+1s</button>
         </div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <label for="sync-velocidad" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
+          <input type="range" id="sync-velocidad" min="25" max="100" step="5" value="100" style="width: 6.5rem;"
+                 title="{% translate 'Bajar la velocidad no cambia el tiempo real que se guarda al marcar — sólo hace más cómodo tapear con precisión.' %}">
+          <span id="sync-velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">100%</span>
+        </div>
         <div class="d-flex align-items-center gap-3 mb-2">
           <span id="sync-tiempo-actual" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
           <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
@@ -110,6 +116,8 @@
   const btnBackFino = document.getElementById('sync-btn-back-fino');
   const btnFwdFino = document.getElementById('sync-btn-fwd-fino');
   const btnFwd1 = document.getElementById('sync-btn-fwd1');
+  const velocidadSlider = document.getElementById('sync-velocidad');
+  const velocidadValorEl = document.getElementById('sync-velocidad-valor');
   const scrubber = document.getElementById('sync-scrubber');
   const tiempoActualEl = document.getElementById('sync-tiempo-actual');
   const tiempoTotalEl = document.getElementById('sync-tiempo-total');
@@ -162,6 +170,16 @@
   function saltar(delta) {
     const destino = audio.currentTime + delta;
     audio.currentTime = Math.max(0, audio.duration ? Math.min(destino, audio.duration) : destino);
+  }
+
+  // audio.currentTime no depende de playbackRate (siempre es la posición
+  // real dentro de la grabación) — bajar la velocidad sólo hace más cómodo
+  // marcar con precisión, no requiere reescalar nada de lo que se guarda.
+  if (velocidadSlider) {
+    velocidadSlider.addEventListener('input', () => {
+      audio.playbackRate = parseInt(velocidadSlider.value, 10) / 100;
+      velocidadValorEl.textContent = velocidadSlider.value + '%';
+    });
   }
 
   btnPlayPause.addEventListener('click', () => {
