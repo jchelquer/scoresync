@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Ajustar márgenes — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -139,8 +139,8 @@ const lienzo = document.getElementById('lienzo');
 const imagen = document.getElementById('imagen-pagina');
 
 let rect = {
-  x0: {{ pagina.margen_x0_aplicado|default:0.0 }}, y0: {{ pagina.margen_y0_aplicado|default:0.0 }},
-  x1: {{ pagina.margen_x1_aplicado|default:1.0 }}, y1: {{ pagina.margen_y1_aplicado|default:1.0 }},
+  x0: {{ pagina.margen_x0_aplicado|default:0.0|unlocalize }}, y0: {{ pagina.margen_y0_aplicado|default:0.0|unlocalize }},
+  x1: {{ pagina.margen_x1_aplicado|default:1.0|unlocalize }}, y1: {{ pagina.margen_y1_aplicado|default:1.0|unlocalize }},
 };
 
 function render() {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Ajustar orientación — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -124,7 +124,7 @@
       </button>
       <form method="post" class="d-flex gap-2 mb-3">
         {% csrf_token %}
-        <input type="number" step="0.01" name="angulo" id="input-angulo" value="{{ pagina.angulo_deskew_aplicado|floatformat:2 }}"
+        <input type="number" step="0.01" name="angulo" id="input-angulo" value="{{ pagina.angulo_deskew_aplicado|default:0|stringformat:'.2f' }}"
                class="form-control" style="max-width: 8rem;">
         <button type="submit" name="accion" value="ajustar_angulo" class="btn btn-outline-light">
           {% translate "Aplicar" %}
@@ -157,7 +157,7 @@ document.querySelectorAll('[data-bs-toggle="popover"]').forEach(el => new bootst
 
 const lienzo = document.getElementById('lienzo');
 const svg = document.getElementById('svg-trazo');
-const anguloActual = parseFloat("{{ pagina.angulo_deskew_aplicado|default:0 }}");
+const anguloActual = parseFloat("{{ pagina.angulo_deskew_aplicado|default:0|unlocalize }}");
 
 // ── Guías arrastrables, con posición recordada entre páginas/recargas ──────
 const GUIAS_KEY = 'scoresync_guias_orientacion';

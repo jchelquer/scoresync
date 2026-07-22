@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Ajustar ancla — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -168,14 +168,14 @@ const imagen = document.getElementById('imagen-pagina');
 let confirmada = {{ pagina.ancla_confirmada|yesno:"true,false" }};
 
 let rect = {
-  x0: {{ pagina.ancla_x0|default:0.3 }}, y0: {{ pagina.ancla_y0|default:0.3 }},
-  x1: {{ pagina.ancla_x1|default:0.4 }}, y1: {{ pagina.ancla_y1|default:0.4 }},
+  x0: {{ pagina.ancla_x0|default:0.3|unlocalize }}, y0: {{ pagina.ancla_y0|default:0.3|unlocalize }},
+  x1: {{ pagina.ancla_x1|default:0.4|unlocalize }}, y1: {{ pagina.ancla_y1|default:0.4|unlocalize }},
 };
 
 const linea = {
-  x: {{ pagina.ancla_linea_x|default_if_none:"null" }},
-  y0: {{ pagina.ancla_linea_y0|default_if_none:"null" }},
-  y1: {{ pagina.ancla_linea_y1|default_if_none:"null" }},
+  x: {{ pagina.ancla_linea_x|default_if_none:"null"|unlocalize }},
+  y0: {{ pagina.ancla_linea_y0|default_if_none:"null"|unlocalize }},
+  y1: {{ pagina.ancla_linea_y1|default_if_none:"null"|unlocalize }},
 };
 
 function render() {

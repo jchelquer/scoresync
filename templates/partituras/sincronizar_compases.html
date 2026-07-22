@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Sincronizar por compás — {{ obra.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -135,7 +135,7 @@
                   {% translate "Compás" %} {{ entrada.compas }}{% if entrada.pasada > 1 %} <small style="color: var(--ss-text-muted)">({{ entrada.pasada }}ª {% translate "vez" %})</small>{% endif %}
                 {% endif %}
               </span>
-              <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:'' }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
+              <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:''|unlocalize }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
             </div>
             <div class="small" style="color: var(--ss-text-muted);">
               {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
