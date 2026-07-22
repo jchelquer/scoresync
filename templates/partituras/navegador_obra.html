@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Navegador — {{ obra.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -893,7 +893,7 @@
   let scoreGeometria = null; // { porCompas: {numero: {...,pagina_numero,offset,repeticiones}}, porPagina: {numero: pagina} }
   let ventanaActiva = null; // { pagina_numero, sistemas: [...], top, bottom, img, pagina, escalaRender }
   const imagenesPorPagina = {}; // numero de página -> HTMLImageElement ya cargada (caché)
-  let nivelZoom = {{ nivel_zoom_guardado|default:1 }};
+  let nivelZoom = {{ nivel_zoom_guardado|default:1|unlocalize }};
   // ZOOM_MIN < 1 alcanza a propósito: alejar más allá del ancho completo
   // deja sobrar ancho sin usar, pero cada sistema ocupa menos alto en
   // pantalla — así entran más sistemas en la ventana (ver
