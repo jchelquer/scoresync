@@ -119,6 +119,11 @@
   const filas = Array.from(document.querySelectorAll('.fila-sync'));
   const scoreCanvas = document.getElementById('sync-score-canvas');
   const scoreMsg = document.getElementById('sync-score-msg');
+  // Las funciones que dibujan la partitura (mostrarCompas, etc. — ver más
+  // abajo) sólo existen cuando hay una parte procesada disponible, así que
+  // este flag es lo único seguro de leer desde afuera de ese bloque para
+  // decidir si hay que llamarlas o mostrar un mensaje en su lugar.
+  const tieneScore = {{ tiene_score|yesno:"true,false" }};
 
   function getCookie(nombre) {
     const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
@@ -205,7 +210,13 @@
     armadaLabel.textContent = compasDesde
       ? '{% translate "Marcando el arranque del compás" %} ' + compasDesde
       : '{% translate "Marcando el fin de la obra" %}';
-    mostrarCompas(compasDesde ? parseInt(compasDesde, 10) : null);
+    if (tieneScore) {
+      mostrarCompas(compasDesde ? parseInt(compasDesde, 10) : null);
+    } else {
+      scoreCanvas.style.display = 'none';
+      scoreMsg.style.display = '';
+      scoreMsg.textContent = '{% translate "Todavía no hay una parte procesada para mostrar acá la partitura — podés sincronizar igual, guiándote sólo por el audio." %}';
+    }
 
     // Si la fila ya tiene un tiempo guardado, posicionar el reproductor ahí
     // — así un click sirve para ir a revisar/reescuchar una marca anterior,

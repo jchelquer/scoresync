@@ -168,6 +168,11 @@
   const filas = Array.from(document.querySelectorAll('.fila-sync'));
   const scoreCanvas = document.getElementById('sync-score-canvas');
   const scoreMsg = document.getElementById('sync-score-msg');
+  // Las funciones que dibujan la partitura (mostrarCompas, etc. — ver más
+  // abajo) sólo existen cuando hay una parte procesada disponible, así que
+  // este flag es lo único seguro de leer desde afuera de ese bloque para
+  // decidir si hay que llamarlas o mostrar un mensaje en su lugar.
+  const tieneScore = {{ tiene_score|yesno:"true,false" }};
   const btnModoMarcado = document.getElementById('modo-btn-marcado');
   const btnModoReproduccion = document.getElementById('modo-btn-reproduccion');
   const btnAjusteM1 = document.getElementById('sync-btn-ajuste-m1');
@@ -305,6 +310,12 @@
   }
 
   function refrescarPanelScore() {
+    if (!tieneScore) {
+      scoreCanvas.style.display = 'none';
+      scoreMsg.style.display = '';
+      scoreMsg.textContent = '{% translate "Todavía no hay una parte procesada para mostrar acá la partitura — podés sincronizar igual, guiándote sólo por el audio." %}';
+      return;
+    }
     // Compases seleccionados para el ajuste fino (ver más abajo) — se
     // pintan aparte en la partitura, además del armado/sonando, para ver
     // de un vistazo a cuáles les va a pegar el próximo ajuste.
