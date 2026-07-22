@@ -26,6 +26,33 @@ import numpy as np
 
 from .imagen import MARGEN_FRAC, binarizar as _binarizar
 
+# Ancho máximo (px) para la imagen que efectivamente pasa por
+# cv2.HoughLinesP/cv2.morphologyEx en este módulo. Medido en la VPS: a los
+# ~2480px de una página A4 a 300 DPI, detectar_angulo_deskew solo (Hough)
+# tardaba ~40s/página — con 15 páginas eso supera el timeout de gunicorn.
+# Ni el ángulo (arctan2, invariante a escala uniforme) ni el score de
+# horizontalidad (ya normalizado por ancho) pierden precisión real al medir
+# sobre una versión reducida — no hace falta la resolución completa para
+# esto, sólo para el recorte final que ve el usuario.
+_ANCHO_DETECCION_MAX = 1200
+
+
+def _reducir_para_deteccion(b, ancho_max=_ANCHO_DETECCION_MAX):
+    """Reduce una imagen binaria (0/255) para acelerar Hough/morphology.
+    Devuelve (imagen_reducida, escala) — escala < 1 si se redujo, para que
+    el caller pueda reescalar cualquier parámetro en píxeles absolutos
+    (ver maxLineGap en detectar_angulo_deskew). INTER_AREA (promedia en vez
+    de tomar un solo píxel) preserva mejor las líneas finas que
+    INTER_NEAREST; el threshold post-resize vuelve a dejarla binaria (el
+    promediado introduce grises en los bordes de cada línea)."""
+    h, w = b.shape
+    if w <= ancho_max:
+        return b, 1.0
+    escala = ancho_max / w
+    reducida = cv2.resize(b, (ancho_max, max(int(round(h * escala)), 1)), interpolation=cv2.INTER_AREA)
+    _, reducida = cv2.threshold(reducida, 0, 255, cv2.THRESH_BINARY)
+    return reducida, escala
+
 
 def _score_horizontalidad(img_bgr, margen_frac=MARGEN_FRAC):
     """
@@ -38,6 +65,7 @@ def _score_horizontalidad(img_bgr, margen_frac=MARGEN_FRAC):
     h, w = b.shape
     mx, my = int(w * margen_frac), int(h * margen_frac)
     b = b[my:h - my, mx:w - mx]
+    b, _ = _reducir_para_deteccion(b)
     h2, w2 = b.shape
     if h2 <= 0 or w2 <= 0:
         return 0.0
@@ -81,12 +109,13 @@ def detectar_angulo_deskew(img_bgr, margen_frac=MARGEN_FRAC):
     h, w = b.shape
     mx, my = int(w * margen_frac), int(h * margen_frac)
     recorte = b[my:h - my, mx:w - mx]
+    recorte, escala = _reducir_para_deteccion(recorte)
 
     lineas = cv2.HoughLinesP(
         recorte, 1, np.pi / 1800,  # resolución angular fina: 0.1°
         threshold=int(recorte.shape[1] * 0.15),
         minLineLength=int(recorte.shape[1] * 0.15),
-        maxLineGap=10,
+        maxLineGap=max(int(round(10 * escala)), 2),  # 10px era en la resolución completa — reescalado para el mismo criterio relativo
     )
     if lineas is None:
         return 0.0
