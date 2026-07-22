@@ -1351,8 +1351,16 @@ def ajuste_ancla(request, pk, numero):
             normalizada, _, _ = _pagina_normalizada_recortada(partitura, pagina)
             h, w = normalizada.shape[:2]
             y_centro = (ry0 * h + ry1 * h) / 2
+            # Sistema.y/height son relativos a esta misma página normalizada
+            # completa (ver _detectar_sistemas_pagina) — usar los ya
+            # confirmados en vez de re-detectar de cero, mismo criterio que
+            # _detectar_ancla_pagina (ver V1.6.6).
             sistema_px = next(
-                (s for s in detectar_sistemas(normalizada) if s['y0'] <= y_centro <= s['y1']),
+                (
+                    {"y0": s.y * h, "y1": (s.y + s.height) * h}
+                    for s in pagina.sistemas.order_by("orden")
+                    if s.y * h <= y_centro <= (s.y + s.height) * h
+                ),
                 None,
             )
             refinado = buscar_barra_en_rectangulo(
