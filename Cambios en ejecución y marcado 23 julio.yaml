@@ -1,0 +1,39 @@
+# Cambios en ejecución y en marcado
+# 23/7/2026
+Terminología: 
+- cuando hable de ejecución, me refiero a la ejecución independiente, no a la de marcado. Una página ejemplo para que veas la url es https://scoresync.infedu.com.ar/partituras/obras/7/navegador/
+- si hablo de marcado o reproducción, me refiero a la sincronización por itinerario (ej https://scoresync.infedu.com.ar/partituras/obras/7/sincronizar-audio/) o por compases (ej https://scoresync.infedu.com.ar/partituras/obras/7/sincronizar-compases/)
+- Para evitar confusiones, en la pantalla de la obra (p.ej.https://scoresync.infedu.com.ar/partituras/obras/7/) los botones respectivos se van a a llamar sincronizar-itinerario y sincronizar compases respectivamente.
+- Las url también deberían cambiar para llamarse sincronizar-itinerario y sincronizar-compases respectivamente. Esto es para que quede claro consistente toda la terminología.
+
+Ejecución:
+- Modos: hay 2 formas de ejecución:
+
+  - Con audio asociado
+  - Sin audio asociado
+
+- Tiempos de aparición del sombreado de compás y de las indicaciones de pulso:
+    Hay dos formas:
+    - Guiándote por la temporización calculada en el itinerario.
+    - Guiándote por la temporización de los compases.
+
+- Posicionamiento del audio (si hay audio asociado):
+    - Al EMPEZAR o RECOMENZAR a ejecutar un rango, el audio se posiciona siempre en lo que indique la temporización del compás desde del rango. Si el inicial es un compás con pulso (p.ej. 5,2.5) arrnaca desde el compás 5 y el pulso 2 lo hace durar 0.5 de lo que correspondería y sigue desde ahí.
+    - Al CONTINUAR después de una pausa, se continúa reproduciendo desde donde quedó el cursor de compás y el indicador de pulsos. Esto es así tanto si la temporización es por itinerario como por compases.
+    - Por lo demás, mientras se ejecuta, el audio corre de corrido.
+    
+- Posicionamiento del cursor de compases y el indicador de pulsos:
+    . Si es por itinerario, calcula todas las posiciones calculando a partir del itinerario.
+    - Si es por compases, calcula todas las posiciones a partir de los compases y sus tiempos.  
+    - En ningún momento se hacen mezclas para completar info faltante en uno u otro.
+    - La elección de un método u otro se hace con un switch (a agregar) donde está el switch de metrónomo, después de silenciar, y dice Temporización con un selector. Por default, el método es por compases.
+    . Para compactar la barra, el botón de Ejecutar en tiempo real pasa a ser sólo un símbolo de play, al igual que el de continuar. El de recomenzar tiene sólo el ícono que ya pusiste, sin texto. El de detener, sólo con el ícono correspondiente. Los botones de anterior y siguiente pasan a estar justo antes de los de las flechas verticales. Su texto cambia a ant y sig respectivamente.
+    - El texto números de compás cambia a n° compás.
+    - Al igual que ahora, en cualquier momento se puede hacer clic en un compás. La ejecución se pone en pausa y el compás activo pasa a ser ese.
+- Envío del plan al js:
+    - Como el JS va a ejecutar según el plan que se le envíe, ese plan se manda tanto al EMPEZAR, RECOMENZAR o CONTINUAR, pero no durante la ejecución.    
+
+- Modo compás o partitura: igual que ahora salvo que en pantallas reducidas tipo móvil el default es Modo Compás y en pantallas normales es, como ahora, el modo partitura.
+El resto a mi juicio está bien.
+
+No sé si hay alguna otra cosa que necesités. 

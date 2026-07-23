@@ -1,0 +1,22 @@
+#
+# Pendientes en Scoresync
+#
+marcado:
+    - Debe ser al igual que en la ejecución. Cuando se pulsa un compás en el pentagrama o en la lista de compases, ambos se posicionan ahí sin necesidad de play.
+    - Revisar la numeración de compases: me parece que no la hace bien en marcado.
+    - Revisar cómo hace la reproducción independiente y para el marcado. La independiente debe usar los tiempos marcados si los hay pero la de marcado no: el posicionamiento inicial sí según compás (si el elegido está marcado) pero, a partir de ahí, estrictamente la música.
+    - Me parece que el cambio de velocidad afecta el pitch (y revisar en ejecución)
+    - Que cambio de velocidad o señalamiento de compás detenga la ejecución.
+ejecución:
+    - Revisar si el cambio de velocidad afecta el pitch.
+    - Que marcar un compás pause la ejecución
+Marcar compases:
+    - quedó confuso qué pasa cuando uno cambia una barra o multirest. Probarlo bien.
+    - Hay barras dobles que si no están muy pegadas las detecta como dos.
+    - Ver si implementó el tema de seleccionar varias barras para borrarlas todas.
+Sistemas:
+    - En Romance para flauta, me parece que los detecta mal. Analizar cómo lo hace para mejorar el algoritmo.
+
+Layout: en marcado, ver si no es más práctico que el play etc esté también arriba de la lista de compases.
+Armadura: agregar en el itinerario y mostrar claramente los cambios.
+Reproducción: (al menos en marcado) aparte de continuar, recomenzar (desde el compás marcado). Al hacer clic, rearmar el plan sin hacer stop y play.

@@ -1,0 +1,50 @@
+# Cambios en ejecución y en marcado
+# 23/7/2026
+Terminología: 
+- cuando hable de ejecución, me refiero a la ejecución independiente, no a la de marcado. Una página ejemplo para que veas la url es https://scoresync.infedu.com.ar/partituras/obras/7/navegador/
+- si hablo de marcado o reproducción, me refiero a la ejecución de marcado, no a la independiente. Una página ejemplo para que veas la url es https://scoresync.infedu.com.ar/partituras/obras/7/sincronizar-compases/
+
+Sincronización:
+- Tipos: hay 2 tipos de sincronización:
+
+  - Sincronización por itinerario: sincroniza cada tramo del itinerario. La sincronización de cada compás se hace al momento de ejecutar interpolando.
+  - Sincronización por compases: sincroniza cada compás con su respectivo tiempo. 
+  
+Uso de audio:
+  - Los dos tipos de sincronización REQUIEREN que haya audio disponible. No vamos a hacer sincronización sin aSi hay audio asociado, la sincronización por compases se hace con el audio. La sincronización por itinerario se hace sin audio.
+Vamos a empezar por la sincronización por compases que es la más importante de las dos.
+
+
+Parte a usar: actualmente elegís, si no me equivoco, la primer parte disponible que sea del usuario. No sé si es así, pero no me parece mal como default. Lo que sí habría que hacer es poner un desplegable con todas las partes disponibles para que el usuario pueda elegir la que quiera. Esto es para que pueda tener a la vista la que más le convenga en cada momento.
+Inicialización: 
+    - La temporización la vamos a hacer SÓLO si hay audio disponible. Si no, rechazarla.
+    - al cargar la página, hay que asegurarse de marcar el principio y final de la obra (útil para interpolaciones)
+    - Si el primer compás no está temporizado ponerlo en cero
+    - Si la última entrada (--fin de la obra--) no está temporizada, ponerla en el tiempo que le corresponde al final del audio.
+    - Posicionar la lista de compases en el primer compás y la partitura al principio de la obra.
+
+- Selección de compases:
+    - Al igual que ahora, el usuario puede seleccionar en cualquier momento rangos de compases es o compases sueltos en la lista. Al hacerlo, la partitura debe ubicarse automáticamente para esté visible al tope el sistema del primer compás seleccionado.
+    - Al igual que ahora, el compás armado para marcado es el último del primer rango de compases seleccionados. 
+    - Los compases, a partir de ahora, pueden tener una temporización introducida por el usuario o interpolada por el programa (ese dato se guarda en la BD)
+    - Los compases que no tienen temporización explícita se marcan con un color distinto (por ejemplo un atenuado del fondo actual) y no se pueden usar como referencia para interpolar. El usuario puede introducir la temporización de esos compases y entonces pasan a ser válidos para usar como extremos en una interpolación.
+    - El usuario puede sacar una temporización explícita editándola y borrando el valor.
+
+- Interpolación:
+    - Hay que agregar un botón de interpolar que aparezca cuando hay seleccionado un compás que no tiene temporización explícita o un rango que tiene algún compás sin temporización explícita.
+    - Al pulsarlo ocurre lo siguiente:
+        - Para cada compás sin temporización explícita:
+        - Se busca el compás más cercano hacia arriba y hacia abajo que tenga temporización explícita. Si no hay ninguno, se rechaza la interpolación.
+        - Se interpolan los tiempos entre los compases con temporización explícita para llenar los espacios.
+        - Notar que para hacerlo bien hay que tener en cuenta la indicación de compás de cada compás para saber la duración relativa del compás durante la interpolación, así como los BPM y cambios que se produzcan.
+        - Puede ser útil,  los puntos de cambio en la indicación de compás y/o bpm en la lista de compases
+        - Los temas de accelerando, ritardando y calderón tienen sus propias complejidad. Por el momento prefiero dejarlo sin solucionar. Mi idea es que sea una capa extra de interporlación.
+        - La interpolación va a tener en cuenta los cambios de compás pero no se va a guiar por las indicaciones de BPM!!!! Lo que va a hacer el sistema es suponer que los compases continúan la duración del primero que tiene marca y se usa para la interpolación. Por el momento, es responsabilidad del usuario no mezclar.
+
+    Con este método se pretende:
+    - Poder hacer una primera temporización aunque sea incorrecta teniendo los tiempos de inicio y fin.
+    - Poder recalcular en cualquier momento si se cambia, agrega o quita una marca de tiempo explícita en algún lugar.
+
+- Borrado de temporizaciones:
+    - Agregar un botón de borrar temporización que borre la temporización explícita y la calculada por interporlación de los compases seleccionados. Esto es útil para recalcular la interpolación si se cambió algo.
+    - Como es una operación destructiva, hay que pedir confirmación al usuario antes de borrarla.
