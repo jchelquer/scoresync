@@ -20,6 +20,7 @@
   .linea-barra.aceptada { background: rgba(46, 204, 113, 0.35); }
   .linea-barra.dudosa { background: rgba(231, 76, 60, 0.35); }
   .linea-barra:hover { background: rgba(255, 255, 255, 0.5); }
+  .linea-barra.seleccionada { outline: 2px solid var(--ss-accent); outline-offset: 2px; }
   .compas-caja {
     position: absolute;
     border-left: 1px dashed rgba(255, 255, 255, 0.18);
@@ -162,7 +163,7 @@
         <span class="leyenda-punto" style="background: #e74c3c"></span>{% translate "Dudosa" %}
       </p>
       <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Barras — clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí." %}
+        {% translate "Barras — clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí. Arrastrá para dibujar un rectángulo y seleccionar varias — Supr o el botón las borra juntas; Esc, clic derecho o clic afuera de la partitura deseleccionan." %}
       </p>
       <p class="small" style="color: var(--ss-text-muted)">
         {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número: aparecen dos cajitas, el número y cuántos compases vale (para un silencio de varios compases) — completá la que te resulte más cómoda, lo que sigue se acomoda solo. Nada se guarda hasta Confirmar." %}
@@ -176,6 +177,9 @@
           {% if pagina.numero < total %}→{% endif %}
         </button>
       </form>
+      <button type="button" id="btn-borrar-seleccion" class="btn btn-outline-danger w-100 mb-2 d-none">
+        <i class="bi bi-trash"></i> {% translate "Borrar seleccionadas" %}
+      </button>
       <hr style="border-color: #2a4a47;">
       <form method="post" class="mb-2">
         {% csrf_token %}
@@ -209,6 +213,37 @@ const numeroInicial = {{ numero_inicial }};
 let sucio = false;
 let ultimoClickBarra = null;
 let ultimoClickTiempo = 0;
+
+// ── Selección múltiple (rectángulo de arrastre) + borrado en lote ─────────
+// Estado 100% de cliente, igual que `barras`: seleccionar y borrar la
+// selección es lo mismo que ya hace el doble clic (sacar del array +
+// marcarSucio + render), aplicado a varias a la vez — el borrado real en la
+// base sigue ocurriendo recién al Confirmar. Declarado acá arriba (no junto
+// a los listeners de arrastre, más abajo) porque render() ya lo necesita y
+// se llama sincrónicamente más abajo en este mismo script.
+let seleccionBarras = new Set();
+const btnBorrarSeleccion = document.getElementById('btn-borrar-seleccion');
+
+function actualizarBotonSeleccion() {
+  if (!btnBorrarSeleccion) return;
+  btnBorrarSeleccion.classList.toggle('d-none', seleccionBarras.size === 0);
+  btnBorrarSeleccion.innerHTML = '<i class="bi bi-trash"></i> {% translate "Borrar seleccionadas" %} (' + seleccionBarras.size + ')';
+}
+
+function limpiarSeleccion() {
+  if (!seleccionBarras.size) return;
+  seleccionBarras.clear();
+  render();
+}
+
+function borrarSeleccionadas() {
+  if (!seleccionBarras.size) return;
+  barras = barras.filter(b => !seleccionBarras.has(b._key));
+  seleccionBarras.clear();
+  marcarSucio();
+  render();
+}
+if (btnBorrarSeleccion) btnBorrarSeleccion.addEventListener('click', borrarSeleccionadas);
 
 function sistemaDe(sistemaId) {
   return sistemas.find(s => s.id === sistemaId);
@@ -410,7 +445,7 @@ function render() {
     const s = sistemaDe(b.sistema_id);
     if (!s) return;
     const linea = document.createElement('div');
-    linea.className = 'linea-barra ' + (b.estado === 'aceptada' ? 'aceptada' : 'dudosa');
+    linea.className = 'linea-barra ' + (b.estado === 'aceptada' ? 'aceptada' : 'dudosa') + (seleccionBarras.has(b._key) ? ' seleccionada' : '');
     linea.style.left = (b.x * 100) + '%';
     linea.style.top = (s.y * 100) + '%';
     linea.style.height = (s.height * 100) + '%';
@@ -439,6 +474,8 @@ function render() {
     });
     lienzo.appendChild(linea);
   });
+
+  actualizarBotonSeleccion();
 }
 
 // Dos cajitas: el número absoluto de este compás (como antes) y cuántos
@@ -588,6 +625,94 @@ lienzo.addEventListener('mousedown', e => {
   }
   document.addEventListener('mousemove', mover);
   document.addEventListener('mouseup', soltar);
+});
+
+// ── Rectángulo de selección por arrastre (mouse/touch, Pointer Events) ────
+// Arranca sólo con el fondo del lienzo o una banda de sistema vacía como
+// destino directo (nunca sobre una barra existente, que tiene su propio
+// clic/doble clic) y sólo si NO hay zoom activo (ese mismo gesto ya panea
+// con zoom, ver arriba — no se pisan porque cada uno mira el estado del
+// otro antes de arrancar).
+const rectSeleccion = document.createElement('div');
+rectSeleccion.id = 'rect-seleccion';
+rectSeleccion.style.cssText = 'position:absolute; display:none; pointer-events:none; border:1px dashed var(--ss-accent); background:rgba(55,182,163,0.15); z-index:3;';
+lienzo.appendChild(rectSeleccion);
+
+lienzo.addEventListener('pointerdown', e => {
+  if (zoomActivo) return;
+  if (e.button !== undefined && e.button !== 0) return;
+  if (!(e.target === lienzo || e.target.classList.contains('banda-sistema'))) return;
+  const r = lienzo.getBoundingClientRect();
+  const x0 = e.clientX - r.left, y0 = e.clientY - r.top;
+  const targetInicial = e.target;
+  let huboArrastre = false;
+
+  function mover(ev) {
+    const x1 = ev.clientX - r.left, y1 = ev.clientY - r.top;
+    // Umbral chico antes de considerar que hay arrastre real — así un clic
+    // normal con un temblor mínimo de mano no dispara el rectángulo.
+    if (!huboArrastre && (Math.abs(x1 - x0) > 4 || Math.abs(y1 - y0) > 4)) huboArrastre = true;
+    if (!huboArrastre) return;
+    rectSeleccion.style.display = '';
+    rectSeleccion.style.left = Math.min(x0, x1) + 'px';
+    rectSeleccion.style.top = Math.min(y0, y1) + 'px';
+    rectSeleccion.style.width = Math.abs(x1 - x0) + 'px';
+    rectSeleccion.style.height = Math.abs(y1 - y0) + 'px';
+  }
+  function soltar(ev) {
+    document.removeEventListener('pointermove', mover);
+    document.removeEventListener('pointerup', soltar);
+    rectSeleccion.style.display = 'none';
+    if (!huboArrastre) {
+      // Clic simple sin arrastre real: si cayó en el fondo vacío del
+      // lienzo, deselecciona; si cayó en una banda, el "click" sintético
+      // que sigue agrega una barra ahí, como siempre (no lo tocamos).
+      if (targetInicial === lienzo) limpiarSeleccion();
+      return;
+    }
+    const x1 = ev.clientX - r.left, y1 = ev.clientY - r.top;
+    const fx0 = Math.min(x0, x1) / r.width, fx1 = Math.max(x0, x1) / r.width;
+    const fy0 = Math.min(y0, y1) / r.height, fy1 = Math.max(y0, y1) / r.height;
+    seleccionBarras = new Set(
+      barras.filter(b => {
+        const s = sistemaDe(b.sistema_id);
+        if (!s) return false;
+        const cy = s.y + s.height / 2;
+        return b.x >= fx0 && b.x <= fx1 && cy >= fy0 && cy <= fy1;
+      }).map(b => b._key)
+    );
+    render();
+  }
+  document.addEventListener('pointermove', mover);
+  document.addEventListener('pointerup', soltar);
+});
+
+// Esc / clic derecho / clic-touch afuera de la partitura: deseleccionan.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return; // ya lo usa la edición de número (cancela esa edición)
+  limpiarSeleccion();
+});
+lienzoWrapper.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  limpiarSeleccion();
+});
+document.addEventListener('pointerdown', e => {
+  if (!seleccionBarras.size) return;
+  if (lienzoWrapper.contains(e.target)) return;
+  limpiarSeleccion();
+});
+
+// Supr/Backspace con selección activa (y sin estar escribiendo en un input)
+// borran el lote — mismo criterio de "nada se pierde de verdad hasta
+// Confirmar" que ya usa el borrado individual (doble clic): sin diálogo de
+// confirmación previo.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  if (!seleccionBarras.size) return;
+  e.preventDefault();
+  borrarSeleccionadas();
 });
 </script>
 {% endblock %}
