@@ -8,12 +8,15 @@
      abajo): header y panel de controles normales se esconden enteros —
      sus elementos clave ya fueron REUBICADOS (no clonados: son los mismos
      nodos con sus mismos listeners) en dos destinos antes de esconder el
-     resto: metrónomo/compás/indicación/bpm/modo/volver van a
-     #barra-compacta; rango (desde/hasta/loop), Ejecutar/Pausar/Continuar/
-     Reiniciar y Anterior/Siguiente van a #score-header-extra, junto a los
-     botones de zoom — así nada se pierde, sólo queda afuera el título, el
+     resto: metrónomo/temporización/compás/indicación/bpm/modo/volver van a
+     #barra-compacta; rango (desde/hasta/loop) y Ejecutar/Pausar/Continuar/
+     Reiniciar van a #score-header-extra, insertados ANTES de
+     Anterior/Siguiente — así nada se pierde, sólo queda afuera el título, el
      selector de parte, y lo que no se pidió tener en ninguna fila
-     (checkboxes de metrónomo, descripción, etc). */
+     (checkboxes de metrónomo, descripción, etc). Anterior/Siguiente y las
+     flechas de sistema/zoom NO se reubican: viven siempre, en los dos
+     modos, como contenido fijo de #score-header-extra (ver más abajo en el
+     HTML) — por eso quedan siempre pegados entre sí. */
   /* !important hace falta: #header-normal tiene la clase .d-flex de
      Bootstrap, y las utilidades de display de Bootstrap (.d-flex, .d-none)
      se definen con !important en su propia hoja — un display:none común
@@ -27,9 +30,6 @@
   body.modo-partitura #barra-compacta {
     display: flex !important;
     align-items: flex-end !important;
-  }
-  body.modo-partitura #score-header-extra {
-    display: flex !important;
   }
 
   #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
@@ -49,6 +49,10 @@
   #barra-compacta #control-compases-aire input,
   #score-header-extra #control-compases-aire input { width: 3rem !important; }
   #barra-compacta #control-ejecutar-audio { font-size: 0.8rem; }
+  #barra-compacta #control-temporizacion,
+  #score-header-extra #control-temporizacion { font-size: 0.8rem; }
+  #barra-compacta #control-temporizacion select,
+  #score-header-extra #control-temporizacion select { padding: 0.1rem 1.4rem 0.1rem 0.4rem; font-size: 0.8rem; }
 
   /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
      final de la fila compacta, empujados a la derecha (todo lo demás
@@ -203,8 +207,10 @@
 <p id="plan-error" class="small text-warning text-center" style="display:none;"></p>
 
 <div class="fila-botones d-flex justify-content-center gap-2 flex-wrap mb-3">
-  <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "Anterior" %}</button>
-  <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "Siguiente" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
+  {% if not tiene_score %}
+  <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "ant" %}</button>
+  <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "sig" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
+  {% endif %}
   <div class="d-flex align-items-center gap-2" id="control-compases-aire">
     <label for="compases-aire" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
     <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
@@ -235,11 +241,11 @@
   </div>
   <audio id="nav-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
   {% endif %}
-  <button id="btn-play" type="button" class="btn btn-ss">▶ {% translate "Ejecutar en tiempo real" %}</button>
-  <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;">⏸ {% translate "Pausar" %}</button>
-  <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;">▶ {% translate "Continuar" %}</button>
-  <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;">↺ {% translate "Reiniciar" %}</button>
-  <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;">⏹ {% translate "Detener" %}</button>
+  <button id="btn-play" type="button" class="btn btn-ss" title="{% translate 'Ejecutar en tiempo real' %}">▶</button>
+  <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Pausar' %}">⏸</button>
+  <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Continuar' %}">▶</button>
+  <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Reiniciar' %}">↺</button>
+  <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Detener' %}">⏹</button>
   <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
     <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
     <label class="form-check-label small ms-1" for="metronomo-visual" style="color: var(--ss-text-muted);">{% translate "Metrónomo visual" %}</label>
@@ -247,6 +253,13 @@
   <div class="form-check form-switch d-flex align-items-center" id="switch-metronomo-audio">
     <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
     <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
+  </div>
+  <div class="d-flex align-items-center gap-2" id="control-temporizacion">
+    <label for="select-temporizacion" class="form-label small mb-0" style="color: var(--ss-text-muted);">⏱ {% translate "Temporización" %}</label>
+    <select id="select-temporizacion" class="form-select form-select-sm" style="width: auto;">
+      <option value="compases" {% if fuente_temporizacion_guardada == "compases" %}selected{% endif %}>{% translate "Compases" %}</option>
+      <option value="itinerario" {% if fuente_temporizacion_guardada == "itinerario" %}selected{% endif %}>{% translate "Itinerario" %}</option>
+    </select>
   </div>
 </div>
 </div>
@@ -274,16 +287,19 @@
       {% else %}
       <p class="small mb-0" id="score-titulo-parte" style="color: var(--ss-text-muted)">{% translate "Score" %} — <span id="score-parte"></span></p>
       {% endif %}
-      <!-- Modo partitura: acá se reubican el rango (desde/hasta/loop) y
-           Anterior/Siguiente — ver alternarModoScore(). Vacío y escondido
-           en modo normal, donde esos controles siguen en su lugar de
-           siempre. -->
-      <div id="score-header-extra" class="d-none align-items-end flex-wrap gap-2"></div>
       <div class="form-check form-switch d-flex align-items-center mb-1">
         <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
-        <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "Números de compás" %}</label>
+        <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
       </div>
-      <div class="d-flex align-items-end gap-1" style="margin-left: auto;">
+      <!-- Modo partitura: acá se reubican el rango (desde/hasta/loop) y
+           Ejecutar/Pausar/Continuar/Reiniciar — ver alternarModoScore(),
+           siempre insertados ANTES de Anterior/Siguiente. Anterior/
+           Siguiente y las flechas de sistema/zoom son contenido FIJO de
+           este div (no se reubican nunca) — así quedan pegados entre sí en
+           los dos modos, no sólo en modo partitura. -->
+      <div id="score-header-extra" class="d-flex align-items-end flex-wrap gap-2" style="margin-left: auto;">
+        <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "ant" %}</button>
+        <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "sig" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
         <button id="btn-sistema-anterior" type="button" class="ss-tecla" title="{% translate 'Subir un sistema' %}">↑</button>
         <button id="btn-sistema-siguiente" type="button" class="ss-tecla" title="{% translate 'Bajar un sistema' %}">↓</button>
         <button id="btn-zoom-menos" type="button" class="btn btn-outline-light btn-sm" title="{% translate 'Alejar' %}">−</button>
@@ -341,6 +357,8 @@
   const toggleEjecutarAudio = document.getElementById('toggle-ejecutar-audio');
   const controlMuteAudio = document.getElementById('control-mute-audio');
   const toggleMuteAudio = document.getElementById('toggle-mute-audio');
+  const controlTemporizacion = document.getElementById('control-temporizacion');
+  const selectTemporizacion = document.getElementById('select-temporizacion');
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
@@ -349,16 +367,20 @@
   // Modo "ensayo con parte" (ver alternarModoScore() más abajo): estos
   // nodos se REUBICAN físicamente (no se clonan — siguen siendo los mismos
   // elementos con sus mismos listeners/ids), cada uno a uno de dos
-  // destinos — compás/indicación/bpm/switches de metrónomo/modo/volver a
-  // #barra-compacta; rango (con Loop), Ejecutar/Pausar/Continuar/Reiniciar
-  // (entre Loop y Anterior) y Anterior/Siguiente a #score-header-extra,
-  // junto a los botones de zoom. El recuadro con el puntito del metrónomo
-  // (metronomoCaja) NO se reubica acá a propósito: en modo partitura el
-  // cursor de pulso que ya se dibuja sobre el score (ver
+  // destinos — compás/indicación/bpm/switches de metrónomo/temporización/
+  // modo/volver a #barra-compacta; rango (con Loop) y Ejecutar/Pausar/
+  // Continuar/Reiniciar a #score-header-extra. El recuadro con el puntito
+  // del metrónomo (metronomoCaja) NO se reubica acá a propósito: en modo
+  // partitura el cursor de pulso que ya se dibuja sobre el score (ver
   // renderizarCursorPulso) hace de indicador visual, no hace falta uno
-  // aparte flotando en la barra. Se marca la posición original de cada uno
-  // con un comentario ancla ANTES de mover nada, así restaurar no depende
-  // de en qué orden se muevan/restauren varios hermanos entre sí.
+  // aparte flotando en la barra. Anterior/Siguiente NO están acá: son
+  // contenido FIJO de #score-header-extra (ver HTML), nunca se mueven —
+  // por eso todo lo que sí se reubica ahí lleva `antesDe: btnAnterior`,
+  // para insertarse SIEMPRE antes de ellos y no romper la adyacencia con
+  // las flechas de sistema/zoom (que también son fijas, después de
+  // Anterior/Siguiente). Se marca la posición original de cada uno con un
+  // comentario ancla ANTES de mover nada, así restaurar no depende de en
+  // qué orden se muevan/restauren varios hermanos entre sí.
   const reubicables = [
     { el: navCompas, destino: barraCompacta },
     { el: navIndicacionWrap, destino: barraCompacta },
@@ -366,34 +388,32 @@
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
     // "Ejecutar con audio" (con "Silenciar" anidado adentro, se mueve con
-    // él) va a continuación del metrónomo — mismo grupo temático ("qué
-    // suena mientras se ejecuta"), en la misma fila compacta.
+    // él) y Temporización van a continuación del metrónomo — mismo grupo
+    // temático ("qué gobierna la ejecución"), en la misma fila compacta.
     { el: controlEjecutarAudio, destino: barraCompacta },
+    { el: controlTemporizacion, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
     // Ejecutar/Pausar/Continuar/Reiniciar van en la MISMA fila que el rango
-    // (con Loop) y Anterior/Siguiente — entre uno y otro, ya que el orden
-    // acá determina el orden final en el destino (appendChild va agregando
-    // al final a medida que se recorre el array). Sólo uno de los cuatro
-    // está visible a la vez (ver mostrarControles), así que el orden entre
-    // ellos casi no se nota — Ejecutar primero porque es el punto de
-    // entrada antes de que exista un plan cargado. Los compases al aire y
-    // la velocidad van justo antes de ese grupo.
-    { el: formRango, destino: scoreHeaderExtra },
-    { el: controlCompasesAire, destino: scoreHeaderExtra },
-    { el: controlVelocidad, destino: scoreHeaderExtra },
-    { el: btnPlay, destino: scoreHeaderExtra },
-    { el: btnPause, destino: scoreHeaderExtra },
-    { el: btnContinuar, destino: scoreHeaderExtra },
-    { el: btnReiniciar, destino: scoreHeaderExtra },
-    { el: btnDetener, destino: scoreHeaderExtra },
-    { el: btnAnterior, destino: scoreHeaderExtra },
-    { el: btnSiguiente, destino: scoreHeaderExtra },
+    // (con Loop), siempre insertados ANTES de Anterior/Siguiente (fijos,
+    // ver arriba) — el orden acá determina el orden final entre ellos.
+    // Sólo uno de los cuatro está visible a la vez (ver mostrarControles),
+    // así que el orden entre ellos casi no se nota — Ejecutar primero
+    // porque es el punto de entrada antes de que exista un plan cargado.
+    // Los compases al aire y la velocidad van justo antes de ese grupo.
+    { el: formRango, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: controlCompasesAire, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: controlVelocidad, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: btnPlay, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: btnPause, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: btnContinuar, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: btnReiniciar, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    { el: btnDetener, destino: scoreHeaderExtra, antesDe: btnAnterior },
   ].filter(r => r.el && r.destino);
-  const anclasReubicacion = reubicables.map(({ el, destino }) => {
+  const anclasReubicacion = reubicables.map(({ el, destino, antesDe }) => {
     const ancla = document.createComment('ancla');
     el.parentNode.insertBefore(ancla, el);
-    return { el, ancla, destino };
+    return { el, ancla, destino, antesDe };
   });
 
   function actualizarVisibilidadMetronomo() {
@@ -432,7 +452,11 @@
       aplicarVelocidadAudio();
       reconstruirTiempos();
       if (idxMostrado >= 0 && idxMostrado < acumulados.length) {
-        elapsedAlPausar = acumulados[idxMostrado];
+        // Sólo re-ancla si el reloj activo es el calculado con velocidad
+        // (acumulados) — si es el real (acumuladosReales, ver
+        // usaAcumuladosReales), la velocidad no lo afecta en absoluto, no
+        // hay nada que remapear.
+        if (!usaAcumuladosReales()) elapsedAlPausar = acumulados[idxMostrado];
         mostrarPulso(pulsos[idxMostrado]); // refresca el bpm mostrado a la nueva velocidad
       }
       programarGuardadoPreferencias();
@@ -474,6 +498,7 @@
     params.set('velocidad', velocidadSlider ? velocidadSlider.value : '100');
     params.set('compases_al_aire', compasesAireInput ? compasesAireInput.value : '1');
     params.set('ejecutar_con_audio', ejecutarConAudio ? 'on' : '');
+    params.set('fuente_temporizacion', fuenteTemporizacion());
     params.set('zoom', String(nivelZoom));
     fetch('{% url "partituras:guardar_preferencias_obra" obra.pk %}', {
       method: 'POST',
@@ -513,11 +538,41 @@
       audioNav.muted = toggleMuteAudio.checked;
     });
   }
+  // ── Temporización (itinerario/compases) ─────────────────────────────
+  // Se recuerda como el resto de las preferencias. Sólo afecta de dónde
+  // sale la duración usada por el reloj/cursor (ver campoDuracion) —
+  // independiente de "Ejecutar con audio", ver audioDebeSonar/
+  // fuenteTemporizacion.
+  if (selectTemporizacion) {
+    selectTemporizacion.addEventListener('change', programarGuardadoPreferencias);
+  }
   // Sólo tiene sentido elegir esto ANTES de arrancar — cambiarlo a mitad
   // de una ejecución (corriendo o en pausa) dejaría el reloj usando un
   // ancla/array que ya no corresponde a lo que se está mostrando.
-  function usarAudioModo() {
+  //
+  // Desacoplado en dos preguntas independientes (antes eran una sola,
+  // "usarAudioModo"): audioDebeSonar() sólo decide si el <audio> HTML
+  // suena/se reposiciona; fuenteTemporizacion()/campoDuracion() deciden,
+  // totalmente aparte, de qué dato sale la posición del cursor/sombreado.
+  // Las 4 combinaciones son válidas (con/sin audio × itinerario/compases).
+  function audioDebeSonar() {
     return ejecutarConAudio && !!audioNav && primerPulsoTiempoReal != null;
+  }
+  function fuenteTemporizacion() {
+    return (selectTemporizacion && selectTemporizacion.value === 'itinerario') ? 'itinerario' : 'compases';
+  }
+  function campoDuracion() {
+    return fuenteTemporizacion() === 'itinerario' ? 'duracion_itinerario' : 'duracion_compases';
+  }
+  // Mismo criterio que usa avanzar() para elegir entre acumulados (con
+  // velocidad) y acumuladosReales (sin ella) — se reusa en los lugares que
+  // necesitan re-anclar elapsedAlPausar a la posición real de un pulso
+  // (cambio de velocidad a mitad de pausa, remapeo al continuar).
+  function usaAcumuladosReales() {
+    return fuenteTemporizacion() === 'compases' || audioDebeSonar();
+  }
+  function elapsedEnPulso(idx) {
+    return usaAcumuladosReales() ? acumuladosReales[idx] : acumulados[idx];
   }
 
   // Los navegadores ignoran (o resetean más tarde) un currentTime asignado
@@ -540,14 +595,15 @@
   // para programar todo contra un único reloj absoluto.
   let pulsos = [];
   let acumulados = [];
-  // Contraparte de acumulados/totalDuracion pero con duracion_real (ver
-  // construir_plan) en vez de la calculada — nunca se le aplica velocidad
-  // (el audio es una grabación de tempo fijo, no algo que se pueda
-  // acelerar/frenar sin distorsión) y por eso NO depende de
-  // velocidadActual como sí depende reconstruirTiempos() de acumulados.
+  // Contraparte de acumulados/totalDuracion pero con duracion_itinerario o
+  // duracion_compases (según campoDuracion, ver construir_plan) en vez de
+  // la calculada pura — nunca se le aplica velocidad (un tiempo real
+  // capturado no es algo que se pueda acelerar/frenar sin distorsión) y
+  // por eso NO depende de velocidadActual como sí depende
+  // reconstruirTiempos() de acumulados.
   let acumuladosReales = [];
   let totalDuracionReal = 0;
-  let primerPulsoTiempoReal = null; // tiempo_inicio real del primer pulso del plan — ancla para usarAudioModo()
+  let primerPulsoTiempoReal = null; // tiempo_inicio real del primer pulso del plan — ancla para audioDebeSonar()
   let compasInicios = []; // índices de pulsos[] donde arranca cada compás (uno por ocurrencia, cruzando filas)
   let totalDuracion = 0;
   let startTs = 0;
@@ -582,17 +638,26 @@
 
   // Reconstruye acumulados/totalDuracion desde pulsos[] (ya cargado) con la
   // velocidadActual vigente — no toca compasInicios (eso no depende de la
-  // velocidad, sólo se arma una vez al cargar el plan).
+  // velocidad, sólo se arma una vez al cargar el plan). acumuladosReales
+  // usa el campo de la fuente de temporización activa (ver campoDuracion) —
+  // nunca se le aplica velocidad (ver comentario de acumuladosReales más
+  // arriba). En modo "por compases", un pulso puede no tener dato real
+  // (campo null — fuera del tramo cubierto por marcas, ver construir_plan):
+  // se le suma 0, así el pulso siguiente "hereda" el mismo acumulado en vez
+  // de robarle tiempo real a nadie — es lo que permite el freeze/snap en
+  // avanzar() (el índice no avanza más allá de un pulso null hasta que el
+  // reloj alcanza el acumulado del próximo pulso con dato real).
   function reconstruirTiempos() {
     acumulados = [];
     totalDuracion = 0;
     acumuladosReales = [];
     totalDuracionReal = 0;
+    const campo = campoDuracion();
     pulsos.forEach(p => {
       acumulados.push(totalDuracion);
       totalDuracion += duracionEscalada(p);
       acumuladosReales.push(totalDuracionReal);
-      totalDuracionReal += (p.duracion_real != null ? p.duracion_real : p.duracion) || 0;
+      totalDuracionReal += p[campo] != null ? p[campo] : 0;
     });
   }
 
@@ -1665,9 +1730,15 @@
   if (toggleNumerosCompas) toggleNumerosCompas.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
 
   cargarScoreGeometria();
-  // Modo partitura es el modo por defecto al entrar al navegador — el otro
-  // ("modo compás", controles completos) sigue disponible con el mismo botón.
-  if (btnModoScore) alternarModoScore();
+  // Modo partitura es el default en pantallas normales; en pantallas
+  // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
+  // la app) arranca en modo compás — controles completos, más fáciles de
+  // tocar, sin la exigencia de espacio horizontal del score. Se evalúa una
+  // sola vez al cargar (no hace falta reaccionar a resize a mitad de
+  // sesión). El otro modo sigue disponible con el mismo botón en cualquier
+  // caso.
+  const esMobile = window.matchMedia('(max-width: 768px)').matches;
+  if (btnModoScore && !esMobile) alternarModoScore();
 
   function mostrarControles(estado) {
     // estado: 'inicial' | 'reproduciendo' | 'pausado'
@@ -1687,6 +1758,10 @@
     // ancla/array que ya no corresponde a lo que se está mostrando — sólo
     // se puede elegir antes de arrancar.
     if (toggleEjecutarAudio) toggleEjecutarAudio.disabled = estado !== 'inicial';
+    // Mismo criterio que "Ejecutar con audio": elegir la fuente de
+    // temporización a mitad de una ejecución dejaría el reloj usando un
+    // acumulado que ya no corresponde a lo que se está mostrando.
+    if (selectTemporizacion) selectTemporizacion.disabled = estado !== 'inicial';
     // El slider de velocidad se deja SIEMPRE habilitado (nunca con el
     // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
     // no recibiría ni el primer evento de interacción, y el listener de
@@ -1716,10 +1791,10 @@
     idxMostrado = idx;
     mostrarPulso(pulsos[idx]);
     elapsedAlPausar = acumulados[idx];
-    // En modo audio hay que reposicionar el audio también — si no,
+    // Si el audio suena hay que reposicionarlo también — si no,
     // "Continuar" después de este salto reengancharía desde donde haya
     // quedado el audio, no desde el pulso al que se acaba de saltar.
-    if (usarAudioModo() && acumuladosReales[idx] != null) {
+    if (audioDebeSonar() && acumuladosReales[idx] != null) {
       await esperarMetadataAudio();
       audioNav.currentTime = primerPulsoTiempoReal + acumuladosReales[idx];
     }
@@ -1775,22 +1850,28 @@
   // Un solo reloj absoluto (startTs) en vez de encadenar setTimeout de a
   // un pulso por vez: así ni el jitter de red (ya no hay pedidos
   // intermedios) ni la imprecisión de cada timer individual se acumulan
-  // como desfasaje de tempo a lo largo de la ejecución. En modo audio, el
-  // "reloj absoluto" pasa a ser directamente audioNav.currentTime — si el
-  // audio está pausado (el usuario le pegó a Pausar, que también pausa el
-  // audio) currentTime no cambia entre frames, así que esto se congela
+  // como desfasaje de tempo a lo largo de la ejecución. Si el audio suena,
+  // el "reloj absoluto" pasa a ser directamente audioNav.currentTime — si
+  // el audio está pausado (el usuario le pegó a Pausar, que también pausa
+  // el audio) currentTime no cambia entre frames, así que esto se congela
   // solo, sin ningún caso especial acá.
   function avanzar(now) {
-    const modoAudio = usarAudioModo();
-    let elapsed = modoAudio ? (audioNav.currentTime - primerPulsoTiempoReal) : (now - startTs) / 1000;
-    const total = modoAudio ? totalDuracionReal : totalDuracion;
-    const acumuladosUsados = modoAudio ? acumuladosReales : acumulados;
+    const conAudio = audioDebeSonar();
+    const campo = campoDuracion();
+    // Contra qué acumulados se compara es independiente de si el audio
+    // suena: "por compases" siempre usa los reales (no tiene sentido
+    // aplicarle velocidad a tiempos de compás tapeados); "por itinerario"
+    // sin audio sigue con los calculados+velocidad de siempre.
+    const usarReal = fuenteTemporizacion() === 'compases' || conAudio;
+    let elapsed = conAudio ? (audioNav.currentTime - primerPulsoTiempoReal) : (now - startTs) / 1000;
+    const total = usarReal ? totalDuracionReal : totalDuracion;
+    const acumuladosUsados = usarReal ? acumuladosReales : acumulados;
     if (elapsed >= total) {
       if (loopEl && loopEl.checked) {
-        if (modoAudio) {
+        if (conAudio) {
           audioNav.currentTime = primerPulsoTiempoReal;
         } else {
-          startTs += totalDuracion * 1000;
+          startTs += (usarReal ? totalDuracionReal : totalDuracion) * 1000;
         }
         elapsed -= total;
         idxMostrado = -1;
@@ -1800,13 +1881,20 @@
         if (!yaMostrado) mostrarPulso(pulsos[idxMostrado]);
         actualizarBotonesNav();
         detenerAnimacion();
-        if (modoAudio) audioNav.pause();
+        if (conAudio) audioNav.pause();
         mostrarControles('inicial');
         return;
       }
     }
+    // Busca el último índice cuyo acumulado ya pasó, PERO nunca avanza más
+    // allá de un pulso cuya propia duración (en la fuente activa) sea
+    // desconocida (null, ver reconstruirTiempos/construir_plan) — ese
+    // pulso "no sabe cuánto dura", así que el cursor se congela ahí hasta
+    // que el reloj alcanza el acumulado del PRÓXIMO pulso con dato
+    // conocido (que ya arrastra el mismo acumulado): en ese instante salta
+    // directo, sin pasar visualmente por los intermedios sin marca.
     let i = 0;
-    while (i + 1 < acumuladosUsados.length && elapsed >= acumuladosUsados[i + 1]) i++;
+    while (i + 1 < acumuladosUsados.length && elapsed >= acumuladosUsados[i + 1] && pulsos[i][campo] != null) i++;
     if (i !== idxMostrado) {
       // Cada entrada saltada (si el navegador se atrasó un instante) igual
       // tiene que sonar/parpadear — sólo el número en pantalla se pisa con
@@ -1819,34 +1907,50 @@
     rafId = requestAnimationFrame(avanzar);
   }
 
-  async function cargarPlanYArrancar() {
+  // Querystring del último plan efectivamente cargado — comparado contra
+  // el nuevo pedido en Continuar para saber si el rango/temporización
+  // cambió a mitad de pausa (ver continuarDesdePausa) y hace falta
+  // reposicionar el audio, o si es "lo mismo de antes" y hay que dejarlo
+  // exactamente donde estaba.
+  let ultimosParametrosPlan = null;
+
+  // Arma los parámetros del plan a partir del formulario de rango vigente
+  // (no de la URL, que puede estar desactualizada si el usuario tipeó algo
+  // nuevo sin recargar) más la fuente de temporización elegida. Se llama
+  // tanto al Empezar/Reiniciar como al Continuar — nunca durante la
+  // ejecución en curso (ver construir_plan/plan_obra).
+  async function pedirPlan() {
     errorEl.style.display = 'none';
-    // Ya no hay botón "Fijar rango" — Ejecutar/Reiniciar toman el rango
-    // directamente de los valores actuales del formulario (no de la URL,
-    // que puede estar desactualizada si el usuario tipeó algo nuevo sin
-    // recargar la página).
     const params = formRango ? new URLSearchParams(new FormData(formRango)) : new URLSearchParams(window.location.search);
     params.delete('segmento');
     params.delete('compas');
+    params.set('fuente_temporizacion', fuenteTemporizacion());
+    const queryStr = params.toString();
     let data;
     try {
-      const resp = await fetch(`{% url 'partituras:plan_obra' obra.pk %}?${params.toString()}`);
+      const resp = await fetch(`{% url 'partituras:plan_obra' obra.pk %}?${queryStr}`);
       data = await resp.json();
     } catch (e) {
       errorEl.textContent = '{% translate "No se pudo obtener el plan de ejecución." %}';
       errorEl.style.display = '';
-      return;
+      return null;
     }
     if (!data.pulsos.length) {
       errorEl.textContent = '{% translate "No hay compases en este rango." %}';
       errorEl.style.display = '';
-      return;
+      return null;
     }
     if (!data.completo) {
       errorEl.textContent = '{% translate "Falta bpm o indicación de compás en alguna fila del rango — no se puede calcular el tiempo real." %}';
       errorEl.style.display = '';
-      return;
+      return null;
     }
+    const rangoCambio = queryStr !== ultimosParametrosPlan;
+    ultimosParametrosPlan = queryStr;
+    return { data, rangoCambio };
+  }
+
+  function aplicarPlan(data) {
     pulsos = data.pulsos;
     primerPulsoTiempoReal = data.primer_pulso_tiempo_real;
     velocidadActual = leerVelocidadSlider();
@@ -1856,6 +1960,12 @@
       if (p.es_primer_pulso_compas) compasInicios.push(idx);
     });
     reconstruirTiempos();
+  }
+
+  async function cargarPlanYArrancar() {
+    const resultado = await pedirPlan();
+    if (!resultado) return;
+    aplicarPlan(resultado.data);
     idxMostrado = -1;
     planCargado = true;
     actualizarBotonesNav();
@@ -1867,7 +1977,7 @@
     // Compases al aire (si están configurados) antes de arrancar el reloj
     // de verdad — al tempo/indicación del primer pulso real del plan.
     construirCuenta(pulsos[0], pulsos[0].compas, async () => {
-      if (usarAudioModo()) {
+      if (audioDebeSonar()) {
         await esperarMetadataAudio();
         audioNav.currentTime = primerPulsoTiempoReal;
         audioNav.play().catch(() => {});
@@ -1890,7 +2000,7 @@
       mostrarControles('pausado');
       return;
     }
-    if (usarAudioModo()) {
+    if (audioDebeSonar()) {
       audioNav.pause(); // congela solo: currentTime no avanza más hasta reanudar
     } else {
       elapsedAlPausar = (performance.now() - startTs) / 1000;
@@ -1899,22 +2009,48 @@
     mostrarControles('pausado');
   }
 
-  function continuarDesdePausa() {
+  async function continuarDesdePausa() {
+    // Vuelve a pedir el plan (a diferencia de antes): los inputs de rango
+    // no se deshabilitan durante la pausa, así que el usuario pudo haber
+    // cambiado desde/hasta (o la velocidad, que no necesita replan — se
+    // aplica en vivo, ver reconstruirTiempos) mientras estaba pausado — sin
+    // esto, un cambio de rango a mitad de pausa se ignoraba en silencio.
+    const pulsoAntes = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado] : null;
+    const resultado = await pedirPlan();
+    if (!resultado) return; // el rango quedó inválido — se queda pausado, ver errorEl
+
+    aplicarPlan(resultado.data);
+
+    // Remapeo por compás+pulso, no por índice — el array puede ser otro si
+    // el rango cambió. Si el punto donde estaba pausado sigue existiendo,
+    // retoma EXACTAMENTE ahí; si no (se acortó el rango y quedó afuera),
+    // cae al primer pulso del nuevo plan.
+    let idxNuevo = pulsoAntes
+      ? pulsos.findIndex(p => p.compas === pulsoAntes.compas && p.pulso === pulsoAntes.pulso)
+      : -1;
+    if (idxNuevo === -1) idxNuevo = 0;
+    idxMostrado = idxNuevo;
+    elapsedAlPausar = elapsedEnPulso(idxNuevo) || 0;
+    mostrarPulso(pulsos[idxNuevo]);
+    actualizarBotonesNav();
+
     mostrarControles('reproduciendo');
     // Cuenta al aire también acá — da tiempo a prepararse antes de
     // reengachar en el punto exacto donde se había quedado. Se arma al
     // tempo/indicación del pulso en el que está pausado (no el del
     // principio de la obra: puede ser un tramo con otro tempo).
-    const referencia = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado] : pulsos[0];
-    const numeroDestino = referencia ? referencia.compas : null;
-    construirCuenta(referencia, numeroDestino, () => {
-      // No vuelve a pedir el plan ni resetea la posición. En modo audio,
-      // audioNav.currentTime ya está exactamente donde se pausó (o donde
-      // se saltó con Anterior/Siguiente — ver irAPulso), así que sólo hay
-      // que reanudar la reproducción; si no, se corre el reloj calculado
-      // hacia atrás lo que ya había transcurrido, para retomar justo donde
-      // se pausó en vez de arrancar de nuevo desde el "desde".
-      if (usarAudioModo()) {
+    const referencia = pulsos[idxNuevo];
+    construirCuenta(referencia, referencia.compas, async () => {
+      // El audio NO se reposiciona salvo que el rango/temporización haya
+      // cambiado de verdad (ver pedirPlan/rangoCambio) — si es el mismo de
+      // antes, audioNav.currentTime ya está exactamente donde se pausó (o
+      // donde se saltó con Anterior/Siguiente/clic en compás, ver
+      // irAPulso), así que sólo hay que reanudar la reproducción.
+      if (audioDebeSonar()) {
+        if (resultado.rangoCambio) {
+          await esperarMetadataAudio();
+          audioNav.currentTime = primerPulsoTiempoReal + (acumuladosReales[idxNuevo] || 0);
+        }
         audioNav.play().catch(() => {});
       } else {
         startTs = performance.now() - elapsedAlPausar * 1000;
@@ -1933,7 +2069,7 @@
   function alternarModoScore() {
     const activo = !document.body.classList.contains('modo-partitura');
     if (activo) {
-      anclasReubicacion.forEach(({ el, destino }) => destino.appendChild(el));
+      anclasReubicacion.forEach(({ el, destino, antesDe }) => destino.insertBefore(el, antesDe || null));
     } else {
       anclasReubicacion.forEach(({ el, ancla }) => ancla.parentNode.insertBefore(el, ancla.nextSibling));
     }

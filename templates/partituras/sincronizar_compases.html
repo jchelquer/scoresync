@@ -442,7 +442,7 @@
     let url;
     if (fila.dataset.esCierre === '1') {
       // La fila de cierre no es un compás puntual — comparte el mismo
-      // tiempo_inicio que usa sincronizar_audio.html (por fila), no una
+      // tiempo_inicio que usa sincronizar_itinerario.html (por fila), no una
       // MarcaTiempoCompas nueva.
       url = '{% url "partituras:marcar_tiempo_segmento" obra.pk %}';
       params.set('segmento_id', fila.dataset.segmentoId);
@@ -683,7 +683,7 @@
 
   if (filas.length) armar(idxArmada, { reposicionar: true });
 
-  // ── Panel de partitura (mismo criterio que sincronizar_audio.html: un
+  // ── Panel de partitura (mismo criterio que sincronizar_itinerario.html: un
   // recorte de unos pocos sistemas con el compás armado resaltado). ──────
   {% if tiene_score %}
   let geometria = null;

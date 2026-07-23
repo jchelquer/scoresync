@@ -420,7 +420,20 @@ class PreferenciaObra(models.Model):
     ejecutar_con_audio = models.BooleanField(
         default=False,
         help_text="Si la ejecución sigue el audio de referencia (tiempos reales, velocidad fija) en vez "
-                   "del reloj calculado — ver sincronizar_audio. Se recuerda igual que el resto de estas preferencias.",
+                   "del reloj calculado — ver sincronizar_itinerario. Se recuerda igual que el resto de estas preferencias.",
+    )
+    FUENTES_TEMPORIZACION = [
+        ('itinerario', 'Itinerario'),
+        ('compases', 'Compases'),
+    ]
+    fuente_temporizacion = models.CharField(
+        max_length=12, choices=FUENTES_TEMPORIZACION, default='compases',
+        help_text="Qué fuente de tiempos reales gobierna el cursor/sombreado durante la ejecución: "
+                   "'itinerario' usa sólo Segmento.tiempo_inicio (con tiempo_inicio_calculado como base "
+                   "siempre disponible, ver sincronizar_itinerario); 'compases' usa sólo MarcaTiempoCompas "
+                   "(sin caer al cálculo puro fuera del tramo cubierto, ver sincronizar_compases). Es "
+                   "independiente de ejecutar_con_audio (ese controla si SUENA el audio de referencia, "
+                   "esto controla de qué reloj sale la posición del cursor).",
     )
     parte_seguida = models.ForeignKey(
         Partitura, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',

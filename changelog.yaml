@@ -39,6 +39,8 @@
       text: "En modo partitura, \"Ejecutar con audio\" y \"Silenciar\" se movieron a la fila compacta de arriba, a continuación del bpm y el metrónomo (antes estaban en la otra fila, junto a Ejecutar/rango/zoom)."
     - type: nuevo
       text: "Botón \"Detener\": corta la ejecución y vuelve al estado inicial sin volver a arrancar sola (a diferencia de \"Reiniciar\", que sí arranca). Antes, una vez elegido \"Ejecutar con audio\" no había forma de cambiarlo sin recargar la página — ese campo (y otros que sólo se pueden tocar antes de arrancar) sólo se habilita en el estado inicial."
+    - type: mejorado
+      text: "Reformulación de la ejecución: la temporización del cursor/sombreado ahora se elige explícitamente entre itinerario o compases (antes iba mezclado con \"Ejecutar con audio\", que ahora sólo controla si suena el audio de referencia), la barra de controles quedó más compacta en los dos modos (compás y partitura), y en pantallas chicas el modo compás pasa a ser el default. De paso, las pantallas de marcado se renombraron a \"Sincronizar itinerario\"/\"Sincronizar compases\" para que los nombres coincidan en toda la app."
 
 - version: "1.5.2"
   date: "2026-07-21"

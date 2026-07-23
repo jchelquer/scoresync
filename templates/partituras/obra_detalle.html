@@ -44,11 +44,11 @@
           </a>
           {% endif %}
           {% if es_dueño and obra.audio and obra.segmentos.exists %}
-          <a href="{% url 'partituras:sincronizar_audio' obra.pk %}" class="btn btn-outline-light">
-            <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar tiempos" %}
+          <a href="{% url 'partituras:sincronizar_itinerario' obra.pk %}" class="btn btn-outline-light">
+            <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar itinerario" %}
           </a>
           <a href="{% url 'partituras:sincronizar_compases' obra.pk %}" class="btn btn-outline-light">
-            <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar por compás" %}
+            <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar compases" %}
           </a>
           {% endif %}
         </div>
