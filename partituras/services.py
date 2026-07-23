@@ -835,8 +835,11 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
     navegador_obra.html (ver plan_obra). pulso_fraccion (0.0-1.0) ubica un
     punto intermedio DENTRO de ese pulso (p.ej. "5,2.5" = compás 5, pulso 2,
     pulso_fraccion=0.5); 0.0 (default) es el arranque exacto del pulso.
-    None si no hay ningún ancla de la fuente pedida que cubra ese punto —
-    no inventa un valor con el tiempo calculado."""
+    None si no hay ningún ancla real de la fuente pedida que cubra ese
+    punto — no inventa un valor con el tiempo calculado ni con la otra
+    fuente. El cliente interpreta None como "no hay cómo posicionar el
+    audio acá" y avisa en vez de arrancarlo desde 0 (ver navegador_obra.html/
+    audioDebeSonar)."""
     segmento = Segmento.objects.filter(pk=segmento_id).first()
     if segmento is None:
         return None

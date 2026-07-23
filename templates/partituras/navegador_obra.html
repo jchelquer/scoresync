@@ -8,8 +8,8 @@
      abajo): header y panel de controles normales se esconden enteros —
      sus elementos clave ya fueron REUBICADOS (no clonados: son los mismos
      nodos con sus mismos listeners) en dos destinos antes de esconder el
-     resto: metrónomo/temporización/compás/indicación/bpm/modo/volver van a
-     #barra-compacta; rango (desde/hasta/loop) y Ejecutar/Pausar/Continuar/
+     resto: metrónomo/temporización/n° compás/compás/indicación/bpm/modo/
+     volver van a #barra-compacta; rango (desde/hasta/loop) y Ejecutar/Pausar/Continuar/
      Reiniciar van a #score-header-extra, insertados ANTES de
      Anterior/Siguiente — así nada se pierde, sólo queda afuera el título, el
      selector de parte, y lo que no se pidió tener en ninguna fila
@@ -39,16 +39,17 @@
   #score-header-extra .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
   #barra-compacta #switch-metronomo-visual,
   #barra-compacta #switch-metronomo-audio { font-size: 0.8rem; }
-  #score-header-extra #form-rango { margin-bottom: 0 !important; gap: 0.6rem !important; }
+  #score-header-rango #form-rango { margin-bottom: 0 !important; gap: 0.6rem !important; }
   #barra-compacta #control-velocidad,
   #score-header-extra #control-velocidad { font-size: 0.8rem; }
   #barra-compacta #control-velocidad input[type="range"],
   #score-header-extra #control-velocidad input[type="range"] { width: 4.5rem !important; }
   #barra-compacta #control-compases-aire,
-  #score-header-extra #control-compases-aire { font-size: 0.8rem; }
+  #score-header-rango #control-compases-aire { font-size: 0.8rem; }
   #barra-compacta #control-compases-aire input,
-  #score-header-extra #control-compases-aire input { width: 3rem !important; }
+  #score-header-rango #control-compases-aire input { width: 3rem !important; }
   #barra-compacta #control-ejecutar-audio { font-size: 0.8rem; }
+  #barra-compacta #control-numeros-compas { font-size: 0.8rem; }
   #barra-compacta #control-temporizacion,
   #score-header-extra #control-temporizacion { font-size: 0.8rem; }
   #barra-compacta #control-temporizacion select,
@@ -66,6 +67,29 @@
      quedar más altos que el espacio real disponible. Este mínimo es sólo
      para el primerísimo instante antes de que el JS corra. */
   #score-ventana-contenedor { min-height: 200px; }
+
+  /* #nav-compas es contenteditable sólo en 'pausado' (ver JS,
+     mostrarControles) — en 'reproduciendo' avanzar() lo pisa varias veces
+     por segundo, y en 'inicial' no hay plan cargado para saltar a ningún
+     lado. El subrayado punteado (señal permanente de que se puede editar,
+     no sólo al enfocar) sólo se muestra cuando de verdad se puede. */
+  #nav-compas {
+    display: inline-block;
+    padding: 0 0.2em;
+  }
+  #nav-compas[contenteditable="true"] {
+    border-bottom: 2px dashed var(--ss-text-muted);
+    cursor: text;
+  }
+  #nav-compas[contenteditable="true"]:hover {
+    border-bottom-color: var(--ss-accent);
+  }
+  #nav-compas[contenteditable="true"]:focus {
+    outline: 2px dashed var(--ss-accent);
+    outline-offset: 4px;
+    border-radius: 6px;
+    border-bottom-color: transparent;
+  }
 
   /* El score aprovecha todo el ancho de la ventana del navegador, no sólo
      el ancho del .container de Bootstrap que limita el resto de la
@@ -164,9 +188,11 @@
       <input type="number" name="hasta_pasada" value="{{ hasta_pasada }}" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
     </div>
   </div>
-  <div class="form-check mb-1">
-    <input type="checkbox" name="loop" id="loop" class="form-check-input" {% if loop %}checked{% endif %}>
-    <label for="loop" class="form-check-label small" style="color: var(--ss-text-muted);">{% translate "Loop" %}</label>
+  <div>
+    <label for="loop" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Loop" %}</label>
+    <div class="form-check form-switch mb-0">
+      <input type="checkbox" name="loop" id="loop" class="form-check-input" {% if loop %}checked{% endif %}>
+    </div>
   </div>
 </form>
 
@@ -176,7 +202,7 @@
       <div id="nav-metronomo-marcas" style="position: absolute; inset: 0;"></div>
       <div id="nav-metronomo-punto" style="position: absolute; top: 50%; left: 12.5%; width: 1.5rem; height: 1.5rem; margin-top: -0.75rem; margin-left: -0.75rem; border-radius: 50%; background: var(--ss-accent); opacity: 0.35; transition: left 0.08s linear, opacity 0.06s, transform 0.06s;"></div>
     </div>
-    <div class="display-3" id="nav-compas" style="color: var(--ss-text-bright)">{{ compas_actual }}</div>
+    <div class="display-3" id="nav-compas" contenteditable="false" inputmode="numeric" spellcheck="false" title="{% translate 'Editable en pausa, para ir a otro compás' %}" style="color: var(--ss-text-bright); outline: none;">{{ compas_actual }}</div>
     <p class="nav-compas-label small mb-0" id="nav-compas-label" style="color: var(--ss-text-muted)">{% translate "compás" %}</p>
 
     <div class="info-extra mt-4 d-flex justify-content-center gap-4 flex-wrap">
@@ -206,27 +232,29 @@
 
 <p id="plan-error" class="small text-warning text-center" style="display:none;"></p>
 
-<div class="fila-botones d-flex justify-content-center gap-2 flex-wrap mb-3">
+<div class="fila-botones d-flex justify-content-center align-items-end gap-2 flex-wrap mb-3">
   {% if not tiene_score %}
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "ant" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "sig" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
   {% endif %}
-  <div class="d-flex align-items-center gap-2" id="control-compases-aire">
-    <label for="compases-aire" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
+  <div id="control-compases-aire">
+    <label for="compases-aire" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
     <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
   </div>
-  <div class="d-flex align-items-center gap-2" id="control-velocidad">
-    <label for="velocidad-slider" class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
-    <div style="position: relative; display: inline-block;">
-      <input type="range" id="velocidad-slider" min="20" max="150" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
-      <!-- Marca fija en 100% (velocidad original) — posición calculada sobre
-           el rango 20-150: (100-20)/(150-20) = 61.54%. No se mueve con el
-           valor del slider (a diferencia del thumb), es sólo una referencia
-           visual fija para volver rápido al tempo real. -->
-      <div style="position: absolute; left: 61.54%; top: 50%; width: 2px; height: 0.6rem; margin-top: -0.3rem; background: var(--ss-accent); pointer-events: none;"></div>
+  <div id="control-velocidad">
+    <label for="velocidad-slider" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
+    <div class="d-flex align-items-center gap-2">
+      <div style="position: relative; display: inline-block;">
+        <input type="range" id="velocidad-slider" min="20" max="150" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
+        <!-- Marca fija en 100% (velocidad original) — posición calculada sobre
+             el rango 20-150: (100-20)/(150-20) = 61.54%. No se mueve con el
+             valor del slider (a diferencia del thumb), es sólo una referencia
+             visual fija para volver rápido al tempo real. -->
+        <div style="position: absolute; left: 61.54%; top: 50%; width: 2px; height: 0.6rem; margin-top: -0.3rem; background: var(--ss-accent); pointer-events: none;"></div>
+      </div>
+      <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
+      <button type="button" id="btn-velocidad-reset" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate 'Volver a 100%' %}">100%</button>
     </div>
-    <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
-    <button type="button" id="btn-velocidad-reset" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate 'Volver a 100%' %}">100%</button>
   </div>
   {% if obra.audio %}
   <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
@@ -244,7 +272,7 @@
   <button id="btn-play" type="button" class="btn btn-ss" title="{% translate 'Ejecutar en tiempo real' %}">▶</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Pausar' %}">⏸</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Continuar' %}">▶</button>
-  <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Reiniciar' %}">↺</button>
+  <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Reiniciar' %}"><i class="bi bi-arrow-counterclockwise"></i></button>
   <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Detener' %}">⏹</button>
   <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
     <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
@@ -254,13 +282,19 @@
     <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
     <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
   </div>
-  <div class="d-flex align-items-center gap-2" id="control-temporizacion">
-    <label for="select-temporizacion" class="form-label small mb-0" style="color: var(--ss-text-muted);">⏱ {% translate "Temporización" %}</label>
-    <select id="select-temporizacion" class="form-select form-select-sm" style="width: auto;">
+  <div id="control-temporizacion">
+    <label for="select-temporizacion" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">⏱ {% translate "Temporización" %}</label>
+    <select id="select-temporizacion" class="form-select form-select-sm" style="width: 8rem;">
       <option value="compases" {% if fuente_temporizacion_guardada == "compases" %}selected{% endif %}>{% translate "Compases" %}</option>
       <option value="itinerario" {% if fuente_temporizacion_guardada == "itinerario" %}selected{% endif %}>{% translate "Itinerario" %}</option>
     </select>
   </div>
+  {% if tiene_score %}
+  <div class="form-check form-switch d-flex align-items-center" id="control-numeros-compas">
+    <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
+    <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
+  </div>
+  {% endif %}
 </div>
 </div>
 
@@ -269,31 +303,32 @@
   <div class="card-body">
     <div class="d-flex align-items-end flex-wrap gap-2 mb-2" id="score-header-row">
       {% if partes_disponibles|length > 1 %}
-      <form method="get" class="d-flex align-items-center gap-2">
+      <form method="get" class="d-flex align-items-end gap-2">
         <input type="hidden" name="desde_compas" value="{{ desde_compas }}">
         <input type="hidden" name="desde_pasada" value="{{ desde_pasada }}">
         <input type="hidden" name="hasta_compas" value="{{ hasta_compas }}">
         <input type="hidden" name="hasta_pasada" value="{{ hasta_pasada }}">
         {% if loop %}<input type="hidden" name="loop" value="on">{% endif %}
-        <span class="small" style="color: var(--ss-text-muted)">{% translate "Score" %} —</span>
-        <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
-          {% for p in partes_disponibles %}
-          <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
-            {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
-          </option>
-          {% endfor %}
-        </select>
+        <div>
+          <span class="form-label small mb-0 d-block" style="color: var(--ss-text-muted)">{% translate "Score" %}</span>
+          <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+            {% for p in partes_disponibles %}
+            <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
+              {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
       </form>
       {% else %}
       <p class="small mb-0" id="score-titulo-parte" style="color: var(--ss-text-muted)">{% translate "Score" %} — <span id="score-parte"></span></p>
       {% endif %}
-      <div class="form-check form-switch d-flex align-items-center mb-1">
-        <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
-        <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
-      </div>
       <!-- Modo partitura: acá se reubican el rango (desde/hasta/loop) y
-           Ejecutar/Pausar/Continuar/Reiniciar — ver alternarModoScore(),
-           siempre insertados ANTES de Anterior/Siguiente. Anterior/
+           Compases al aire — ver alternarModoScore(), pegados al selector
+           de parte (a la izquierda), no al grupo de la derecha. -->
+      <div id="score-header-rango" class="d-flex align-items-end flex-wrap gap-2"></div>
+      <!-- Acá se reubican Velocidad y Ejecutar/Pausar/Continuar/Reiniciar
+           — siempre insertados ANTES de Anterior/Siguiente. Anterior/
            Siguiente y las flechas de sistema/zoom son contenido FIJO de
            este div (no se reubican nunca) — así quedan pegados entre sí en
            los dos modos, no sólo en modo partitura. -->
@@ -333,6 +368,7 @@
   const linkVolverObra = document.getElementById('link-volver-obra');
   const formRango = document.getElementById('form-rango');
   const barraCompacta = document.getElementById('barra-compacta');
+  const scoreHeaderRango = document.getElementById('score-header-rango');
   const scoreHeaderExtra = document.getElementById('score-header-extra');
   const btnZoomMas = document.getElementById('btn-zoom-mas');
   const btnZoomMenos = document.getElementById('btn-zoom-menos');
@@ -359,6 +395,7 @@
   const toggleMuteAudio = document.getElementById('toggle-mute-audio');
   const controlTemporizacion = document.getElementById('control-temporizacion');
   const selectTemporizacion = document.getElementById('select-temporizacion');
+  const controlNumerosCompas = document.getElementById('control-numeros-compas');
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
@@ -392,17 +429,20 @@
     // temático ("qué gobierna la ejecución"), en la misma fila compacta.
     { el: controlEjecutarAudio, destino: barraCompacta },
     { el: controlTemporizacion, destino: barraCompacta },
+    { el: controlNumerosCompas, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
-    // Ejecutar/Pausar/Continuar/Reiniciar van en la MISMA fila que el rango
-    // (con Loop), siempre insertados ANTES de Anterior/Siguiente (fijos,
-    // ver arriba) — el orden acá determina el orden final entre ellos.
-    // Sólo uno de los cuatro está visible a la vez (ver mostrarControles),
-    // así que el orden entre ellos casi no se nota — Ejecutar primero
-    // porque es el punto de entrada antes de que exista un plan cargado.
-    // Los compases al aire y la velocidad van justo antes de ese grupo.
-    { el: formRango, destino: scoreHeaderExtra, antesDe: btnAnterior },
-    { el: controlCompasesAire, destino: scoreHeaderExtra, antesDe: btnAnterior },
+    // Rango (con Loop) y Compases al aire van pegados al selector de parte,
+    // a la izquierda de la fila — no al grupo de la derecha.
+    { el: formRango, destino: scoreHeaderRango },
+    { el: controlCompasesAire, destino: scoreHeaderRango },
+    // Ejecutar/Pausar/Continuar/Reiniciar van en #score-header-extra (a la
+    // derecha), siempre insertados ANTES de Anterior/Siguiente (fijos, ver
+    // arriba) — el orden acá determina el orden final entre ellos. Sólo
+    // uno de los cuatro está visible a la vez (ver mostrarControles), así
+    // que el orden entre ellos casi no se nota — Ejecutar primero porque
+    // es el punto de entrada antes de que exista un plan cargado. La
+    // velocidad va justo antes de ese grupo.
     { el: controlVelocidad, destino: scoreHeaderExtra, antesDe: btnAnterior },
     { el: btnPlay, destino: scoreHeaderExtra, antesDe: btnAnterior },
     { el: btnPause, destino: scoreHeaderExtra, antesDe: btnAnterior },
@@ -1729,6 +1769,37 @@
   }
   if (toggleNumerosCompas) toggleNumerosCompas.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
 
+  // ── Editar el número de compás para saltar a otro (ver #nav-compas,
+  // contenteditable) — mismo mecanismo que hacer clic en un compás del
+  // score: salta con irAPulso, que ya reposiciona la ventana de la
+  // partitura sola (ver mostrarPulso → actualizarScore). Sólo se puede
+  // editar en 'pausado' (ver mostrarControles) — en 'reproduciendo'
+  // avanzar() pisa el texto varias veces por segundo (lo tecleado se
+  // perdía sin llegar a aplicarse) y en 'inicial' no hay plan/pulsos
+  // cargados todavía para saltar a ningún lado (ese caso ya lo cubre
+  // "desde c."). Por eso acá se asume directamente estado 'pausado':
+  // rafId ya está en null y planCargado ya es true.
+  const compasActualInicial = {{ compas_actual|default:"null" }};
+  function confirmarEdicionCompas() {
+    const numero = parseInt((navCompas.textContent || '').trim(), 10);
+    const idx = Number.isFinite(numero)
+      ? pulsos.findIndex(p => p.compas === numero && p.es_primer_pulso_compas)
+      : -1;
+    if (idx === -1) {
+      // Número inválido o fuera del rango cargado — no hay a dónde
+      // saltar, se revierte el texto sin más.
+      navCompas.textContent = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado].compas : compasActualInicial;
+      return;
+    }
+    irAPulso(idx);
+  }
+  if (navCompas) {
+    navCompas.addEventListener('blur', confirmarEdicionCompas);
+    navCompas.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); navCompas.blur(); }
+    });
+  }
+
   cargarScoreGeometria();
   // Modo partitura es el default en pantallas normales; en pantallas
   // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
@@ -1766,6 +1837,11 @@
     // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
     // no recibiría ni el primer evento de interacción, y el listener de
     // 'input' no podría pausar antes de aplicar el cambio (ver más arriba).
+    // #nav-compas (editable, ver confirmarEdicionCompas) sólo se puede
+    // editar en 'pausado': en 'reproduciendo' avanzar() pisa el texto en
+    // cada frame (lo tecleado se perdía sin aplicarse) y en 'inicial'
+    // todavía no hay plan/pulsos cargados para saltar a ningún lado.
+    if (navCompas) navCompas.contentEditable = estado === 'pausado' ? 'true' : 'false';
   }
 
   // Corta todo (reloj, audio) y vuelve al estado 'inicial' sin arrancar de
@@ -1960,6 +2036,15 @@
       if (p.es_primer_pulso_compas) compasInicios.push(idx);
     });
     reconstruirTiempos();
+    // "Ejecutar con audio" pedido pero sin ningún ancla real (de la fuente
+    // de temporización elegida) para el arranque de este rango — no se
+    // inventa una posición (ver tiempo_real_ancla), así que el audio
+    // simplemente no suena; se avisa por qué en vez de fallar en silencio.
+    // El resto de la ejecución (cursor/sombreado, metrónomo) sigue igual.
+    if (ejecutarConAudio && audioNav && primerPulsoTiempoReal == null) {
+      errorEl.textContent = '{% translate "El audio de referencia no tiene un tiempo real marcado para el arranque de este rango con la temporización elegida — no va a sonar (el resto de la ejecución sigue normalmente)." %}';
+      errorEl.style.display = '';
+    }
   }
 
   async function cargarPlanYArrancar() {

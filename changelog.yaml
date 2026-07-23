@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.7.0"
+  date: "2026-07-23"
+  changes:
+    - type: mejorado
+      text: "Ejecución reformulada completa: la temporización del cursor/sombreado ahora se elige explícitamente entre itinerario o compases (antes iba mezclado con \"Ejecutar con audio\", que ahora sólo controla si suena el audio de referencia y nunca se mezcla con la otra fuente), con un switch nuevo que recuerda la elección. La barra de controles quedó más compacta en los dos modos (compás y partitura): botones sólo con ícono, textos arriba de cada control (como en el rango), y en pantallas chicas el modo compás pasa a ser el default. El número de compás grande se puede editar en pausa para saltar directo a otro (con marcado visual sobre la partitura, igual que al hacer clic en un compás). \"Continuar\" vuelve a pedir el plan de ejecución en vez de ignorar cambios de rango hechos durante la pausa. De paso, las pantallas de marcado se renombraron a \"Sincronizar itinerario\"/\"Sincronizar compases\" para que los nombres coincidan en toda la app."
+
 - version: "1.6.0"
   date: "2026-07-21"
   changes:
@@ -39,8 +45,6 @@
       text: "En modo partitura, \"Ejecutar con audio\" y \"Silenciar\" se movieron a la fila compacta de arriba, a continuación del bpm y el metrónomo (antes estaban en la otra fila, junto a Ejecutar/rango/zoom)."
     - type: nuevo
       text: "Botón \"Detener\": corta la ejecución y vuelve al estado inicial sin volver a arrancar sola (a diferencia de \"Reiniciar\", que sí arranca). Antes, una vez elegido \"Ejecutar con audio\" no había forma de cambiarlo sin recargar la página — ese campo (y otros que sólo se pueden tocar antes de arrancar) sólo se habilita en el estado inicial."
-    - type: mejorado
-      text: "Reformulación de la ejecución: la temporización del cursor/sombreado ahora se elige explícitamente entre itinerario o compases (antes iba mezclado con \"Ejecutar con audio\", que ahora sólo controla si suena el audio de referencia), la barra de controles quedó más compacta en los dos modos (compás y partitura), y en pantallas chicas el modo compás pasa a ser el default. De paso, las pantallas de marcado se renombraron a \"Sincronizar itinerario\"/\"Sincronizar compases\" para que los nombres coincidan en toda la app."
 
 - version: "1.5.2"
   date: "2026-07-21"
