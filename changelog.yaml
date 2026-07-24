@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.8.0"
+  date: "2026-07-24"
+  changes:
+    - type: corregido
+      text: "Se dejó de generar el PDF \"normalizado\" (una copia completa de la partitura con la rotación/enderezado ya aplicados, que se armaba al confirmar la orientación). Nunca se volvía a usar en ningún paso posterior — todo el resto del proceso (márgenes, sistemas, ancla, barras, y el recorte de compases al navegar/sincronizar) siempre rasterizó de nuevo el PDF original aplicando la corrección guardada, así que ese archivo se calculaba y se guardaba en vano. Además tenía un problema de compresión (cada página quedaba embebida sin comprimir, a veces >20 MB por página) que lo hacía pesar muchísimo más de lo necesario. Sacarlo también agiliza el paso de confirmar orientación, que ya no tiene que armar y grabar ese archivo."
+
 - version: "1.7.3"
   date: "2026-07-23"
   changes:

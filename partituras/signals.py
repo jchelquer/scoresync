@@ -13,8 +13,6 @@ from .models import Obra, Partitura
 def borrar_archivos_partitura(sender, instance, **kwargs):
     if instance.archivo_original:
         instance.archivo_original.delete(save=False)
-    if instance.archivo_normalizado:
-        instance.archivo_normalizado.delete(save=False)
 
 
 @receiver(post_delete, sender=Obra)

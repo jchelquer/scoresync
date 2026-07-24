@@ -8,6 +8,10 @@ def _upload_path_original(instance, filename):
     return f"partituras/u{instance.owner_id}/{uuid.uuid4().hex}_original.{ext}"
 
 
+# Ya no la usa ningún campo (se sacó archivo_normalizado) — queda acá porque
+# la migración 0001_initial todavía la referencia por nombre (Django resuelve
+# el upload_to de un FileField importando la función en vivo, no la congela
+# en la migración) y borrarla rompe cualquier `migrate` desde cero.
 def _upload_path_normalizado(instance, filename):
     return f"partituras/u{instance.owner_id}/{uuid.uuid4().hex}_normalizado.pdf"
 
@@ -208,7 +212,6 @@ class Partitura(models.Model):
         related_name='partituras',
     )
     archivo_original = models.FileField(upload_to=_upload_path_original)
-    archivo_normalizado = models.FileField(upload_to=_upload_path_normalizado, null=True, blank=True)
     estado_normalizacion = models.CharField(max_length=12, choices=ESTADOS_NORM, default='pendiente')
     estado_analisis = models.CharField(max_length=12, choices=ESTADOS_ANALISIS, default='pendiente')
     creado = models.DateTimeField(auto_now_add=True)

@@ -5,7 +5,6 @@ from urllib.parse import urlencode
 import cv2
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Max
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
@@ -19,7 +18,7 @@ from .models import (
     PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
-from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
+from .pdf import contar_paginas, rasterizar_pagina
 from .services import (
     avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
     construir_plan, desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
@@ -1164,7 +1163,8 @@ def ajuste_orientacion(request, pk, numero):
             siguiente = partitura.paginas.filter(confirmada=False).order_by("numero").first()
             if siguiente:
                 return redirect("partituras:ajuste_orientacion", pk=pk, numero=siguiente.numero)
-            _generar_pdf_normalizado(partitura)
+            partitura.estado_normalizacion = "confirmada"
+            partitura.save(update_fields=["estado_normalizacion"])
             return redirect("partituras:ajuste_margenes", pk=pk, numero=1)
         return redirect("partituras:ajuste_orientacion", pk=pk, numero=numero)
 
@@ -1173,21 +1173,6 @@ def ajuste_orientacion(request, pk, numero):
         "pagina": pagina,
         "total": total,
     })
-
-
-def _generar_pdf_normalizado(partitura):
-    paginas_bgr = []
-    for pagina in partitura.paginas.order_by("numero"):
-        img = rasterizar_pagina(partitura.archivo_original.path, pagina.numero, dpi=DPI)
-        paginas_bgr.append(normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado))
-    pdf_bytes = generar_pdf_normalizado(paginas_bgr)
-    partitura.archivo_normalizado.save(
-        f"{partitura.pk}_normalizado.pdf",
-        ContentFile(pdf_bytes),
-        save=False,
-    )
-    partitura.estado_normalizacion = "confirmada"
-    partitura.save(update_fields=["archivo_normalizado", "estado_normalizacion"])
 
 
 # ── Márgenes (recuadro de contenido real) ──────────────────────────────────
