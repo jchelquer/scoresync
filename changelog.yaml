@@ -2,8 +2,11 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
-- version: "1.8.0"
+- version: "1.9.0"
   date: "2026-07-24"
+  changes:
+    - type: corregido
+      text: "La temporización \"por compases\" (marcas reales de audio) durante la ejecución no podía calcular el tiempo real de un compás que viviera solo en su propia fila del itinerario (por ejemplo, un compás de anacrusis) — sólo miraba las marcas dentro de la fila actual, así que un compás vecino marcado en la fila siguiente quedaba invisible para interpolar. Si ese era el primer compás de la obra (el caso más común), \"Ejecutar con audio\" no podía arrancar el audio en absoluto. Ahora las marcas de compás se leen para la obra entera, cruzando filas del itinerario, igual que ya hacía la interpolación persistida de \"Sincronizar compases\"."
   changes:
     - type: corregido
       text: "Se dejó de generar el PDF \"normalizado\" (una copia completa de la partitura con la rotación/enderezado ya aplicados, que se armaba al confirmar la orientación). Nunca se volvía a usar en ningún paso posterior — todo el resto del proceso (márgenes, sistemas, ancla, barras, y el recorte de compases al navegar/sincronizar) siempre rasterizó de nuevo el PDF original aplicando la corrección guardada, así que ese archivo se calculaba y se guardaba en vano. Además tenía un problema de compresión (cada página quedaba embebida sin comprimir, a veces >20 MB por página) que lo hacía pesar muchísimo más de lo necesario. Sacarlo también agiliza el paso de confirmar orientación, que ya no tiene que armar y grabar ese archivo."

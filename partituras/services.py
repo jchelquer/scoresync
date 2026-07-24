@@ -311,19 +311,18 @@ def _pasadas_por_compas(obra):
     return resultado
 
 
-def _perfil_y_anclas_fila(seg, bpm_inicio, pulsos_compas, marcas_por_compas_pasada,
-                           pasadas_por_compas, tiempo_inicio_siguiente):
+def _perfil_y_anclas_fila(seg, bpm_inicio, pulsos_compas, tiempo_inicio_siguiente):
     """Para UNA fila: posiciones (tiempo calculado acumulado, en segundos
     desde el arranque de la fila, ANTES de cada pulso — posiciones[k] es el
     instante en que arranca el pulso k, 0-based; posiciones[-1] es la
-    duración calculada total de la fila) y DOS listas de anclas
-    independientes — ver _escala_en_posicion — que NUNCA se combinan entre
-    sí (cada fuente de temporización usa sólo la suya):
-    - anclas_itinerario: (posición calculada, tiempo real) del borde de
-      ESTA fila (Segmento.tiempo_inicio) y del borde de la fila siguiente.
-    - anclas_compases: (posición calculada, tiempo real) de cada
-      MarcaTiempoCompas puntual que caiga dentro del rango de compases de
-      esta fila. Vacía si ninguno de sus compases fue marcado todavía."""
+    duración calculada total de la fila) y anclas_itinerario: (posición
+    calculada, tiempo real) del borde de ESTA fila (Segmento.tiempo_inicio) y
+    del borde de la fila siguiente — ver _escala_en_posicion. La fuente
+    "compases" NO usa nada de esto, ver _anclas_compases_globales: a
+    diferencia del itinerario (donde cada fila es su propio tramo de tempo,
+    con borde propio), un compás marcado no sabe ni le importa en qué fila
+    del itinerario cayó — su vecino real para interpolar puede estar en la
+    fila siguiente."""
     total_pulsos_fila = int(_cantidad_pulsos_fila(seg, pulsos_compas))
     posiciones = [0.0]
     for idx in range(total_pulsos_fila):
@@ -341,16 +340,48 @@ def _perfil_y_anclas_fila(seg, bpm_inicio, pulsos_compas, marcas_por_compas_pasa
         anclas_itinerario.append((duracion_calculada_fila, tiempo_inicio_siguiente.total_seconds()))
     anclas_itinerario.sort(key=lambda a: a[0])
 
-    anclas_compases = []
-    for compas in range(seg.compas_desde, seg.compas_hasta + 1):
-        pasada = pasadas_por_compas.get((seg.id, compas))
-        marca = marcas_por_compas_pasada.get((compas, pasada)) if pasada else None
-        if marca is not None:
-            idx_compas = _pulsos_antes_del_compas(seg, compas, pulsos_compas)
-            anclas_compases.append((posiciones[idx_compas], marca.total_seconds()))
-    anclas_compases.sort(key=lambda a: a[0])
+    return posiciones, anclas_itinerario
 
-    return posiciones, anclas_itinerario, anclas_compases
+
+def _anclas_compases_globales(navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada,
+                               tiempo_cierre=None):
+    """Anclas de la fuente "compases", para la obra ENTERA de una sola vez —
+    a diferencia del itinerario (donde el tempo se calcula fila por fila),
+    acá la posición es el ORDINAL de pulso desde el primer pulso navegable de
+    la obra (no un tiempo calculado por bpm: "por compases" no le importa el
+    tempo, sólo cuántos pulsos hay entre dos marcas reales — mismo criterio
+    que interpolar_marcas_compas). Cruza filas del itinerario sin problema:
+    dos compases vecinos en la reproducción real pueden interpolar entre sí
+    aunque el itinerario los haya partido en filas distintas (p.ej. un
+    compás de anacrusis solo en su propia fila).
+
+    tiempo_cierre (segundos, opcional): Segmento.tiempo_inicio de la fila de
+    cierre — si está, cuenta como ancla del extremo derecho (fin real de la
+    obra), para que los últimos pulsos del último compás también puedan
+    resolver su duración — mismo criterio que interpolar_marcas_compas.
+
+    Devuelve (anclas: [(ordinal, tiempo_real), ...] ordenada por ordinal,
+    ordinal_inicio: {(segmento_id, compas): ordinal del primer pulso de esa
+    ocurrencia}) — filas sin bpm/indicación resuelta (plan incompleto, ver
+    construir_plan) se saltean: no se puede contar sus pulsos."""
+    anclas = []
+    ordinal_inicio = {}
+    ordinal = 0
+    for seg in navegables:
+        pulsos_compas = resueltos_por_id.get(seg.id, {}).get('pulsos_por_compas')
+        if not pulsos_compas:
+            continue
+        for compas in range(seg.compas_desde, seg.compas_hasta + 1):
+            ordinal_inicio[(seg.id, compas)] = ordinal
+            pasada = pasadas_por_compas.get((seg.id, compas))
+            marca = marcas_por_compas_pasada.get((compas, pasada)) if pasada else None
+            if marca is not None:
+                anclas.append((ordinal, marca.total_seconds()))
+            ini, fin = _rango_pulsos_del_compas(seg, compas, pulsos_compas)
+            ordinal += (fin - ini + 1)
+    if tiempo_cierre is not None:
+        anclas.append((ordinal, tiempo_cierre))
+    return anclas, ordinal_inicio
 
 
 def _escala_en_posicion(anclas, posicion, fuera_de_rango=1.0):
@@ -382,7 +413,13 @@ def _tiempo_real_en_posicion(anclas, posicion):
     mitad de uno) — misma mecánica de tramos que _escala_en_posicion, pero
     devuelve el tiempo real absoluto en vez de sólo el factor de escala.
     None si la posición cae fuera del tramo cubierto (o hay menos de dos
-    anclas) — sin inventar una extrapolación."""
+    anclas) — sin inventar una extrapolación. Excepción: si la posición
+    coincide EXACTO con una ancla, se devuelve directo su tiempo real, aunque
+    sea la única que haya — ahí no hace falta una segunda para interpolar
+    nada, ya está marcada."""
+    for pos_a, t_a in anclas:
+        if pos_a == posicion:
+            return t_a
     if len(anclas) < 2 or posicion < anclas[0][0] or posicion > anclas[-1][0]:
         return None
     ultimo_tramo = len(anclas) - 2
@@ -624,9 +661,11 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     # de compás y las marcas puntuales por compás (ver MarcaTiempoCompas) —
     # todo esto se arma una sola vez acá (no adentro del loop de abajo)
     # porque necesita ver TODAS las filas/marcas en orden. Con esto,
-    # _perfil_y_anclas_fila arma — perezoso, cacheado por fila más abajo —
-    # DOS listas de anclas independientes por fila (itinerario/compases,
-    # ver esa función y _escala_en_posicion) que nunca se combinan entre sí.
+    # _perfil_y_anclas_fila arma — perezoso, cacheado por fila más abajo — las
+    # anclas del itinerario (esas sí, por fila: cada una es su propio tramo
+    # de tempo); las anclas de "compases" se arman aparte y una sola vez para
+    # toda la obra, ver _anclas_compases_globales. Las dos fuentes nunca se
+    # combinan entre sí (ver _escala_en_posicion).
     todos_los_segmentos = list(obra.segmentos.order_by('orden'))
     tiempo_inicio_siguiente_por_id = {
         s.id: (todos_los_segmentos[i + 1].tiempo_inicio if i + 1 < len(todos_los_segmentos) else None)
@@ -636,7 +675,14 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     marcas_por_compas_pasada = {
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
     }
-    perfiles_por_fila = {}  # cache: seg.id -> (posiciones, anclas_itinerario, anclas_compases)
+    # "compases" no se calcula por fila (ver _anclas_compases_globales) — se
+    # arma una sola vez para la obra entera, cruzando filas del itinerario.
+    cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
+    tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
+    anclas_compases_globales, ordinal_inicio_por_seg_compas = _anclas_compases_globales(
+        navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
+    )
+    perfiles_por_fila = {}  # cache: seg.id -> (posiciones, anclas_itinerario)
 
     # Parte fraccionaria de desde_pulso (ej. 2.5 -> 0.5) — cuánto del primer
     # pulso EMITIDO ya "pasó" antes del punto de arranque pedido; se le
@@ -692,10 +738,10 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
 
             if seg.id not in perfiles_por_fila:
                 perfiles_por_fila[seg.id] = _perfil_y_anclas_fila(
-                    seg, bpm_inicio, pulsos_compas, marcas_por_compas_pasada,
-                    pasadas_por_compas, tiempo_inicio_siguiente_por_id.get(seg.id),
+                    seg, bpm_inicio, pulsos_compas, tiempo_inicio_siguiente_por_id.get(seg.id),
                 )
-            posiciones_fila, anclas_itinerario, anclas_compases = perfiles_por_fila[seg.id]
+            posiciones_fila, anclas_itinerario = perfiles_por_fila[seg.id]
+            ordinal_compas = ordinal_inicio_por_seg_compas.get((seg.id, compas))
 
             for p in range(pulso_ini_emitir, pulso_fin_emitir + 1):
                 idx_en_fila = offset_compas + (p - pulso_ini)
@@ -705,9 +751,21 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                     bpm_pulso = bpm_inicio + (seg.bpm_llegada - bpm_inicio) * fraccion
                 duracion_pulso = 60.0 / bpm_pulso
                 escala_itin = _escala_en_posicion(anclas_itinerario, posiciones_fila[idx_en_fila], fuera_de_rango=1.0)
-                escala_comp = _escala_en_posicion(anclas_compases, posiciones_fila[idx_en_fila], fuera_de_rango=None)
                 duracion_itinerario_pulso = duracion_pulso * escala_itin
-                duracion_compases_pulso = None if escala_comp is None else duracion_pulso * escala_comp
+
+                # "compases": duración real = diferencia entre el tiempo real
+                # interpolado en el ordinal de ESTE pulso y el del siguiente
+                # (no un factor de escala sobre duracion_pulso — acá el bpm
+                # calculado no participa en absoluto, ver
+                # _anclas_compases_globales). None si algún extremo cae fuera
+                # de lo cubierto por marcas reales.
+                duracion_compases_pulso = None
+                if ordinal_compas is not None:
+                    ordinal_pulso = ordinal_compas + (p - pulso_ini)
+                    t_ini = _tiempo_real_en_posicion(anclas_compases_globales, ordinal_pulso)
+                    t_fin = _tiempo_real_en_posicion(anclas_compases_globales, ordinal_pulso + 1)
+                    if t_ini is not None and t_fin is not None:
+                        duracion_compases_pulso = t_fin - t_ini
 
                 # Primer pulso EMITIDO de TODO el plan (primera_iteracion,
                 # no sólo de este compás): si desde_pulso venía con fracción
@@ -854,6 +912,29 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
     pulsos_compas = info.get('pulsos_por_compas')
     if not (bpm_inicio and pulsos_compas):
         return None
+    pulso_ini_compas, _ = _rango_pulsos_del_compas(segmento, compas, pulsos_compas)
+
+    if fuente == 'compases':
+        navegables = segmentos_navegables(obra)
+        pasadas_por_compas = _pasadas_por_compas(obra)
+        marcas_por_compas_pasada = {
+            (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
+        }
+        todos_los_segmentos = list(obra.segmentos.order_by('orden'))
+        cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
+        tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
+        anclas, ordinal_inicio = _anclas_compases_globales(
+            navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
+        )
+        ordinal = ordinal_inicio.get((segmento.id, compas))
+        if ordinal is None:
+            return None
+        ordinal += (pulso - pulso_ini_compas)
+        t_ini = _tiempo_real_en_posicion(anclas, ordinal)
+        if t_ini is None or pulso_fraccion <= 0:
+            return t_ini
+        t_fin = _tiempo_real_en_posicion(anclas, ordinal + 1)
+        return t_ini if t_fin is None else t_ini + pulso_fraccion * (t_fin - t_ini)
 
     todos_los_segmentos = list(obra.segmentos.order_by('orden'))
     tiempo_inicio_siguiente = None
@@ -861,23 +942,15 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
         if s.id == segmento.id and i + 1 < len(todos_los_segmentos):
             tiempo_inicio_siguiente = todos_los_segmentos[i + 1].tiempo_inicio
             break
-    pasadas_por_compas = _pasadas_por_compas(obra)
-    marcas_por_compas_pasada = {
-        (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
-    }
-    posiciones, anclas_itinerario, anclas_compases = _perfil_y_anclas_fila(
-        segmento, bpm_inicio, pulsos_compas, marcas_por_compas_pasada,
-        pasadas_por_compas, tiempo_inicio_siguiente,
+    posiciones, anclas_itinerario = _perfil_y_anclas_fila(
+        segmento, bpm_inicio, pulsos_compas, tiempo_inicio_siguiente,
     )
 
-    pulso_ini_compas, _ = _rango_pulsos_del_compas(segmento, compas, pulsos_compas)
     idx_en_fila = _pulsos_antes_del_compas(segmento, compas, pulsos_compas) + (pulso - pulso_ini_compas)
     if idx_en_fila < 0 or idx_en_fila + 1 >= len(posiciones):
         return None
     posicion = posiciones[idx_en_fila] + pulso_fraccion * (posiciones[idx_en_fila + 1] - posiciones[idx_en_fila])
-
-    anclas = anclas_itinerario if fuente == 'itinerario' else anclas_compases
-    return _tiempo_real_en_posicion(anclas, posicion)
+    return _tiempo_real_en_posicion(anclas_itinerario, posicion)
 
 
 def desplazar_marcas_compas(obra, delta_segundos, objetivos=None):
