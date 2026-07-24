@@ -2,6 +2,16 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.7.3"
+  date: "2026-07-23"
+  changes:
+    - type: mejorado
+      text: "Reformulación completa de \"Sincronizar compases\": ahora recuerda la parte elegida y arranca siempre en el compás 1 (se completa solo si faltaba). Las marcas ya no son todas iguales: una tapeada a mano queda \"explícita\", una completada por interpolación queda diferenciada visualmente (atenuada) y deja de servir de referencia para futuras interpolaciones si no se la vuelve a tapear a mano. Nueva interpolación persistida (botón \"Interpolar\"): rellena un tramo seleccionado repartiendo el tiempo proporcional a la cantidad de pulsos de cada compás, avisando cuáles no pudo resolver por faltar una marca real de referencia a algún lado. Nuevo borrado en lote de temporización sobre la selección. Seleccionar un compás (clic, Shift+clic, Ctrl+clic o el control deslizante de audio) reposiciona la partitura en el primer compás de la selección, sin depender de cuál quedó armado para marcar. El reproductor pasa a un esquema Play/Pausar/Continuar/Reiniciar (igual que en Ejecución): siempre arranca 2 compases antes del punto elegido, para tener contexto musical antes de escuchar/marcar."
+    - type: corregido
+      text: "En \"Sincronizar compases\", mover el control deslizante de audio posicionaba la partitura pero no dejaba realmente armado el compás para marcar, y por eso tampoco hacía scroll para llevarlo a la vista en la lista — ahora arma el compás correspondiente en los dos modos."
+    - type: nuevo
+      text: "En el paso de detección de orientación de una partitura, botón \"Omitir detección automática\" para saltar directo al ajuste manual — la detección puede demorar mucho o fallar por timeout con varias páginas, y no siempre hace falta: el usuario puede ajustar a mano sin esperarla."
+
 - version: "1.7.0"
   date: "2026-07-23"
   changes:

@@ -149,15 +149,20 @@ class MarcaTiempoCompas(models.Model):
     2da vez, D.C., etc. — cada pasada tiene su propia marca), mismo criterio
     de "pasada" que usa buscar_posicion.
 
-    Convive con Segmento.tiempo_inicio en vez de reemplazarlo: construir_plan
-    prioriza estas marcas cuando existen (más precisas, punto a punto) y cae
-    en las de Segmento (por fila) donde no las haya, y en el tiempo calculado
-    puro donde no haya ninguna de las dos — una escalera de calidad, no un
-    interruptor que haya que elegir a mano."""
+    Convive con Segmento.tiempo_inicio en vez de reemplazarlo: en la
+    ejecución, cada fuente ("por itinerario" o "por compases") se usa por
+    separado según elija el usuario — nunca se mezclan entre sí (ver
+    construir_plan en services.py)."""
     obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_tiempo_compas')
     compas = models.PositiveIntegerField()
     pasada = models.PositiveIntegerField(default=1)
     tiempo_inicio = models.DurationField()
+    explicita = models.BooleanField(
+        default=True,
+        help_text="True si la puso el usuario (tap, edición manual, desplazamiento en bloque); "
+                   "False si la generó la interpolación de sincronizar_compases — esas no sirven "
+                   "de ancla para futuras interpolaciones, y se muestran atenuadas.",
+    )
 
     class Meta:
         unique_together = [('obra', 'compas', 'pasada')]

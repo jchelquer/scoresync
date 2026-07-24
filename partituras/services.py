@@ -5,6 +5,7 @@ etapa anterior del pipeline (orientación → márgenes → sistemas → ancla �
 barras/compases), y la resolución del itinerario de ejecución de una obra
 (herencia de campos en blanco + tiempo estimado a partir de bpm)."""
 
+import bisect
 import re
 from datetime import timedelta
 
@@ -776,9 +777,10 @@ def compases_desenrollados(obra):
     ocurrencia, con segmento_id/compas/pasada/indicacion_compas/bpm/
     tiempo_inicio_calculado (acumulado desde el primer compás de la obra,
     en segundos — None de ahí en más si en algún punto faltó bpm o
-    indicación)/tiempo_inicio (real, si ya está marcado)/es_cierre; completo
-    es False si algún compás quedó sin bpm/indicación resueltos (mismo
-    criterio que construir_plan).
+    indicación)/tiempo_inicio (real, si ya está marcado)/explicita (None si
+    no hay tiempo_inicio en absoluto; True/False según MarcaTiempoCompas.explicita
+    si lo hay — ver ese modelo)/es_cierre; completo es False si algún compás
+    quedó sin bpm/indicación resueltos (mismo criterio que construir_plan).
 
     La ÚLTIMA entrada, si la obra tiene fila de cierre (ver Segmento —
     compas_desde null, marca dónde termina el último compás de verdad), es
@@ -792,13 +794,14 @@ def compases_desenrollados(obra):
 
     pulsos, completo = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     pasadas = _pasadas_por_compas(obra)
-    marcas = {(m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()}
+    marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
 
     entradas = []
     acumulado = 0.0
     for p in pulsos:
         if p.get('es_primer_pulso_compas'):
             pasada = pasadas.get((p['segmento_id'], p['compas']), 1)
+            marca = marcas.get((p['compas'], pasada))
             entradas.append({
                 'segmento_id': p['segmento_id'],
                 'compas': p['compas'],
@@ -806,7 +809,8 @@ def compases_desenrollados(obra):
                 'indicacion_compas': p['indicacion_compas'],
                 'bpm': p['bpm'],
                 'tiempo_inicio_calculado': acumulado,
-                'tiempo_inicio': marcas.get((p['compas'], pasada)),
+                'tiempo_inicio': marca.tiempo_inicio if marca else None,
+                'explicita': marca.explicita if marca else None,
                 'es_cierre': False,
             })
         if acumulado is not None:
@@ -822,6 +826,7 @@ def compases_desenrollados(obra):
             'bpm': None,
             'tiempo_inicio_calculado': acumulado,
             'tiempo_inicio': cierre.tiempo_inicio,
+            'explicita': True if cierre.tiempo_inicio is not None else None,
             'es_cierre': True,
         })
     return entradas, completo
@@ -894,6 +899,82 @@ def desplazar_marcas_compas(obra, delta_segundos, objetivos=None):
         marca.tiempo_inicio = timedelta(seconds=nuevo)
     MarcaTiempoCompas.objects.bulk_update(marcas, ["tiempo_inicio"])
     return len(marcas)
+
+
+def interpolar_marcas_compas(obra, objetivos):
+    """objetivos: iterable de (compas, pasada) sin marca explícita, a rellenar
+    por interpolación (sincronizar_compases.html). Busca, para cada uno, el
+    compás explícito más cercano hacia atrás y hacia adelante en TODA la
+    obra (no sólo en objetivos) — incluye la fila de cierre
+    (Segmento.tiempo_inicio) como ancla válida del extremo derecho. Si a
+    alguno le falta un extremo, se lo salta (no se interpola) sin abortar el
+    resto. Reparte el tiempo entre las dos anclas proporcional a la
+    cantidad de pulsos de cada compás intermedio (_pulsos_por_compas de su
+    indicación) — sin mirar bpm/accelerando/ritardando del itinerario en el
+    medio (tempo asumido constante entre esas dos anclas). Guarda cada
+    resultado como MarcaTiempoCompas(explicita=False), sobrescribiendo si ya
+    había un valor no-explícito ahí (permite recalcular).
+
+    Devuelve (resueltos, no_resueltos): resueltos es la cantidad interpolada
+    con éxito; no_resueltos es la lista de (compas, pasada) a las que les
+    faltó una ancla explícita de algún lado."""
+    entradas, _ = compases_desenrollados(obra)
+    idx_por_clave = {
+        (e['compas'], e['pasada']): i for i, e in enumerate(entradas) if not e['es_cierre']
+    }
+
+    anclas = [
+        (i, e['tiempo_inicio'].total_seconds())
+        for i, e in enumerate(entradas)
+        if e['explicita'] and e['tiempo_inicio'] is not None
+    ]
+    indices_ancla = [a[0] for a in anclas]
+
+    def pulsos_de(i):
+        return _pulsos_por_compas(entradas[i]['indicacion_compas']) or 1.0
+
+    no_resueltos = []
+    a_guardar = []
+    for clave in objetivos:
+        i = idx_por_clave.get(clave)
+        if i is None:
+            no_resueltos.append(clave)
+            continue
+        pos = bisect.bisect_left(indices_ancla, i)
+        izq = anclas[pos - 1] if pos > 0 else None
+        der = anclas[pos] if pos < len(anclas) else None
+        if izq is None or der is None:
+            no_resueltos.append(clave)
+            continue
+        idx_izq, t_izq = izq
+        idx_der, t_der = der
+        numerador = sum(pulsos_de(k) for k in range(idx_izq + 1, i + 1))
+        denominador = sum(pulsos_de(k) for k in range(idx_izq + 1, idx_der + 1))
+        fraccion = (numerador / denominador) if denominador else 0.0
+        a_guardar.append((clave, t_izq + fraccion * (t_der - t_izq)))
+
+    for (compas, pasada), tiempo in a_guardar:
+        MarcaTiempoCompas.objects.update_or_create(
+            obra=obra, compas=compas, pasada=pasada,
+            defaults={'tiempo_inicio': timedelta(seconds=tiempo), 'explicita': False},
+        )
+
+    return len(a_guardar), no_resueltos
+
+
+def borrar_marcas_compas(obra, objetivos):
+    """Borra (explícitas Y no-explícitas, sin distinción) las MarcaTiempoCompas
+    de obra que coincidan con (compas, pasada) en objetivos — borrado en
+    lote de una selección múltiple en sincronizar_compases.html. No toca la
+    fila de cierre (Segmento.tiempo_inicio, mecanismo aparte) — mismo
+    criterio que desplazar_marcas_compas, que tampoco la soporta. Devuelve
+    cuántas se borraron."""
+    objetivos = set(objetivos)
+    if not objetivos:
+        return 0
+    ids = [m.id for m in obra.marcas_tiempo_compas.all() if (m.compas, m.pasada) in objetivos]
+    MarcaTiempoCompas.objects.filter(id__in=ids).delete()
+    return len(ids)
 
 
 def recalcular_tiempos_calculados(obra):

@@ -48,3 +48,19 @@ Inicialización:
 - Borrado de temporizaciones:
     - Agregar un botón de borrar temporización que borre la temporización explícita y la calculada por interporlación de los compases seleccionados. Esto es útil para recalcular la interpolación si se cambió algo.
     - Como es una operación destructiva, hay que pedir confirmación al usuario antes de borrarla.
+
+- Reproducción:
+    - La reproducción comienza en el primer compás seleccionado y sigue mientras no se la detenga.
+    - El bloque de reproducción con el play, pausa etc., el slider de velocidad y el slider del reproductor mudarlo arriba de todo del panel de compases.
+    - Si se mueve el slider del reproductor de audio, seleccionar automáticamente el compás correspondiente y después posicionarse en el audio según el compás (puede haber una pequeña diferencia porque en el slider uno se ubica en cualquier parte, por eso lo digo)
+
+- Marcado:
+    - Cuando está en modo marcado, el audio comienza a escucharse 2 compases antes del compás a marcar.
+    - La fuente para ubicar el audio es siempre la temporización de los compases.
+    - Si por alguna razón esos compases no tuvieran termporización (explícita o interpolada) o no hubiera 2 compases previos, probar con 1 compás previo. Si tampoco hay 1 compás previo, usar el comienzo del audio.
+
+    - El compás a marcar se señala en rojo.
+    - El compás que se está ejecutando, en verde.
+    
+
+Análisis de orientación: como demora mucho, permitir un botón que no haga el análisis automático y deje ajustar a mano directamente.

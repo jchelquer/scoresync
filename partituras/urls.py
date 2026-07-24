@@ -31,6 +31,8 @@ urlpatterns = [
     path('obras/<int:pk>/sincronizar-compases/', views.sincronizar_compases, name='sincronizar_compases'),
     path('obras/<int:pk>/marcar-tiempo-compas/', views.marcar_tiempo_compas, name='marcar_tiempo_compas'),
     path('obras/<int:pk>/desplazar-tiempos-compases/', views.desplazar_tiempos_compases, name='desplazar_tiempos_compases'),
+    path('obras/<int:pk>/interpolar-tiempos-compases/', views.interpolar_tiempos_compases, name='interpolar_tiempos_compases'),
+    path('obras/<int:pk>/borrar-tiempos-compases/', views.borrar_tiempos_compases, name='borrar_tiempos_compases'),
 
     path('<int:pk>/normalizar/', views.iniciar_normalizacion, name='iniciar_normalizacion'),
     path('<int:pk>/orientacion/<int:numero>/', views.ajuste_orientacion, name='ajuste_orientacion'),

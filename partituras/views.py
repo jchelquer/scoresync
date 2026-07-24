@@ -21,12 +21,12 @@ from .models import (
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, generar_pdf_normalizado, rasterizar_pagina
 from .services import (
-    avanzar_compas, buscar_posicion, compases_desenrollados, construir_plan,
-    desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
-    invalidar_desde_ancla, invalidar_desde_margenes, invalidar_desde_orientacion,
-    invalidar_desde_sistemas, numero_inicial_pagina, parsear_compas_pulso,
-    recalcular_tiempos_calculados, renumerar_segmentos, resolver_segmentos,
-    retroceder_compas, segmentos_navegables, tiempo_real_ancla,
+    avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
+    construir_plan, desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
+    interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
+    invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
+    parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
+    resolver_segmentos, retroceder_compas, segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
     buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
@@ -363,12 +363,37 @@ def sincronizar_compases(request, pk):
     if not entradas:
         messages.warning(request, 'Esta obra todavía no tiene compases navegables en el itinerario.')
         return redirect("partituras:obra_detalle", pk=pk)
+
+    # El primer compás de la obra siempre necesita una ancla real para que
+    # la interpolación tenga de dónde arrancar — si nadie lo tapeó todavía,
+    # se asume que el audio arranca justo ahí (tiempo 0), igual que la fila
+    # de cierre se completa sola con la duración del audio del lado del
+    # cliente (ver sincronizar_compases.html, sólo ahí se conoce audio.duration).
+    primera = entradas[0]
+    if not primera["es_cierre"] and primera["tiempo_inicio"] is None:
+        MarcaTiempoCompas.objects.get_or_create(
+            obra=obra, compas=primera["compas"], pasada=primera["pasada"],
+            defaults={"tiempo_inicio": timedelta(0), "explicita": True},
+        )
+        primera["tiempo_inicio"] = timedelta(0)
+        primera["explicita"] = True
+
     for entrada in entradas:
         tiempo_inicio = entrada["tiempo_inicio"]
         entrada["tiempo_inicio_segundos"] = tiempo_inicio.total_seconds() if tiempo_inicio is not None else None
 
+    pref = PreferenciaObra.objects.filter(usuario=request.user, obra=obra).first()
     partes_disponibles = _partes_disponibles(obra)
-    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
+    partitura_seguida = _partitura_seguida(obra, request, pref) if partes_disponibles else None
+
+    # Mismo criterio que navegador_obra: si vino una parte elegida A
+    # PROPÓSITO por querystring, se recuerda para la próxima visita.
+    parte_id_qs = _leer_entero(request.GET.get("parte"), None)
+    if parte_id_qs and partitura_seguida and partitura_seguida.id == parte_id_qs:
+        PreferenciaObra.objects.update_or_create(
+            usuario=request.user, obra=obra,
+            defaults={"parte_seguida": partitura_seguida},
+        )
 
     return render(request, "partituras/sincronizar_compases.html", {
         "obra": obra,
@@ -402,14 +427,31 @@ def marcar_tiempo_compas(request, pk):
         segundos = float(segundos_raw)
     except ValueError:
         return JsonResponse({"ok": False, "error": "segundos inválido"}, status=400)
+    # Un tap/edición manual siempre es una marca explícita, aunque el
+    # compás ya tuviera un valor interpolado (explicita=False) puesto por
+    # el botón Interpolar — la mano del usuario siempre pisa/promueve eso.
     marca, _creada = MarcaTiempoCompas.objects.update_or_create(
         obra=obra, compas=compas, pasada=pasada,
-        defaults={"tiempo_inicio": timedelta(seconds=max(segundos, 0))},
+        defaults={"tiempo_inicio": timedelta(seconds=max(segundos, 0)), "explicita": True},
     )
     return JsonResponse({
         "ok": True, "compas": compas, "pasada": pasada,
         "tiempo_inicio": str(marca.tiempo_inicio),
     })
+
+
+def _parsear_compas_pasada_lista(texto):
+    """"5:1,5:2,6:1" -> [(5,1),(5,2),(6,1)] — formato compartido en que el
+    cliente manda una selección múltiple de sincronizar_compases.html
+    (desplazar/interpolar/borrar tiempos). Levanta ValueError si algún par
+    no tiene el formato esperado."""
+    if not texto:
+        return []
+    objetivos = []
+    for par in texto.split(","):
+        c, p = par.split(":")
+        objetivos.append((int(c), int(p)))
+    return objetivos
 
 
 @login_required
@@ -428,15 +470,56 @@ def desplazar_tiempos_compases(request, pk):
     objetivos = None
     compases_raw = request.POST.get("compases")
     if compases_raw:
-        objetivos = []
-        for par in compases_raw.split(","):
-            try:
-                c, p = par.split(":")
-                objetivos.append((int(c), int(p)))
-            except ValueError:
-                return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
+        try:
+            objetivos = _parsear_compas_pasada_lista(compases_raw)
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
 
     n = desplazar_marcas_compas(obra, delta, objetivos=objetivos)
+    return JsonResponse({"ok": True, "n": n})
+
+
+@login_required
+@require_POST
+def interpolar_tiempos_compases(request, pk):
+    """Rellena por interpolación (ver interpolar_marcas_compas) los compases
+    sin marca explícita de la selección — "compases" (POST) es la misma
+    lista "compas:pasada,..." que usa desplazar_tiempos_compases. Devuelve
+    los tiempos resueltos (para que el cliente actualice esas filas sin
+    recargar la página) y la lista de los que no se pudieron resolver."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        objetivos = _parsear_compas_pasada_lista(request.POST.get("compases", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
+
+    _resueltos, no_resueltos = interpolar_marcas_compas(obra, objetivos)
+    marcas = {
+        (m.compas, m.pasada): m.tiempo_inicio.total_seconds()
+        for m in obra.marcas_tiempo_compas.filter(
+            compas__in=[c for c, _p in objetivos]
+        ) if (m.compas, m.pasada) in objetivos and (m.compas, m.pasada) not in no_resueltos
+    }
+    return JsonResponse({
+        "ok": True,
+        "resueltos": [{"compas": c, "pasada": p, "tiempo_inicio": marcas[(c, p)]} for c, p in objetivos if (c, p) in marcas],
+        "no_resueltos": [{"compas": c, "pasada": p} for c, p in no_resueltos],
+    })
+
+
+@login_required
+@require_POST
+def borrar_tiempos_compases(request, pk):
+    """Borra en lote (explícitas y no-explícitas) las MarcaTiempoCompas de la
+    selección — ver borrar_marcas_compas. "compases" (POST) es la misma
+    lista "compas:pasada,..." que usan los otros endpoints de selección."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        objetivos = _parsear_compas_pasada_lista(request.POST.get("compases", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
+
+    n = borrar_marcas_compas(obra, objetivos)
     return JsonResponse({"ok": True, "n": n})
 
 
@@ -981,9 +1064,22 @@ def gestionar_obra(request, pk):
 
 @login_required
 def iniciar_normalizacion(request, pk):
+    """Crea (o recrea, para páginas no confirmadas) un Pagina por cada
+    página del PDF y arranca el ajuste de orientación. POST "accion=omitir"
+    (botón "Omitir detección automática", ver detalle.html) salta
+    rasterizar_pagina/detectar_rotacion_90/detectar_angulo_deskew por
+    completo — quedan en 0/0 (rotación/ángulo), exactamente el mismo
+    resultado que produce la detección en una página ya derecha (ver
+    normalizacion.py), así que no deja nada en un estado "raro" para las
+    pantallas siguientes. Existe porque la detección es O(páginas) DENTRO
+    del propio request síncrono — con muchas páginas puede tardar mucho o
+    directamente dar timeout, y no es grave si el usuario prefiere ajustar
+    todo a mano desde cero."""
     partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
     if request.method != "POST":
         return redirect("partituras:detalle", pk=pk)
+
+    omitir_deteccion = request.POST.get("accion") == "omitir"
 
     total = contar_paginas(partitura.archivo_original.path)
     ya_confirmadas = set(
@@ -992,10 +1088,13 @@ def iniciar_normalizacion(request, pk):
     for numero in range(1, total + 1):
         if numero in ya_confirmadas:
             continue  # no pisar una página que el usuario ya revisó y confirmó
-        img = rasterizar_pagina(partitura.archivo_original.path, numero, dpi=DPI)
-        rotacion = detectar_rotacion_90(img)
-        rotada = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE) if rotacion == 90 else img
-        angulo = detectar_angulo_deskew(rotada)
+        if omitir_deteccion:
+            rotacion, angulo = 0, 0.0
+        else:
+            img = rasterizar_pagina(partitura.archivo_original.path, numero, dpi=DPI)
+            rotacion = detectar_rotacion_90(img)
+            rotada = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE) if rotacion == 90 else img
+            angulo = detectar_angulo_deskew(rotada)
 
         Pagina.objects.update_or_create(
             partitura=partitura, numero=numero,

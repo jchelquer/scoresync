@@ -10,6 +10,12 @@
     padding: 0.4rem 0.6rem;
   }
   .fila-sync:hover { background: rgba(255,255,255,0.04); }
+  /* No-explícita (interpolada, ver botón Interpolar): definida ANTES de
+     .armada a propósito, para que .armada gane la cascada cuando las dos
+     clases coinciden en una fila — el compás armado siempre se ve armado,
+     sea o no explícita su marca. */
+  .fila-sync.no-explicita { background: rgba(255, 255, 255, 0.05); }
+  .fila-sync.no-explicita .tiempo-real { opacity: 0.6; font-style: italic; }
   .fila-sync.armada {
     background: rgba(233, 69, 96, 0.18);
     border-left: 3px solid #e94560;
@@ -45,7 +51,21 @@
   <h5 style="color: var(--ss-text-bright)">
     {% translate "Sincronizar por compás" %} — {{ obra.titulo }}
   </h5>
-  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  <div class="d-flex align-items-center gap-2">
+    {% if partes_disponibles|length > 1 %}
+    <form method="get" class="d-flex align-items-center gap-2">
+      <span class="small" style="color: var(--ss-text-muted)">{% translate "Parte" %}</span>
+      <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+        {% for p in partes_disponibles %}
+        <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
+          {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </form>
+    {% endif %}
+    <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  </div>
 </div>
 
 <p class="small mb-2" style="color: var(--ss-text-muted)">
@@ -66,7 +86,7 @@
 
 <div class="row g-3">
   <div class="col-lg-7">
-    <div class="card border-0 mb-3" style="background: var(--ss-surface)">
+    <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body">
         <div class="form-check form-switch d-flex align-items-center mb-2">
           <input class="form-check-input" type="checkbox" id="sync-toggle-numeros" checked>
@@ -78,14 +98,20 @@
         </div>
       </div>
     </div>
+  </div>
 
-    <div class="card border-0" style="background: var(--ss-surface)">
+  <div class="col-lg-5">
+    <!-- El reproductor encabeza esta columna (antes vivía junto a la
+         partitura, a la izquierda) — para no tener que mirar de un lado a
+         otro entre los controles de audio y la lista de compases. -->
+    <div class="card border-0 mb-3" style="background: var(--ss-surface)">
       <div class="card-body">
         <audio id="sync-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
         <div class="d-flex align-items-center gap-2 mb-2">
           <button id="sync-btn-back1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 1 segundo" %}">−1s</button>
           <button id="sync-btn-back-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 0,1 segundo" %}">−0,1s</button>
           <button id="sync-btn-playpause" type="button" class="btn btn-ss" title="{% translate "Pausar/continuar (Enter)" %}">▶</button>
+          <button id="sync-btn-reiniciar" type="button" class="btn btn-outline-light d-none" title="{% translate "Reiniciar — 2 compases antes del primero seleccionado" %}">↺</button>
           <button id="sync-btn-fwd-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 0,1 segundo" %}">+0,1s</button>
           <button id="sync-btn-fwd1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 1 segundo" %}">+1s</button>
         </div>
@@ -102,9 +128,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <div class="col-lg-5">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body pb-2">
         <!-- Acá y no junto al reproductor: lo que ajustan es las marcas de
@@ -123,16 +146,22 @@
           <button id="sync-btn-ajuste-p1" type="button" class="btn btn-sm btn-paso btn-ajuste-pos btn-ajuste-pos-fuerte">+0,1s</button>
           <span id="sync-seleccion-label" class="small ms-1" style="color: var(--ss-text-muted);"></span>
         </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
+          <button id="sync-btn-interpolar" type="button" class="btn btn-sm btn-outline-light d-none">{% translate "Interpolar" %}</button>
+          <button id="sync-btn-borrar-tiempos" type="button" class="btn btn-sm btn-outline-danger d-none">{% translate "Borrar temporización" %}</button>
+          <span id="sync-interpolar-aviso" class="small text-warning" style="display:none;"></span>
+        </div>
       </div>
       <div class="card-body p-0">
         <div id="sync-filas" style="max-height: 60vh; overflow-y: auto;">
           {% for entrada in entradas %}
-          <div class="fila-sync"
+          <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% endif %}"
                data-index="{{ forloop.counter0 }}"
                data-compas="{{ entrada.compas|default_if_none:'' }}"
                data-pasada="{{ entrada.pasada|default_if_none:'' }}"
                data-segmento-id="{{ entrada.segmento_id }}"
-               data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}">
+               data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}"
+               data-explicita="{% if entrada.explicita %}1{% elif entrada.explicita == False %}0{% endif %}">
             <div class="d-flex justify-content-between">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
@@ -160,6 +189,10 @@
 (function () {
   const audio = document.getElementById('sync-audio');
   const btnPlayPause = document.getElementById('sync-btn-playpause');
+  const btnReiniciar = document.getElementById('sync-btn-reiniciar');
+  const btnInterpolar = document.getElementById('sync-btn-interpolar');
+  const btnBorrarTiempos = document.getElementById('sync-btn-borrar-tiempos');
+  const avisoInterpolar = document.getElementById('sync-interpolar-aviso');
   const btnBack1 = document.getElementById('sync-btn-back1');
   const btnBackFino = document.getElementById('sync-btn-back-fino');
   const btnFwdFino = document.getElementById('sync-btn-fwd-fino');
@@ -236,18 +269,82 @@
     });
   }
 
+  // ── Play / Pausar / Continuar / Reiniciar (modo reproducción) ────────
+  // En modo marcado, btnPlayPause sigue siendo un toggle simple (como
+  // siempre) — el adelanto de 2 compases ahí lo maneja armar() aparte (ver
+  // más abajo), no este botón. En modo reproducción, en cambio, el mismo
+  // botón pasa a un esquema de 3 estados: Play (desde detenido) arranca 2
+  // compases antes del primer compás seleccionado; Continuar (desde
+  // pausado) NO retoma en seco — ubica a qué compás corresponde donde se
+  // pausó y arranca 2 compases antes de ESE; Reiniciar (botón aparte,
+  // visible sólo en pausa) vuelve al punto de Play.
+  let estadoReproduccion = 'inicial'; // sólo relevante con modo === 'reproduccion'
+
+  function iniciarReproduccionDesde(idx) {
+    audio.currentTime = tiempoNCompasesAntes(idx, 2);
+    audio.play().catch(() => {});
+  }
+
+  function actualizarBotonesReproduccion() {
+    if (btnReiniciar) btnReiniciar.classList.toggle('d-none', !(modo === 'reproduccion' && estadoReproduccion === 'pausado'));
+  }
+
   btnPlayPause.addEventListener('click', () => {
-    if (audio.paused) audio.play(); else audio.pause();
+    if (modo !== 'reproduccion') {
+      if (audio.paused) audio.play(); else audio.pause();
+      return;
+    }
+    if (estadoReproduccion === 'reproduciendo') {
+      audio.pause();
+    } else if (estadoReproduccion === 'pausado') {
+      iniciarReproduccionDesde(indiceEnTiempo(audio.currentTime));
+    } else {
+      iniciarReproduccionDesde(primerIndiceSeleccion());
+    }
   });
+  if (btnReiniciar) {
+    btnReiniciar.addEventListener('click', () => {
+      if (modo === 'reproduccion') iniciarReproduccionDesde(primerIndiceSeleccion());
+    });
+  }
   btnBack1.addEventListener('click', () => saltar(-1));
   btnBackFino.addEventListener('click', () => saltar(-0.1));
   btnFwdFino.addEventListener('click', () => saltar(0.1));
   btnFwd1.addEventListener('click', () => saltar(1));
-  audio.addEventListener('play', () => { btnPlayPause.textContent = '⏸'; iniciarSeguimientoSonando(); });
-  audio.addEventListener('pause', () => { btnPlayPause.textContent = '▶'; detenerSeguimientoSonando(); });
+  audio.addEventListener('play', () => {
+    btnPlayPause.textContent = '⏸';
+    if (modo === 'reproduccion') estadoReproduccion = 'reproduciendo';
+    actualizarBotonesReproduccion();
+    iniciarSeguimientoSonando();
+  });
+  audio.addEventListener('pause', () => {
+    btnPlayPause.textContent = '▶';
+    if (modo === 'reproduccion') estadoReproduccion = 'pausado';
+    actualizarBotonesReproduccion();
+    detenerSeguimientoSonando();
+  });
+  // Si nadie marcó todavía el fin de la obra, se completa solo con la
+  // duración real del audio (ver la vista, que hace lo mismo con el
+  // compás 1 apenas se conoce sin depender del audio) — recién acá se
+  // conoce audio.duration, por eso este paso es del lado del cliente.
+  function completarCierreSiFalta() {
+    const filaCierre = filas.find(f => f.dataset.esCierre === '1');
+    if (!filaCierre) return;
+    const tiempoEl = filaCierre.querySelector('.tiempo-real');
+    if (tiempoEl.dataset.segundos !== '') return;
+    if (!audio.duration || !isFinite(audio.duration)) return;
+    guardarTiempo(filaCierre, audio.duration).then((ok) => {
+      if (!ok) return;
+      tiempoEl.textContent = formatearTiempo(audio.duration);
+      tiempoEl.dataset.segundos = String(audio.duration);
+      filaCierre.classList.add('marcada');
+    });
+  }
   audio.addEventListener('loadedmetadata', () => {
     tiempoTotalEl.textContent = formatearTiempo(audio.duration);
+    completarCierreSiFalta();
   });
+  if (audio.readyState >= 1) completarCierreSiFalta();
   audio.addEventListener('timeupdate', () => {
     tiempoActualEl.textContent = formatearTiempo(audio.currentTime);
     if (!arrastrandoScrubber && audio.duration) {
@@ -261,17 +358,73 @@
       tiempoActualEl.textContent = formatearTiempo(nuevo);
     }
   });
+  // Al soltar el scrubber: a diferencia de antes (que sólo movía el audio a
+  // la posición cruda del slider), ahora selecciona el compás
+  // correspondiente (reposiciona la partitura, ver refrescarPanelScore) y
+  // deja el audio exacto en SU tiempo real — puede diferir un poco de
+  // dónde se soltó el slider, es esperable.
   scrubber.addEventListener('change', () => {
     if (audio.duration) {
-      audio.currentTime = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+      const tiempoCrudo = (parseInt(scrubber.value, 10) / 1000) * audio.duration;
+      const idx = indiceEnTiempo(tiempoCrudo);
+      seleccion = new Set([idx]);
+      anclaSeleccion = idx;
+      actualizarClasesSeleccion();
+      armar(idx, { reposicionar: false });
+      const t = tiempoDeFila(idx);
+      audio.currentTime = t != null ? t : tiempoCrudo;
     }
     arrastrandoScrubber = false;
   });
 
   // ── Filas / marcado ─────────────────────────────────────────────────
-  let idxArmada = filas.findIndex(f => f.querySelector('.tiempo-real').textContent.trim() === '—');
-  if (idxArmada === -1) idxArmada = filas.length ? filas.length - 1 : -1;
+  // La pantalla arranca siempre en el primer compás de la obra (índice 0),
+  // no en la primera fila sin marca como antes — el compás 1 ya viene
+  // garantizado con una marca real (ver la vista, que lo auto-completa en
+  // 0 si hacía falta).
+  let idxArmada = filas.length ? 0 : -1;
   const historialMarcas = []; // índices efectivamente MARCADOS (no salteados) — para poder deshacer
+
+  // ── Tiempo real de una fila / "N compases antes" con fallback ────────
+  // Sobre los datos ya cargados en el cliente (cada fila trae su tiempo en
+  // el dataset) — no hace falta ningún pedido al servidor para esto.
+  function tiempoDeFila(i) {
+    if (i < 0 || i >= filas.length) return null;
+    const seg = filas[i].querySelector('.tiempo-real').dataset.segundos;
+    return seg === '' ? null : parseFloat(seg);
+  }
+
+  // Tiempo real N compases antes de la entrada idx, con fallback
+  // N→N-1→...→0 (cualquier tiempo real vale, explícito o interpolado — a
+  // diferencia de las anclas de interpolación, acá no importa el origen).
+  // Si ni el propio idx tiene tiempo, cae en 0 (comienzo del audio).
+  function tiempoNCompasesAntes(idx, n) {
+    for (let delta = n; delta >= 0; delta--) {
+      const t = tiempoDeFila(idx - delta);
+      if (t != null) return t;
+    }
+    return 0;
+  }
+
+  // Índice de la fila cuyo tiempo real es el mayor <= segundos dados (qué
+  // compás "está sonando"/corresponde a ese punto del audio).
+  function indiceEnTiempo(segundos) {
+    let mejor = 0;
+    for (let i = 0; i < filas.length; i++) {
+      const t = tiempoDeFila(i);
+      if (t != null && t <= segundos) mejor = i;
+    }
+    return mejor;
+  }
+
+  // Primer compás (no cierre) de la selección, en orden de compás — los
+  // índices de fila YA están en ese orden (mismo orden que
+  // compases_desenrollados), así que Math.min alcanza sin ordenar nada.
+  // Sin selección, cae en el compás 1 (índice 0).
+  function primerIndiceSeleccion() {
+    const candidatos = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
+    return candidatos.length ? Math.min(...candidatos) : 0;
+  }
 
   // Selección múltiple (para el ajuste fino, ver más abajo) — declarada acá
   // arriba porque refrescarPanelScore() ya la necesita.
@@ -279,10 +432,12 @@
   let anclaSeleccion = null;
 
   // ── Compás "sonando" en vivo ─────────────────────────────────────────
-  // Independiente del modo: mientras el audio suena, se seguye el MISMO
-  // plan que usa "Ejecutar con audio" en el navegador (ya prioriza marcas
-  // de compás sobre las de fila) para saber qué compás está SONANDO en
-  // este instante — no necesariamente el mismo que está armado para tapear.
+  // Independiente del modo: mientras el audio suena, se sigue el MISMO plan
+  // que usa el navegador (ver navegador_obra.html/construir_plan) para
+  // saber qué compás está SONANDO en este instante — no necesariamente el
+  // mismo que está armado para tapear. Se pide siempre "por compases"
+  // (default del endpoint, sin querystring) — nunca itinerario, coherente
+  // con que esta pantalla gira en torno a MarcaTiempoCompas.
   let pulsosGlobal = [];
   let acumuladosRealesGlobal = [];
   let primerPulsoTiempoRealGlobal = null;
@@ -310,7 +465,11 @@
         }
         pasadaPorPulsoGlobal.push(pasadaActual);
         acumuladosRealesGlobal.push(total);
-        total += (p.duracion_real != null ? p.duracion_real : p.duracion) || 0;
+        // duracion_compases puede ser null (tramo sin marca real, ver
+        // construir_plan) — se suma 0 en vez de caer al calculado, así el
+        // pulso siguiente hereda el mismo acumulado (el resaltado "sonando"
+        // se congela ahí en vez de mezclar con tiempos de itinerario).
+        total += (p.duracion_compases != null ? p.duracion_compases : 0);
       });
     } catch (e) {
       // Sin esto no hay resaltado en vivo — no es crítico, se puede seguir
@@ -346,20 +505,29 @@
       // Acá no hay nada "armado para marcar" — el recorte se ancla en lo
       // que está SONANDO (verde), no en el rojo de marcado; si todavía no
       // arrancó a sonar nada, se apoya en el último armado sólo para no
-      // dejar el panel vacío, pero sin pintar su caja roja (4to parámetro).
+      // dejar el panel vacío, pero sin pintar su caja roja (dibujarArmado=false).
       const numeroCrop = compasSonando != null ? compasSonando
         : (idxArmada >= 0 && filas[idxArmada].dataset.esCierre !== '1' ? parseInt(filas[idxArmada].dataset.compas, 10) : null);
-      mostrarCompas(numeroCrop, compasSonando, numerosSeleccionados, false);
+      mostrarCompas(numeroCrop, null, compasSonando, numerosSeleccionados, false);
       return;
     }
 
     if (idxArmada < 0) return;
-    const filaArmada = filas[idxArmada];
-    if (filaArmada.dataset.esCierre === '1') {
-      mostrarCompas(null, compasSonando, numerosSeleccionados);
-    } else {
-      mostrarCompas(parseInt(filaArmada.dataset.compas, 10), compasSonando, numerosSeleccionados);
+    // El recorte (qué se VE) y lo armado (qué se pinta en rojo, lo que se
+    // va a marcar) son cosas distintas: si hay una selección, la partitura
+    // se ubica en el PRIMER compás de la selección (en orden de compás),
+    // aunque lo armado siga siendo el compás clickeado — que puede ser
+    // otro extremo de un rango con Shift+click.
+    let idxCrop = idxArmada;
+    if (seleccion.size) {
+      const primero = primerIndiceSeleccion();
+      if (filas[primero]) idxCrop = primero;
     }
+    const filaCrop = filas[idxCrop];
+    const numeroCrop = filaCrop.dataset.esCierre === '1' ? null : parseInt(filaCrop.dataset.compas, 10);
+    const filaArmada = filas[idxArmada];
+    const numeroArmado = filaArmada.dataset.esCierre === '1' ? null : parseInt(filaArmada.dataset.compas, 10);
+    mostrarCompas(numeroCrop, numeroArmado, compasSonando, numerosSeleccionados);
   }
 
   function actualizarSonando() {
@@ -407,33 +575,41 @@
     if (!visible) el.scrollIntoView({ block: 'start' });
   }
 
+  // "Marcando el compás X" sólo tiene sentido en modo marcado (es lo que
+  // van a tocar Marcar/Saltear/Deshacer, deshabilitados en reproducción) —
+  // en reproducción se limpia, no queda pegado un texto de una marca vieja.
+  function actualizarArmadaLabel() {
+    if (modo !== 'marcado' || idxArmada < 0) {
+      armadaLabel.textContent = '';
+      return;
+    }
+    const fila = filas[idxArmada];
+    const compas = fila.dataset.compas;
+    const pasada = fila.dataset.pasada;
+    armadaLabel.textContent = fila.dataset.esCierre === '1'
+      ? '{% translate "Marcando el fin de la obra" %}'
+      : '{% translate "Marcando el compás" %} ' + compas + (pasada > 1 ? ` (${pasada}ª)` : '');
+  }
+
   function armar(idx, opciones) {
     if (idx < 0 || idx >= filas.length) return;
     idxArmada = idx;
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idx));
     scrollSiHaceFalta(filas[idx]);
-    const compas = filas[idx].dataset.compas;
-    const pasada = filas[idx].dataset.pasada;
-    if (filas[idx].dataset.esCierre === '1') {
-      armadaLabel.textContent = '{% translate "Marcando el fin de la obra" %}';
-    } else {
-      armadaLabel.textContent = '{% translate "Marcando el compás" %} ' + compas + (pasada > 1 ? ` (${pasada}ª)` : '');
-    }
+    actualizarArmadaLabel();
     refrescarPanelScore();
 
-    // Reposicionar el audio al tiempo ya guardado SÓLO cuando se arma por
-    // click explícito (ir a revisar/corregir una marca puntual) — no al
-    // avanzar solo (marcar/saltear): en el tap en vivo el audio tiene que
-    // seguir sonando sin cortes aunque el próximo compás ya tenga una
-    // marca vieja, si no cada tap podría hacerlo saltar en el tiempo.
+    // Reposicionar el audio SÓLO cuando se arma por click explícito (ir a
+    // revisar/corregir una marca puntual) — no al avanzar solo
+    // (marcar/saltear): en el tap en vivo el audio tiene que seguir sonando
+    // sin cortes aunque el próximo compás ya tenga una marca vieja, si no
+    // cada tap podría hacerlo saltar en el tiempo. Arranca 2 compases ANTES
+    // del armado (con fallback a 1, y a 0 si tampoco hay — ver
+    // tiempoNCompasesAntes), para tener contexto musical antes de tapear en
+    // vez de empezar en seco justo en el compás.
     if (opciones && opciones.reposicionar) {
-      const segundosGuardados = filas[idx].querySelector('.tiempo-real').dataset.segundos;
-      if (segundosGuardados) {
-        const seg = parseFloat(segundosGuardados);
-        if (!isNaN(seg)) {
-          audio.currentTime = Math.max(0, audio.duration ? Math.min(seg, audio.duration) : seg);
-        }
-      }
+      const seg = tiempoNCompasesAntes(idx, 2);
+      audio.currentTime = Math.max(0, audio.duration ? Math.min(seg, audio.duration) : seg);
     }
   }
 
@@ -472,7 +648,12 @@
     const tiempoEl = fila.querySelector('.tiempo-real');
     tiempoEl.textContent = formatearTiempo(segundos);
     tiempoEl.dataset.segundos = String(segundos);
+    // Un tap siempre es una marca explícita, aunque el compás ya tuviera un
+    // valor interpolado puesto por "Interpolar" — la mano del usuario
+    // siempre pisa/promueve eso (ver marcar_tiempo_compas en el backend).
+    fila.dataset.explicita = '1';
     fila.classList.add('marcada');
+    fila.classList.remove('no-explicita');
     historialMarcas.push(idxArmada);
     // Sin esto, el plan usado por "sonando"/reproducción quedaba con las
     // duraciones de ANTES de esta marca — el ajuste no se reflejaba hasta
@@ -496,7 +677,8 @@
     const tiempoEl = fila.querySelector('.tiempo-real');
     tiempoEl.textContent = '—';
     tiempoEl.dataset.segundos = '';
-    fila.classList.remove('marcada');
+    fila.dataset.explicita = '';
+    fila.classList.remove('marcada', 'no-explicita');
     cargarPlanGlobal();
     armar(idx);
   }
@@ -535,7 +717,9 @@
         if (!ok) { tiempoEl.textContent = valorInicial || '—'; return; }
         tiempoEl.textContent = segundos === null ? '—' : formatearTiempo(segundos);
         tiempoEl.dataset.segundos = segundos === null ? '' : String(segundos);
+        fila.dataset.explicita = segundos === null ? '' : '1';
         fila.classList.toggle('marcada', segundos !== null);
+        fila.classList.remove('no-explicita');
         cargarPlanGlobal();
       });
     }
@@ -559,7 +743,19 @@
     labelSeleccion.textContent = seleccion.size > 1
       ? seleccion.size + ' {% translate "compases seleccionados" %}'
       : '';
+    actualizarBotonesSeleccion();
     refrescarPanelScore();
+  }
+
+  // Interpolar aparece si hay algo sin marca explícita en la selección
+  // (sin marca, o con una interpolada de antes); Borrar aparece si hay
+  // algo CON tiempo (explícito o no) para borrar.
+  function actualizarBotonesSeleccion() {
+    const indices = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
+    const conHueco = indices.some(i => filas[i].dataset.explicita !== '1');
+    const conAlgo = indices.some(i => filas[i].querySelector('.tiempo-real').dataset.segundos !== '');
+    if (btnInterpolar) btnInterpolar.classList.toggle('d-none', !conHueco);
+    if (btnBorrarTiempos) btnBorrarTiempos.classList.toggle('d-none', !conAlgo);
   }
 
   filas.forEach((f, i) => {
@@ -623,6 +819,71 @@
   btnAjusteP05.addEventListener('click', () => ajustarSeleccion(0.05));
   btnAjusteP1.addEventListener('click', () => ajustarSeleccion(0.1));
 
+  // ── Interpolar / Borrar temporización (selección) ────────────────────
+  async function interpolarSeleccion() {
+    const indices = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1' && filas[i].dataset.explicita !== '1');
+    if (!indices.length) return;
+    const params = new URLSearchParams();
+    params.set('compases', indices.map(i => `${filas[i].dataset.compas}:${filas[i].dataset.pasada}`).join(','));
+    const resp = await fetch('{% url "partituras:interpolar_tiempos_compases" obra.pk %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+      body: params.toString(),
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const filaPorClave = {};
+    filas.forEach((f) => { if (f.dataset.esCierre !== '1') filaPorClave[`${f.dataset.compas}:${f.dataset.pasada}`] = f; });
+    (data.resueltos || []).forEach((r) => {
+      const fila = filaPorClave[`${r.compas}:${r.pasada}`];
+      if (!fila) return;
+      const tiempoEl = fila.querySelector('.tiempo-real');
+      tiempoEl.textContent = formatearTiempo(r.tiempo_inicio);
+      tiempoEl.dataset.segundos = String(r.tiempo_inicio);
+      fila.dataset.explicita = '0';
+      fila.classList.remove('marcada');
+      fila.classList.add('no-explicita');
+    });
+    if ((data.no_resueltos || []).length) {
+      avisoInterpolar.textContent = '{% translate "No se pudo interpolar (falta ancla explícita de un lado): compás" %} '
+        + data.no_resueltos.map(n => n.compas).join(', ');
+      avisoInterpolar.style.display = '';
+    } else {
+      avisoInterpolar.style.display = 'none';
+    }
+    cargarPlanGlobal();
+    actualizarBotonesSeleccion();
+    refrescarPanelScore();
+  }
+  if (btnInterpolar) btnInterpolar.addEventListener('click', interpolarSeleccion);
+
+  async function borrarSeleccionTiempos() {
+    const indices = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1' && filas[i].querySelector('.tiempo-real').dataset.segundos !== '');
+    if (!indices.length) return;
+    if (!confirm('{% translate "¿Borrar la temporización (explícita e interpolada) de los compases seleccionados? No se puede deshacer." %}')) return;
+    const params = new URLSearchParams();
+    params.set('compases', indices.map(i => `${filas[i].dataset.compas}:${filas[i].dataset.pasada}`).join(','));
+    const resp = await fetch('{% url "partituras:borrar_tiempos_compases" obra.pk %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+      body: params.toString(),
+    });
+    if (!resp.ok) return;
+    indices.forEach((i) => {
+      const fila = filas[i];
+      const tiempoEl = fila.querySelector('.tiempo-real');
+      tiempoEl.textContent = '—';
+      tiempoEl.dataset.segundos = '';
+      fila.dataset.explicita = '';
+      fila.classList.remove('marcada', 'no-explicita');
+    });
+    avisoInterpolar.style.display = 'none';
+    cargarPlanGlobal();
+    actualizarBotonesSeleccion();
+    refrescarPanelScore();
+  }
+  if (btnBorrarTiempos) btnBorrarTiempos.addEventListener('click', borrarSeleccionTiempos);
+
   // ── Modo marcado / reproducción ──────────────────────────────────────
   // El seguimiento "sonando" (verde) corre siempre que el audio suena, en
   // los dos modos — lo único que cambia es qué hacen Espacio/Tab/Backspace:
@@ -639,6 +900,15 @@
     btnSaltear.disabled = modo !== 'marcado';
     btnDeshacer.disabled = modo !== 'marcado';
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idxArmada));
+    actualizarArmadaLabel();
+    // Al entrar a reproducción, el estado del esquema Play/Continuar/
+    // Reiniciar arranca de cero salvo que el audio ya estuviera sonando
+    // (p.ej. veías/escuchabas en marcado y cambiaste de modo sin pausar) —
+    // "pausado" sólo tiene sentido si ya se pasó por acá antes.
+    if (modo === 'reproduccion') {
+      estadoReproduccion = audio.paused ? 'inicial' : 'reproduciendo';
+    }
+    actualizarBotonesReproduccion();
     refrescarPanelScore();
   }
   btnModoMarcado.addEventListener('click', () => cambiarModo('marcado'));
@@ -681,20 +951,29 @@
     }
   });
 
+  {% if tiene_score %}
+  // Declaradas ACÁ, antes del armar() inicial de más abajo — ese primer
+  // armar() ya dispara refrescarPanelScore() → mostrarCompas() (que lee
+  // generacionMostrar/geometria en su primerísima línea, ANTES de cualquier
+  // await), así que si se declararan más abajo (donde viven el resto de
+  // las funciones de este bloque) esa primera llamada las encontraría
+  // todavía sin inicializar.
+  let geometria = null;
+  const imagenesPorPagina = {};
+  let generacionMostrar = 0;
+  {% endif %}
+
   if (filas.length) armar(idxArmada, { reposicionar: true });
 
   // ── Panel de partitura (mismo criterio que sincronizar_itinerario.html: un
   // recorte de unos pocos sistemas con el compás armado resaltado). ──────
   {% if tiene_score %}
-  let geometria = null;
-  const imagenesPorPagina = {};
   // Tapeando rápido, un mostrarCompas() puede seguir esperando la imagen
   // cuando ya se armó un compás más nuevo — sin esto, si esa llamada vieja
   // resuelve DESPUÉS de la nueva, pisa el dibujo correcto con uno viejo
   // ("dejó de marcar el compás que estoy por tocar"). Cada llamada guarda
-  // su propio número de generación y, al volver de esperar la imagen,
-  // aborta si ya no es la última.
-  let generacionMostrar = 0;
+  // su propio número de generación (generacionMostrar, declarado arriba) y,
+  // al volver de esperar la imagen, aborta si ya no es la última.
 
   async function cargarGeometria() {
     try {
@@ -806,28 +1085,31 @@
     ctx.strokeRect(caja.x0, caja.y0 + 1, caja.bw, caja.bh - 2);
   }
 
-  // numeroArmado: siempre se intenta mostrar (define el recorte/crop) —
-  // null para la fila de cierre (no hay un compás puntual que recortar).
+  // numeroCrop: define el recorte/crop (qué se VE) — null para la fila de
+  // cierre (no hay un compás puntual que recortar). numeroArmado: qué se
+  // pinta en rojo (lo armado para marcar) — puede ser DISTINTO de
+  // numeroCrop (ver refrescarPanelScore: seleccionar reposiciona la vista
+  // en el primer compás de la selección sin cambiar qué está armado).
   // numeroSonando/numerosSeleccionados: opcionales — cada uno se dibuja
-  // sólo si cae dentro del MISMO recorte que ya se armó para numeroArmado
-  // (ver calcularCajaCompas); si numeroArmado es null no hay recorte
-  // posible, así que ninguno de los dos se llega a dibujar tampoco.
-  // dibujarArmado (default true): en "modo reproducción" numeroArmado sólo
-  // define QUÉ recortar (normalmente el que está sonando) pero no se pinta
-  // de rojo — ahí no hay nada "armado para marcar".
-  async function mostrarCompas(numeroArmado, numeroSonando, numerosSeleccionados, dibujarArmado) {
+  // sólo si cae dentro del MISMO recorte que ya se armó para numeroCrop
+  // (ver calcularCajaCompas); si numeroCrop es null no hay recorte
+  // posible, así que ninguno se llega a dibujar tampoco.
+  // dibujarArmado (default true): en "modo reproducción" no hay nada
+  // "armado para marcar" — se pasa numeroArmado=null y no se pinta nada de
+  // rojo de todos modos.
+  async function mostrarCompas(numeroCrop, numeroArmado, numeroSonando, numerosSeleccionados, dibujarArmado) {
     const miGeneracion = ++generacionMostrar;
     if (!geometria) return;
-    if (numeroArmado == null) {
+    if (numeroCrop == null) {
       if (miGeneracion === generacionMostrar) {
         mostrarErrorScore('{% translate "(fin de la obra — no hay un compás puntual que mostrar)" %}');
       }
       return;
     }
-    const entrada = geometria.porCompas[numeroArmado];
+    const entrada = geometria.porCompas[numeroCrop];
     if (!entrada) {
       if (miGeneracion === generacionMostrar) {
-        mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numeroArmado + '.');
+        mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numeroCrop + '.');
       }
       return;
     }
@@ -876,7 +1158,7 @@
       if (caja) dibujarCaja(ctx, caja, 'rgba(90, 170, 255, 0.22)', '#5aaaff');
     });
 
-    if (dibujarArmado !== false) {
+    if (dibujarArmado !== false && numeroArmado != null) {
       const cajaArmada = calcularCajaCompas(pagina, numeroArmado, bordesFranja, img, escala);
       if (cajaArmada) dibujarCaja(ctx, cajaArmada, 'rgba(233, 69, 96, 0.28)', '#e94560');
     }

@@ -75,6 +75,14 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-ss" data-texto-procesando="Analizando PDF…">Enderezar PDF</button>
           </form>
+          <form method="post" action="{% url 'partituras:iniciar_normalizacion' partitura.pk %}" class="form-procesando">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="omitir">
+            <button type="submit" class="btn btn-outline-light" data-texto-procesando="Preparando páginas…"
+                    title="{% translate 'La detección automática puede tardar mucho o fallar con muchas páginas — esto salta directo al ajuste manual, sin rotación/inclinación corregida.' %}">
+              {% translate "Omitir detección automática" %}
+            </button>
+          </form>
           {% endif %}
         </div>
 
