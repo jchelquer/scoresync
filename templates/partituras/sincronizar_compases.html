@@ -1035,6 +1035,7 @@
     scoreMsg.textContent = texto;
   }
 
+  const SISTEMAS_ANTES = 1;
   const SISTEMAS_ADELANTE = 2;
 
   function limitesSistema(pagina, sistema) {
@@ -1047,9 +1048,15 @@
   }
 
   function limitesFranja(pagina, sistemaInicial) {
+    // Muestra SISTEMAS_ANTES sistemas antes del actual y SISTEMAS_ADELANTE
+    // después — mientras se marca conviene ver de dónde viene y hacia dónde
+    // va el compás, no sólo lo que sigue (si el sistema anterior queda en
+    // otra página, no hay como mostrarlo: se corta en el margen de esta).
     const idx = pagina.sistemas.findIndex(s => s.orden === sistemaInicial.orden);
-    const anterior = pagina.sistemas[idx - 1] || null;
-    const top = anterior ? (anterior.y + anterior.height + sistemaInicial.y) / 2 : pagina.margen_y0;
+    const idxInicial = Math.max(idx - SISTEMAS_ANTES, 0);
+    const sistemaInicialReal = pagina.sistemas[idxInicial];
+    const anterior = pagina.sistemas[idxInicial - 1] || null;
+    const top = anterior ? (anterior.y + anterior.height + sistemaInicialReal.y) / 2 : pagina.margen_y0;
 
     const idxFinal = Math.min(idx + SISTEMAS_ADELANTE, pagina.sistemas.length - 1);
     const sistemaFinal = pagina.sistemas[idxFinal];
