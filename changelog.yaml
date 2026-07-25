@@ -2,6 +2,14 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.10.3"
+  date: "2026-07-25"
+  changes:
+    - type: nuevo
+      text: "Publicar/despublicar una parte (partitura) — de su propio dueño, del dueño de la obra a la que está adjunta, o de un admin. Le da al dueño de la obra la potestad de aceptar o rechazar una parte que subió otro usuario: mientras esté despublicada, no aparece en la lista de partes de la obra ni se puede elegir para seguir en la ejecución para nadie más (su propio dueño y el dueño de la obra la siguen viendo)."
+    - type: nuevo
+      text: "Una obra no se puede publicar (switch deshabilitado, con aviso) hasta que esté completa: tenga un itinerario armado y al menos una parte con los compases confirmados — evita confundir a quien la encuentre en la biblioteca sin poder practicarla todavía. Despublicar sigue permitido siempre."
+
 - version: "1.10.2"
   date: "2026-07-25"
   changes:

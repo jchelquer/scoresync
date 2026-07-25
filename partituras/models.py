@@ -227,6 +227,12 @@ class Partitura(models.Model):
     archivo_original = models.FileField(upload_to=_upload_path_original)
     estado_normalizacion = models.CharField(max_length=12, choices=ESTADOS_NORM, default='pendiente')
     estado_analisis = models.CharField(max_length=12, choices=ESTADOS_ANALISIS, default='pendiente')
+    publicada = models.BooleanField(
+        default=True,
+        help_text="Si está en False, sólo el dueño de la parte, el dueño de la obra a la que pertenece "
+                   "(si tiene) y los admins la ven — le da al dueño de la obra la potestad de aceptar o "
+                   "rechazar una parte que subió otro usuario.",
+    )
     creado = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -130,6 +130,24 @@ def borrar_partitura(request, pk):
 
 
 @login_required
+@require_POST
+def alternar_publicacion_partitura(request, pk):
+    """Publicar/despublicar una parte — de su dueño, del dueño de la obra a
+    la que está adjunta (si tiene), o de un admin (ver _puede_ver_partitura).
+    Le da al dueño de la obra la potestad de aceptar o rechazar una parte
+    que subió otro usuario: mientras esté despublicada, sólo la ven su
+    propio dueño, el dueño de la obra y los admins (ver estado/_partes_disponibles)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
+    es_dueño_parte = partitura.owner_id == request.user.id
+    es_dueño_obra = bool(partitura.obra_id and partitura.obra.owner_id == request.user.id)
+    if not (es_dueño_parte or es_dueño_obra or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    partitura.publicada = not partitura.publicada
+    partitura.save(update_fields=["publicada"])
+    return redirect("partituras:estado", pk=pk)
+
+
+@login_required
 def editar_partitura(request, pk):
     """Corrige instrumento/parte de una partitura ya subida (y el título,
     sólo si es una parte suelta — si ya pertenece a una obra, el título es
@@ -182,6 +200,8 @@ def _contexto_estado(request, partitura):
     return {
         "partitura": partitura,
         "es_dueño": partitura.owner_id == request.user.id,
+        "es_dueño_obra": bool(partitura.obra_id and partitura.obra.owner_id == request.user.id),
+        "es_admin": _es_admin(request.user),
         "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
         "pagina_sistemas": _primera_pendiente_sistemas(partitura),
         "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
@@ -212,8 +232,12 @@ def estado(request, pk):
     para entrar acá (es el link que se muestra desde la ficha de la obra a
     cualquiera) — pero el panel de edición del pipeline (enderezar, ajustar
     márgenes/sistemas/ancla/barras, separar/adjuntar a obra) queda oculto
-    para quien no es dueño, ver `es_dueño` en el contexto y detalle.html."""
+    para quien no es dueño, ver `es_dueño` en el contexto y detalle.html.
+    Sí hace falta poder VER la parte (ver Partitura.publicada/_puede_ver_partitura)
+    — una despublicada por el dueño de la obra queda oculta para el resto."""
     partitura = get_object_or_404(Partitura, pk=pk)
+    if not _puede_ver_partitura(request.user, partitura):
+        raise Http404()
     return render(request, "partituras/detalle.html", _contexto_estado(request, partitura))
 
 
@@ -223,6 +247,34 @@ def _es_admin(user):
     """Mismo criterio ya usado en el resto del proyecto (usuarios/sc_versiones,
     ver base.html) — se reusa acá tal cual, no es un mecanismo nuevo."""
     return user.es_admin or user.is_staff
+
+
+def _puede_ver_partitura(user, partitura, obra=None):
+    """Análogo a la visibilidad de Obra (ver Partitura.publicada): además
+    del dueño de la parte y los admins, el dueño de la OBRA a la que está
+    adjunta también la ve siempre — es quien decide si acepta o rechaza una
+    parte que subió otro usuario. `obra` opcional: pasarla si ya se tiene a
+    mano (evita una consulta extra) — si no, se usa partitura.obra."""
+    if partitura.publicada:
+        return True
+    if partitura.owner_id == user.id:
+        return True
+    obra = obra if obra is not None else partitura.obra
+    if obra and obra.owner_id == user.id:
+        return True
+    return _es_admin(user)
+
+
+def _obra_completa(obra):
+    """Itinerario armado + al menos una parte con los compases confirmados
+    en alguna página (mismo criterio que _partes_disponibles usa para
+    decidir si una parte se puede seguir en la ejecución) — una obra que no
+    cumple esto todavía no se puede practicar de verdad, así que no se deja
+    publicar (ver alternar_publicacion_obra) aunque el switch exista: sería
+    confuso para quien la encuentre en la biblioteca y no pueda usarla."""
+    if not obra.segmentos.exists():
+        return False
+    return Pagina.objects.filter(partitura__obra=obra, compases_confirmados=True).exists()
 
 
 @login_required
@@ -276,7 +328,11 @@ def obra_detalle(request, pk):
         "obra": obra,
         "es_dueño": es_dueño,
         "es_admin": es_admin,
-        "partituras": sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower()),
+        "obra_completa": _obra_completa(obra),
+        "partituras": sorted(
+            (p for p in obra.partituras.all() if _puede_ver_partitura(request.user, p, obra=obra)),
+            key=lambda p: p.nombre_parte.lower(),
+        ),
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
 
@@ -288,10 +344,19 @@ def alternar_publicacion_obra(request, pk):
     _es_admin). Una obra despublicada no aparece en la biblioteca para
     nadie más, y tampoco se puede entrar a su ficha/practicar por URL
     directa (ver obra_detalle/navegador_obra) — sigue existiendo, sólo
-    queda invisible para el resto."""
+    queda invisible para el resto. Despublicar siempre se permite; publicar
+    NO, si la obra todavía no está completa (ver _obra_completa) — sería
+    confuso para quien la encuentre en la biblioteca sin poder practicarla."""
     obra = get_object_or_404(Obra, pk=pk)
     if not (obra.owner_id == request.user.id or _es_admin(request.user)):
         return HttpResponseForbidden()
+    if not obra.publicada and not _obra_completa(obra):
+        messages.warning(
+            request,
+            'Todavía no se puede publicar: hace falta un itinerario armado y al menos una '
+            'parte con los compases confirmados.',
+        )
+        return redirect("partituras:obra_detalle", pk=pk)
     obra.publicada = not obra.publicada
     obra.save(update_fields=["publicada"])
     return redirect("partituras:obra_detalle", pk=pk)
@@ -341,7 +406,7 @@ def sincronizar_itinerario(request, pk):
             "tiempo_inicio_segundos": seg.tiempo_inicio.total_seconds() if seg.tiempo_inicio is not None else None,
         })
 
-    partes_disponibles = _partes_disponibles(obra)
+    partes_disponibles = _partes_disponibles(obra, request.user)
     partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
 
     return render(request, "partituras/sincronizar_itinerario.html", {
@@ -417,7 +482,7 @@ def sincronizar_compases(request, pk):
         entrada["tiempo_inicio_segundos"] = tiempo_inicio.total_seconds() if tiempo_inicio is not None else None
 
     pref = PreferenciaObra.objects.filter(usuario=request.user, obra=obra).first()
-    partes_disponibles = _partes_disponibles(obra)
+    partes_disponibles = _partes_disponibles(obra, request.user)
     partitura_seguida = _partitura_seguida(obra, request, pref) if partes_disponibles else None
 
     # Mismo criterio que navegador_obra: si vino una parte elegida A
@@ -694,15 +759,22 @@ def _leer_entero(valor, default):
         return default
 
 
-def _partes_disponibles(obra):
+def _partes_disponibles(obra, user):
     """Partes de esta obra que se pueden seguir en la ejecución — sólo las
     que ya tienen compases confirmados en alguna página (mostrar una parte
-    a medio procesar sería peor que no mostrar nada). Alfabético por
-    nombre_parte (no por el campo 'parte' en crudo — está vacío en varias
-    partes, y ordenar por ahí las agrupa todas al principio en vez de por
-    el instrumento que se termina mostrando)."""
+    a medio procesar sería peor que no mostrar nada) Y que `user` puede ver
+    (publicada, o es su dueña, o es dueño de la obra, o admin — ver
+    _puede_ver_partitura; así una parte despublicada por el dueño de la
+    obra deja de ofrecerse para seguir, pero su propio dueño la sigue
+    viendo mientras espera que se acepte). Alfabético por nombre_parte (no
+    por el campo 'parte' en crudo — está vacío en varias partes, y ordenar
+    por ahí las agrupa todas al principio en vez de por el instrumento que
+    se termina mostrando)."""
     partituras = sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower())
-    return [p for p in partituras if p.paginas.filter(compases_confirmados=True).exists()]
+    return [
+        p for p in partituras
+        if p.paginas.filter(compases_confirmados=True).exists() and _puede_ver_partitura(user, p, obra=obra)
+    ]
 
 
 def _partitura_seguida(obra, request, pref=None):
@@ -714,7 +786,7 @@ def _partitura_seguida(obra, request, pref=None):
     usuario logueado (Partitura.owner), el default más útil: "mi parte" sin
     tener que elegir nada; (4) la primera disponible, si ninguna de las
     anteriores aplica."""
-    candidatas = _partes_disponibles(obra)
+    candidatas = _partes_disponibles(obra, request.user)
     if not candidatas:
         return None
     partitura_id = _leer_entero(request.GET.get("parte"), None)
@@ -837,7 +909,7 @@ def navegador_obra(request, pk):
     )
     anterior = retroceder_compas(obra, segmento_actual, compas_actual)
 
-    partes_disponibles = _partes_disponibles(obra)
+    partes_disponibles = _partes_disponibles(obra, request.user)
     partitura_seguida = _partitura_seguida(obra, request, pref) if partes_disponibles else None
 
     # Si vino una parte elegida A PROPÓSITO por querystring, se recuerda

@@ -6,13 +6,27 @@
 <div class="row justify-content-center">
   <div class="col-md-7">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 style="color: var(--ss-text-bright)">{{ partitura.titulo }}</h4>
+      <h4 style="color: var(--ss-text-bright)">
+        {{ partitura.titulo }}
+        {% if not partitura.publicada %}<span class="badge bg-secondary ms-2 align-middle">{% translate "Despublicada" %}</span>{% endif %}
+      </h4>
       {% if partitura.obra %}
       <a href="{% url 'partituras:obra_detalle' partitura.obra_id %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
       {% else %}
       <a href="{% url 'partituras:partes_sueltas' %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a partes sueltas" %}</a>
       {% endif %}
     </div>
+    {% if es_dueño or es_dueño_obra or es_admin %}
+    <form method="post" action="{% url 'partituras:alternar_publicacion_partitura' partitura.pk %}" class="form-check form-switch mb-3">
+      {% csrf_token %}
+      <input class="form-check-input" type="checkbox" role="switch" id="switch-parte-publicada"
+             {% if partitura.publicada %}checked{% endif %} onchange="this.form.submit()">
+      <label class="form-check-label small" for="switch-parte-publicada" style="color: var(--ss-text-muted);"
+             title="{% translate 'Despublicada: sólo su dueño, el dueño de la obra y los admins la ven.' %}">
+        {% translate "Publicada (visible para todos)" %}
+      </label>
+    </form>
+    {% endif %}
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
         <p class="small mb-3" style="color: var(--ss-text-muted)">

@@ -12,6 +12,7 @@ urlpatterns = [
     path('<int:pk>/', views.detalle, name='detalle'),
     path('<int:pk>/editar/', views.editar_partitura, name='editar_partitura'),
     path('<int:pk>/borrar/', views.borrar_partitura, name='borrar_partitura'),
+    path('<int:pk>/publicar/', views.alternar_publicacion_partitura, name='alternar_publicacion_partitura'),
     path('<int:pk>/estado/', views.estado, name='estado'),
     path('<int:pk>/obra/', views.gestionar_obra, name='gestionar_obra'),
 
