@@ -659,13 +659,27 @@
     // duraciones de ANTES de esta marca — el ajuste no se reflejaba hasta
     // recargar la página.
     cargarPlanGlobal();
+    limpiarSeleccion();
     if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
+  }
+
+  // Limpia la selección de ajuste fino (el recuadro azul y su ancla de
+  // Shift+click) al avanzar por tap — si quedara pisada de un clic previo
+  // (el que se usó para arrancar a marcar desde ahí), refrescarPanelScore()
+  // seguiría anclando el recorte de partitura a ESE compás viejo en vez de
+  // seguir a idxArmada, y la ventana nunca avanzaría en modo marcado.
+  function limpiarSeleccion() {
+    if (!seleccion.size) return;
+    seleccion = new Set();
+    anclaSeleccion = null;
+    actualizarClasesSeleccion();
   }
 
   function saltear() {
     // Avanza sin marcar — para cuando te perdiste el compás actual y no
     // querés que el resto del tap se desalinee: éste queda sin dato y lo
     // cubre la interpolación entre los compases marcados más cercanos.
+    limpiarSeleccion();
     if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
   }
 
@@ -680,6 +694,7 @@
     fila.dataset.explicita = '';
     fila.classList.remove('marcada', 'no-explicita');
     cargarPlanGlobal();
+    limpiarSeleccion();
     armar(idx);
   }
 
