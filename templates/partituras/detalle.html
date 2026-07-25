@@ -50,6 +50,7 @@
             <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Adjuntar" %}</button>
           </form>
           {% endif %}
+          {% if user.es_admin or user.is_staff %}
           <details class="d-inline ms-1">
             <summary class="small d-inline" style="cursor: pointer; color: var(--ss-accent);">{% translate "o creá una obra nueva" %}</summary>
             <form method="post" action="{% url 'partituras:crear_obra' %}" class="d-flex gap-1 align-items-center mt-2">
@@ -63,9 +64,15 @@
           </details>
           {% endif %}
           {% endif %}
+          {% endif %}
         </p>
 
         <div class="d-flex flex-wrap gap-2 mb-2">
+          {% if partitura.obra and partitura.obra.segmentos.exists %}
+          <a href="{% url 'partituras:navegador_obra' partitura.obra_id %}?parte={{ partitura.pk }}" class="btn btn-ss">
+            <i class="bi bi-play-fill me-1"></i>{% translate "Practicar" %}
+          </a>
+          {% endif %}
           <a href="{{ partitura.archivo_original.url }}" target="_blank" class="btn btn-outline-light">
             <i class="bi bi-box-arrow-up-right me-1"></i>Ver PDF original
           </a>

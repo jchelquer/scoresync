@@ -462,7 +462,15 @@
     // deja de animar.
     metronomoCaja.style.display = metronomoVisualToggle.checked ? '' : 'none';
   }
-  metronomoVisualToggle.addEventListener('change', actualizarVisibilidadMetronomo);
+  metronomoVisualToggle.addEventListener('change', () => {
+    actualizarVisibilidadMetronomo();
+    // Repinta ya mismo el cursor de pulso sobre la partitura (ver
+    // repintarScore) — si no, togglear el switch en pausa dejaba el
+    // círculo congelado hasta el próximo pulso real. Sólo acá (no en la
+    // llamada inicial de abajo): a esta altura del script `ventanaActiva`
+    // todavía no está declarada (TDZ) la primera vez que corre.
+    repintarScore();
+  });
   actualizarVisibilidadMetronomo();
 
   // Velocidad de ejecución (20%-150% del tempo original) — se puede tocar
@@ -540,6 +548,7 @@
     params.set('ejecutar_con_audio', ejecutarConAudio ? 'on' : '');
     params.set('fuente_temporizacion', fuenteTemporizacion());
     params.set('zoom', String(nivelZoom));
+    params.set('modo_score', document.body.classList.contains('modo-partitura') ? 'partitura' : 'compas');
     fetch('{% url "partituras:guardar_preferencias_obra" obra.pk %}', {
       method: 'POST',
       headers: {
@@ -1639,7 +1648,11 @@
     if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
       if (ultimoCuentaAlAire != null) {
         renderizarCuentaAlAireSync(ventanaActiva, ultimoEntradaResaltar, ultimoCuentaAlAire);
-      } else {
+      } else if (metronomoVisualToggle.checked) {
+        // Con el metrónomo visual apagado no se dibuja ningún pulso sobre
+        // la partitura (antes seguía moviéndose el círculo numerado, sólo
+        // se le apagaba el destello) — el recuadro del compás actual
+        // (arriba) y la cuenta al aire siguen igual, no dependen de este switch.
         renderizarCursorPulso(ventanaActiva, ultimoEntradaResaltar, ultimoPulso, ultimoPulsosPorCompas);
       }
     }
@@ -1804,12 +1817,16 @@
   // Modo partitura es el default en pantallas normales; en pantallas
   // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
   // la app) arranca en modo compás — controles completos, más fáciles de
-  // tocar, sin la exigencia de espacio horizontal del score. Se evalúa una
-  // sola vez al cargar (no hace falta reaccionar a resize a mitad de
-  // sesión). El otro modo sigue disponible con el mismo botón en cualquier
-  // caso.
+  // tocar, sin la exigencia de espacio horizontal del score. Sólo se usa
+  // este default de ancho de pantalla si el usuario nunca eligió un modo a
+  // mano (modo_guardado vacío) — si ya guardó una preferencia, ésa gana
+  // siempre, sin importar el ancho. Se evalúa una sola vez al cargar (no
+  // hace falta reaccionar a resize a mitad de sesión). El otro modo sigue
+  // disponible con el mismo botón en cualquier caso.
+  const modoGuardado = '{{ modo_guardado }}'; // 'compas' | 'partitura' | ''
   const esMobile = window.matchMedia('(max-width: 768px)').matches;
-  if (btnModoScore && !esMobile) alternarModoScore();
+  const modoInicialPartitura = modoGuardado ? modoGuardado === 'partitura' : !esMobile;
+  if (btnModoScore && modoInicialPartitura) alternarModoScore();
 
   function mostrarControles(estado) {
     // estado: 'inicial' | 'reproduciendo' | 'pausado'
@@ -2191,7 +2208,14 @@
     if (!entrada) return;
     activarVentana(entrada).then(() => { if (ventanaActiva) repintarScore(); }).catch(() => {});
   }
-  if (btnModoScore) btnModoScore.addEventListener('click', alternarModoScore);
+  // Guarda sólo en el click real del usuario — la llamada programática de
+  // arriba (para fijar el modo guardado o el default de ancho de pantalla
+  // al cargar) nunca pasa por este listener, así no se pisa la preferencia
+  // ya guardada con lo que sea que haya decidido esa carga inicial.
+  if (btnModoScore) btnModoScore.addEventListener('click', () => {
+    alternarModoScore();
+    programarGuardadoPreferencias();
+  });
 
   btnPlay.addEventListener('click', cargarPlanYArrancar);
   btnReiniciar.addEventListener('click', cargarPlanYArrancar);

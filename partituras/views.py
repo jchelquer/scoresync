@@ -6,8 +6,8 @@ import cv2
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Max
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.db.models import Max, Q
+from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -219,14 +219,27 @@ def estado(request, pk):
 
 # ── Obra (agrupa varias Partitura de la misma pieza, una por parte) ────────
 
+def _es_admin(user):
+    """Mismo criterio ya usado en el resto del proyecto (usuarios/sc_versiones,
+    ver base.html) — se reusa acá tal cual, no es un mecanismo nuevo."""
+    return user.es_admin or user.is_staff
+
+
 @login_required
 def obras(request):
-    """La biblioteca: TODAS las obras (de cualquier usuario, no sólo las
-    propias — ver notas de diseño, cualquiera puede navegar/sumar su parte
-    a cualquier obra) — también punto de entrada para crear una obra sin
-    depender de tener ya una partitura cargada."""
-    lista = Obra.objects.select_related("owner").order_by("titulo")
-    return render(request, "partituras/obras.html", {"obras": lista})
+    """La biblioteca: todas las obras PUBLICADAS (de cualquier usuario, no
+    sólo las propias — ver notas de diseño, cualquiera puede navegar/sumar
+    su parte a cualquier obra), más las propias despublicadas (para que el
+    dueño las siga viendo y pueda republicarlas) — también punto de entrada
+    para crear una obra sin depender de tener ya una partitura cargada. Un
+    admin ve TODO, publicado o no."""
+    if _es_admin(request.user):
+        lista = Obra.objects.select_related("owner").order_by("titulo")
+    else:
+        lista = Obra.objects.select_related("owner").filter(
+            Q(publicada=True) | Q(owner=request.user)
+        ).order_by("titulo")
+    return render(request, "partituras/obras.html", {"obras": lista, "es_admin": _es_admin(request.user)})
 
 
 @login_required
@@ -237,14 +250,19 @@ def obra_detalle(request, pk):
     sincronizar tiempo_inicio — ver sincronizar_itinerario).
 
     No hace falta ser dueño de la OBRA para entrar — cualquiera logueado
-    puede ver la ficha, elegir qué parte seguir y navegar/ejecutar. Cargar
-    una parte nueva o adjuntar una propia suelta también está abierto (cada
-    parte tiene su propio dueño, independiente del de la obra — ver
-    Partitura.owner). Lo que sí es exclusivo del dueño de la obra: borrar la
-    obra, el audio de referencia y sincronizar tiempos (ver plantilla y las
-    vistas de sincronización, que sí exigen ser dueño)."""
+    puede ver la ficha, elegir qué parte seguir y navegar/ejecutar, SIEMPRE
+    QUE la obra esté publicada (si no, sólo el dueño y los admins entran —
+    ver Obra.publicada). Cargar una parte nueva o adjuntar una propia suelta
+    también está abierto (cada parte tiene su propio dueño, independiente
+    del de la obra — ver Partitura.owner). Lo que sí es exclusivo del dueño
+    de la obra: borrar la obra, el audio de referencia y sincronizar tiempos
+    (ver plantilla y las vistas de sincronización, que sí exigen ser dueño).
+    Publicar/despublicar es del dueño O de un admin (ver alternar_publicacion_obra)."""
     obra = get_object_or_404(Obra, pk=pk)
     es_dueño = obra.owner_id == request.user.id
+    es_admin = _es_admin(request.user)
+    if not obra.publicada and not es_dueño and not es_admin:
+        raise Http404()
     if request.method == "POST" and request.FILES.get("audio"):
         if not es_dueño:
             return HttpResponseForbidden()
@@ -257,9 +275,26 @@ def obra_detalle(request, pk):
     return render(request, "partituras/obra_detalle.html", {
         "obra": obra,
         "es_dueño": es_dueño,
+        "es_admin": es_admin,
         "partituras": sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower()),
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
+
+
+@login_required
+@require_POST
+def alternar_publicacion_obra(request, pk):
+    """Publicar/despublicar una obra — del dueño o de un admin (ver
+    _es_admin). Una obra despublicada no aparece en la biblioteca para
+    nadie más, y tampoco se puede entrar a su ficha/practicar por URL
+    directa (ver obra_detalle/navegador_obra) — sigue existiendo, sólo
+    queda invisible para el resto."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    obra.publicada = not obra.publicada
+    obra.save(update_fields=["publicada"])
+    return redirect("partituras:obra_detalle", pk=pk)
 
 
 @login_required
@@ -712,9 +747,11 @@ def navegador_obra(request, pk):
     pantalla es de sólo lectura, no modifica el itinerario.
 
     No hace falta ser dueño de la obra — cualquier usuario logueado puede
-    navegar/ejecutar cualquier obra (ver obra_detalle); lo único que se
-    guarda es PreferenciaObra del propio usuario, no algo de la obra."""
+    navegar/ejecutar cualquier obra publicada (ver obra_detalle); lo único
+    que se guarda es PreferenciaObra del propio usuario, no algo de la obra."""
     obra = get_object_or_404(Obra, pk=pk)
+    if not obra.publicada and obra.owner_id != request.user.id and not _es_admin(request.user):
+        raise Http404()
     navegables = segmentos_navegables(obra)
     if not navegables:
         return render(request, "partituras/navegador_obra.html", {
@@ -857,6 +894,7 @@ def navegador_obra(request, pk):
         "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
         "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else False,
         "fuente_temporizacion_guardada": pref.fuente_temporizacion if pref else "compases",
+        "modo_guardado": pref.modo_score if pref else "",
     })
 
 
@@ -884,6 +922,10 @@ def guardar_preferencias_obra(request, pk):
         "fuente_temporizacion": (
             request.POST.get("fuente_temporizacion")
             if request.POST.get("fuente_temporizacion") in ("itinerario", "compases") else "compases"
+        ),
+        "modo_score": (
+            request.POST.get("modo_score")
+            if request.POST.get("modo_score") in ("compas", "partitura") else ""
         ),
     }
     PreferenciaObra.objects.update_or_create(usuario=request.user, obra=obra, defaults=defaults)
@@ -992,10 +1034,14 @@ def score_geometria_obra(request, pk):
 
 @login_required
 def crear_obra(request):
-    """Crea una obra nueva. Si se llamó desde la ficha de una partitura
+    """Crea una obra nueva — por ahora sólo admins (ver _es_admin); el botón
+    ya queda oculto para el resto en los templates, esto es lo que lo hace
+    cumplir de verdad. Si se llamó desde la ficha de una partitura
     (partitura_pk en el POST) la adjunta ahí mismo en el mismo paso y vuelve
     a esa partitura; si no, es una creación independiente y va a la ficha de
     la obra recién creada."""
+    if not _es_admin(request.user):
+        return HttpResponseForbidden()
     if request.method != "POST":
         return redirect("partituras:obras")
     partitura = Partitura.objects.filter(pk=request.POST.get("partitura_pk"), owner=request.user).first()

@@ -40,7 +40,20 @@ class Obra(models.Model):
         help_text="Grabación de referencia (mp3) para sincronizar el itinerario — ver Segmento.tiempo_inicio "
                    "y la pantalla de sincronización.",
     )
+    publicada = models.BooleanField(
+        default=True,
+        help_text="Si está en False, sólo el dueño y los admins la ven (en la biblioteca y entrando "
+                   "directo por URL) — el resto de los usuarios logueados no la ve en absoluto.",
+    )
     creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(
+        auto_now=True,
+        help_text="Se actualiza sola en cualquier cambio de la obra en sí (título, audio, publicada...), "
+                   "y también cuando cambia su itinerario (Segmento) o sus marcas de tiempo por compás "
+                   "(MarcaTiempoCompas) — ver signals.py, que la toca aparte porque son modelos distintos. "
+                   "NO cambia por preferencias de usuario (PreferenciaObra/PreferenciaParte) — esas son "
+                   "por-usuario, no un cambio real de la obra.",
+    )
 
     class Meta:
         ordering = ['-creado']
@@ -446,6 +459,15 @@ class PreferenciaObra(models.Model):
     parte_seguida = models.ForeignKey(
         Partitura, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',
         help_text="Última parte elegida explícitamente en el selector — desempata antes que 'mi propia parte'.",
+    )
+    MODOS_SCORE = [
+        ('compas', 'Compás'),
+        ('partitura', 'Partitura'),
+    ]
+    modo_score = models.CharField(
+        max_length=10, choices=MODOS_SCORE, blank=True,
+        help_text="Modo compás vs. modo partitura en el navegador — en blanco significa que todavía no "
+                   "se guardó ninguna elección, y se usa el default viejo (ancho de pantalla) en su lugar.",
     )
     actualizado = models.DateTimeField(auto_now=True)
 

@@ -8,6 +8,7 @@
   <a href="{% url 'partituras:partes_sueltas' %}" class="btn btn-outline-light btn-sm">{% translate "Partes sueltas" %}</a>
 </div>
 
+{% if user.es_admin or user.is_staff %}
 <div class="row justify-content-center mb-4">
   <div class="col-md-7">
     <div class="card border-0" style="background: var(--ss-surface)">
@@ -24,6 +25,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 {% if obras %}
 <div class="row g-3">
@@ -32,7 +34,10 @@
     <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="text-decoration-none">
       <div class="card border-0 h-100" style="background: var(--ss-surface)">
         <div class="card-body">
-          <h6 class="card-title" style="color: var(--ss-text-bright)"><i class="bi bi-music-note-list me-1"></i>{{ obra.titulo }}</h6>
+          <h6 class="card-title" style="color: var(--ss-text-bright)">
+            <i class="bi bi-music-note-list me-1"></i>{{ obra.titulo }}
+            {% if not obra.publicada %}<span class="badge bg-secondary ms-1">{% translate "Despublicada" %}</span>{% endif %}
+          </h6>
           <p class="small mb-1" style="color: var(--ss-text-muted)">{{ obra.compositor|default:"—" }}{% if obra.arreglista %} · {% translate "arr." %} {{ obra.arreglista }}{% endif %}</p>
           <p class="small mb-0" style="color: var(--ss-text-muted)">
             {{ obra.partituras.count }} {% translate "parte(s)" %}
@@ -41,6 +46,9 @@
             {% else %}
             · {{ obra.owner.get_full_name|default:obra.owner.username }}
             {% endif %}
+          </p>
+          <p class="small mb-0" style="color: var(--ss-text-muted); opacity: 0.8;">
+            {% translate "Creada" %} {{ obra.creado|date:"d/m/Y" }} · {% translate "actualizada" %} {{ obra.actualizado|date:"d/m/Y H:i" }}
           </p>
         </div>
       </div>

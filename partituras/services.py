@@ -9,8 +9,9 @@ import re
 from datetime import timedelta
 
 from django.db.models import F
+from django.utils import timezone
 
-from .models import Barra, Compas, MarcaTiempoCompas, Segmento
+from .models import Barra, Compas, MarcaTiempoCompas, Obra, Segmento
 
 _PATRON_INDICACION_COMPAS = re.compile(r'^[1-9]\d*/[1-9]\d*$')
 
@@ -975,6 +976,11 @@ def desplazar_marcas_compas(obra, delta_segundos, objetivos=None):
         nuevo = max(marca.tiempo_inicio.total_seconds() + delta_segundos, 0)
         marca.tiempo_inicio = timedelta(seconds=nuevo)
     MarcaTiempoCompas.objects.bulk_update(marcas, ["tiempo_inicio"])
+    # bulk_update no dispara post_save (a diferencia de save()/update_or_create/
+    # delete(), que si lo hacen) — sin esto, correr todas las marcas no
+    # actualizaba Obra.actualizado (ver signals.py).
+    if marcas:
+        Obra.objects.filter(pk=obra.pk).update(actualizado=timezone.now())
     return len(marcas)
 
 

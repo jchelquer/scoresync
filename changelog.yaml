@@ -2,6 +2,24 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.10.1"
+  date: "2026-07-25"
+  changes:
+    - type: nuevo
+      text: "Publicar/despublicar una obra (el dueño o un admin) — una obra despublicada no aparece en la biblioteca para nadie más, y tampoco se puede entrar a su ficha ni practicarla por URL directa. El dueño y los admins la siguen viendo (con un aviso \"Despublicada\"); un admin ve y puede publicar/despublicar cualquier obra."
+    - type: nuevo
+      text: "Crear una obra nueva pasa a ser sólo para administradores, por ahora — el formulario (en la biblioteca y en la ficha de una parte suelta) queda oculto para el resto."
+    - type: mejorado
+      text: "Al abrir la app (`/`) ya no se pasa por una pantalla de bienvenida con un botón \"Ir a la biblioteca\" — va directo a la biblioteca."
+    - type: mejorado
+      text: "El botón \"Navegador\" pasa a llamarse \"Practicar\" (también la URL: .../practicar/ en vez de .../navegador/), se movió arriba de todo en la ficha de la obra (antes de \"Volver a Obras\") y quedó destacado. También se agregó en la pantalla de estado de una parte suelta/parte de una obra — antes ahí sólo se podía ver el PDF original sin forma de practicar; al entrar desde ahí queda preseleccionada esa parte."
+    - type: corregido
+      text: "Con el metrónomo visual apagado, el círculo numerado que marca el pulso sobre la partitura seguía dibujándose y moviéndose igual (sólo se le apagaba el destello) — ahora no se dibuja nada, sin afectar el recuadro del compás actual ni la cuenta al aire."
+    - type: corregido
+      text: "El modo (compás/partitura) del navegador no se guardaba — cada carga volvía a arrancar en partitura (desktop) o compás (mobile) según el ancho de pantalla, ignorando la última elección. Ahora se recuerda como el resto de las preferencias (parte seguida, velocidad, zoom, fuente de temporización)."
+    - type: nuevo
+      text: "Cada obra ahora registra cuándo fue modificada de verdad (su itinerario o sus marcas de tiempo por compás — no cambia por preferencias de cada usuario), y se muestra junto a la fecha de creación en cada tarjeta de la biblioteca."
+
 - version: "1.10.0"
   date: "2026-07-25"
   changes:

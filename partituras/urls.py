@@ -19,10 +19,14 @@ urlpatterns = [
     path('obras/nueva/', views.crear_obra, name='crear_obra'),
     path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
     path('obras/<int:pk>/borrar/', views.borrar_obra, name='borrar_obra'),
+    path('obras/<int:pk>/publicar/', views.alternar_publicacion_obra, name='alternar_publicacion_obra'),
     path('obras/<int:pk>/subir/', views.subir, name='subir'),
     path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
     path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),
-    path('obras/<int:pk>/navegador/', views.navegador_obra, name='navegador_obra'),
+    # El nombre interno queda "navegador_obra" (usado por la vista y por el
+    # único template que lo referencia) — sólo cambia el path visible,
+    # que ahora dice "practicar" para que coincida con el botón.
+    path('obras/<int:pk>/practicar/', views.navegador_obra, name='navegador_obra'),
     path('obras/<int:pk>/preferencias/', views.guardar_preferencias_obra, name='guardar_preferencias_obra'),
     path('obras/<int:pk>/plan/', views.plan_obra, name='plan_obra'),
     path('obras/<int:pk>/score-geometria/', views.score_geometria_obra, name='score_geometria_obra'),

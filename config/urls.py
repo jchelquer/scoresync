@@ -10,7 +10,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.http import FileResponse, HttpResponse, HttpResponseNotFound
 from django.utils._os import safe_join
-from django.views.generic import TemplateView
+from django.views.generic import RedirectView, TemplateView
 from django.views.i18n import JavaScriptCatalog
 
 _RANGO_RE = re.compile(r"bytes=(\d*)-(\d*)$")
@@ -52,7 +52,11 @@ def _servir_media_con_rango(request, path, document_root=None, show_indexes=Fals
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("", login_required(TemplateView.as_view(template_name="home.html")), name="home"),
+    # Antes mostraba una pantalla de bienvenida con un botón "Ir a la
+    # biblioteca" (templates/home.html, sin uso ahora) — no aportaba nada,
+    # se salta directo. name="home" se mantiene: base.html linkea el logo
+    # del navbar a este nombre.
+    path("", login_required(RedirectView.as_view(pattern_name="partituras:obras")), name="home"),
     path("jsi18n/", JavaScriptCatalog.as_view(domain="django"), name="javascript-catalog"),
     path("usuarios/", include("usuarios.urls")),
     path("partituras/", include("partituras.urls", namespace="partituras")),
