@@ -161,7 +161,8 @@
                data-pasada="{{ entrada.pasada|default_if_none:'' }}"
                data-segmento-id="{{ entrada.segmento_id }}"
                data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}"
-               data-explicita="{% if entrada.explicita %}1{% elif entrada.explicita == False %}0{% endif %}">
+               data-explicita="{% if entrada.explicita %}1{% elif entrada.explicita == False %}0{% endif %}"
+               data-pulsos="{{ entrada.pulsos_por_compas|default_if_none:''|unlocalize }}">
             <div class="d-flex justify-content-between">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
@@ -175,7 +176,8 @@
             <div class="small" style="color: var(--ss-text-muted);">
               {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
               {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
-              {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} {{ entrada.tiempo_inicio_calculado|floatformat:2 }}s{% endif %}
+              <span class="bpm-resultante"></span>
+              {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} <span class="tiempo-calc" data-segundos="{{ entrada.tiempo_inicio_calculado|unlocalize }}"></span><span class="tiempo-calc-local"></span>{% endif %}
             </div>
           </div>
           {% endfor %}
@@ -246,7 +248,7 @@
     return NaN;
   }
 
-  document.querySelectorAll('.tiempo-real').forEach((el) => {
+  document.querySelectorAll('.tiempo-real, .tiempo-calc').forEach((el) => {
     const segundos = el.dataset.segundos;
     if (segundos !== '') el.textContent = formatearTiempo(parseFloat(segundos));
   });
@@ -338,6 +340,7 @@
       tiempoEl.textContent = formatearTiempo(audio.duration);
       tiempoEl.dataset.segundos = String(audio.duration);
       filaCierre.classList.add('marcada');
+      actualizarDerivados();
     });
   }
   audio.addEventListener('loadedmetadata', () => {
@@ -393,6 +396,60 @@
     const seg = filas[i].querySelector('.tiempo-real').dataset.segundos;
     return seg === '' ? null : parseFloat(seg);
   }
+
+  // Tiempo CALCULADO (acumulado desde el compás 1 por fórmula de bpm) de la
+  // fila i — mismo dataset que ya reformatea el bucle inicial de arriba.
+  function calcDeFila(i) {
+    if (i < 0 || i >= filas.length) return null;
+    const el = filas[i].querySelector('.tiempo-calc');
+    if (!el) return null;
+    const seg = el.dataset.segundos;
+    return seg === '' ? null : parseFloat(seg);
+  }
+
+  // Dos datos derivados por fila, recalculados cada vez que cambia algún
+  // tiempo real (tapear, deshacer, interpolar, borrar, editar a mano):
+  // - Bpm REAL medido entre esta fila y la siguiente (a diferencia del bpm
+  //   nominal del itinerario, que sólo dice lo que el itinerario cree que
+  //   debería sonar) — sirve para comparar a ojo si una interpolación
+  //   siguió bien la curva de acelerando/ritardando o quedó pareja. Sólo se
+  //   muestra si las DOS puntas tienen tiempo real (explícito o
+  //   interpolado, no importa cuál).
+  // - Junto al tiempo calculado (que acumula desde el compás 1 por fórmula
+  //   y puede irse alejando de la realidad en piezas largas), un segundo
+  //   valor "anclado local": el tiempo real del compás ANTERIOR más la
+  //   duración calculada de este compás — compara el tempo esperado contra
+  //   el último punto real conocido, en vez de arrastrar el error
+  //   acumulado desde el principio de la obra.
+  // Ninguno de los dos inventa nada: si falta algún dato, queda vacío.
+  function actualizarDerivados() {
+    filas.forEach((f, i) => {
+      const spanBpm = f.querySelector('.bpm-resultante');
+      if (spanBpm) {
+        if (f.dataset.esCierre === '1') {
+          spanBpm.textContent = '';
+        } else {
+          const pulsos = parseFloat(f.dataset.pulsos);
+          const tActual = tiempoDeFila(i);
+          const tSiguiente = tiempoDeFila(i + 1);
+          spanBpm.textContent = (!pulsos || tActual == null || tSiguiente == null || tSiguiente <= tActual)
+            ? ''
+            : ` · {% translate "bpm real:" %} ${Math.round(60 * pulsos / (tSiguiente - tActual))}`;
+        }
+      }
+
+      const spanCalcLocal = f.querySelector('.tiempo-calc-local');
+      if (spanCalcLocal) {
+        const tAnterior = tiempoDeFila(i - 1);
+        const calcAnterior = calcDeFila(i - 1);
+        const calcActual = calcDeFila(i);
+        spanCalcLocal.textContent = (tAnterior == null || calcAnterior == null || calcActual == null)
+          ? ''
+          : ` / ${formatearTiempo(tAnterior + (calcActual - calcAnterior))}`;
+      }
+    });
+  }
+  actualizarDerivados();
 
   // Tiempo real N compases antes de la entrada idx, con fallback
   // N→N-1→...→0 (cualquier tiempo real vale, explícito o interpolado — a
@@ -659,6 +716,7 @@
     // duraciones de ANTES de esta marca — el ajuste no se reflejaba hasta
     // recargar la página.
     cargarPlanGlobal();
+    actualizarDerivados();
     limpiarSeleccion();
     if (idxArmada + 1 < filas.length) armar(idxArmada + 1);
   }
@@ -694,6 +752,7 @@
     fila.dataset.explicita = '';
     fila.classList.remove('marcada', 'no-explicita');
     cargarPlanGlobal();
+    actualizarDerivados();
     limpiarSeleccion();
     armar(idx);
   }
@@ -736,6 +795,7 @@
         fila.classList.toggle('marcada', segundos !== null);
         fila.classList.remove('no-explicita');
         cargarPlanGlobal();
+        actualizarDerivados();
       });
     }
 
@@ -867,6 +927,7 @@
       avisoInterpolar.style.display = 'none';
     }
     cargarPlanGlobal();
+    actualizarDerivados();
     actualizarBotonesSeleccion();
     refrescarPanelScore();
   }
@@ -894,6 +955,7 @@
     });
     avisoInterpolar.style.display = 'none';
     cargarPlanGlobal();
+    actualizarDerivados();
     actualizarBotonesSeleccion();
     refrescarPanelScore();
   }

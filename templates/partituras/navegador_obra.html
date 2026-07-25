@@ -2021,6 +2021,24 @@
       errorEl.style.display = '';
       return null;
     }
+    // "Por compases" depende de que TODO el rango tenga temporización real
+    // (explícita o interpolada, da igual — ver duracion_compases en
+    // construir_plan) — un hueco sin marcar deja pulsos con duración 0 y
+    // rompe el seguimiento en silencio. Mejor bloquear con la causa (siempre
+    // se puede completar interpolando en "Sincronizar compases") que dejar
+    // que la ejecución avance mal sin avisar.
+    if (fuenteTemporizacion() === 'compases') {
+      const sinCobertura = [...new Set(
+        data.pulsos.filter((p) => p.duracion_compases == null).map((p) => p.compas)
+      )];
+      if (sinCobertura.length) {
+        errorEl.textContent = '{% translate "Faltan compases sin temporización real (ni marcada ni interpolada) para ejecutar por compases: " %}'
+          + sinCobertura.join(', ')
+          + '. {% translate "Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes de ejecutar." %}';
+        errorEl.style.display = '';
+        return null;
+      }
+    }
     const rangoCambio = queryStr !== ultimosParametrosPlan;
     ultimosParametrosPlan = queryStr;
     return { data, rangoCambio };

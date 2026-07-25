@@ -2,6 +2,18 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.10.0"
+  date: "2026-07-25"
+  changes:
+    - type: mejorado
+      text: "La interpolación de tiempos en \"Sincronizar compases\" (botón Interpolar) y el cálculo en vivo de la fuente \"por compases\" durante la ejecución ahora reparten el tiempo real entre dos marcas siguiendo la curva de bpm/acelerando/ritardando calculada del itinerario, en vez de repartirlo en partes iguales por cantidad de pulsos — un acelerando notado en el itinerario ya no queda aplanado en los tramos sin marcar compás a compás."
+    - type: mejorado
+      text: "La fuente \"por itinerario\" tenía el mismo problema de fondo: sólo escalaba el tiempo calculado contra el borde de la fila actual y el de la fila vecina — marcar únicamente el arranque y el final reales de la obra en \"Sincronizar tiempos\", sin tocar ninguna fila intermedia, no servía de nada. Ahora busca la marca de arranque de fila más cercana cruzando huecos de filas sin marcar (mismo criterio que \"por compases\"), así esos dos puntos alcanzan para estirar proporcionalmente todo el tramo del medio — útil para compensar preparación/aplausos al principio y al final de una grabación."
+    - type: nuevo
+      text: "\"Ejecutar\"/\"Continuar\" con la fuente \"por compases\" ahora se bloquean, con un aviso que lista los compases afectados, si queda algún compás del rango sin ninguna temporización real (ni marcada ni interpolada) — antes esos huecos avanzaban en silencio con duración 0. Siempre se puede destrabar completando la temporización con Interpolar."
+    - type: mejorado
+      text: "En \"Sincronizar compases\", el tiempo calculado de cada fila ahora se muestra en formato m:ss.dd (antes, segundos crudos) y se agregó un segundo valor al lado (\"/\"): el mismo cálculo pero anclado al último tiempo real conocido (el compás anterior) en vez de arrastrado desde el principio de la obra — mucho más útil para detectar de un vistazo si el tempo local se aleja de lo calculado. También se agregó el \"bpm real\" medido entre cada compás y el siguiente, para comparar contra el bpm nominal del itinerario."
+
 - version: "1.9.2"
   date: "2026-07-24"
   changes:
