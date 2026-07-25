@@ -19,6 +19,17 @@
       </h4>
       <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a Obras" %}</a>
     </div>
+    {% if es_dueño or es_admin %}
+    <form method="post" action="{% url 'partituras:alternar_publicacion_obra' obra.pk %}" class="form-check form-switch mb-3">
+      {% csrf_token %}
+      <input class="form-check-input" type="checkbox" role="switch" id="switch-publicada"
+             {% if obra.publicada %}checked{% endif %} onchange="this.form.submit()">
+      <label class="form-check-label small" for="switch-publicada" style="color: var(--ss-text-muted);"
+             title="{% translate 'Despublicada: sólo vos y los admins la ven (biblioteca y URL directa).' %}">
+        {% translate "Publicada (visible para todos)" %}
+      </label>
+    </form>
+    {% endif %}
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
         <p class="small mb-3" style="color: var(--ss-text-muted)">
@@ -55,14 +66,6 @@
           <a href="{% url 'partituras:sincronizar_compases' obra.pk %}" class="btn btn-outline-light">
             <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar compases" %}
           </a>
-          {% endif %}
-          {% if es_dueño or es_admin %}
-          <form method="post" action="{% url 'partituras:alternar_publicacion_obra' obra.pk %}" class="d-inline">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-outline-light">
-              {% if obra.publicada %}<i class="bi bi-eye-slash me-1"></i>{% translate "Despublicar" %}{% else %}<i class="bi bi-eye me-1"></i>{% translate "Publicar" %}{% endif %}
-            </button>
-          </form>
           {% endif %}
         </div>
 

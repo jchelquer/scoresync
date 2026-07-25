@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.10.2"
+  date: "2026-07-25"
+  changes:
+    - type: mejorado
+      text: "El botón Publicar/Despublicar de una obra pasó a ser un switch bien visible junto al título (antes era un botón más, mezclado con el resto de las acciones y fácil de pasar por alto) — sigue siendo sólo para el dueño o un admin."
+
 - version: "1.10.1"
   date: "2026-07-25"
   changes:
