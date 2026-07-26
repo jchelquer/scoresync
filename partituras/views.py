@@ -268,13 +268,24 @@ def _puede_ver_partitura(user, partitura, obra=None):
 def _obra_completa(obra):
     """Itinerario armado + al menos una parte con los compases confirmados
     en alguna página (mismo criterio que _partes_disponibles usa para
-    decidir si una parte se puede seguir en la ejecución) — una obra que no
-    cumple esto todavía no se puede practicar de verdad, así que no se deja
-    publicar (ver alternar_publicacion_obra) aunque el switch exista: sería
-    confuso para quien la encuentre en la biblioteca y no pueda usarla."""
+    decidir si una parte se puede seguir en la ejecución) + temporización
+    "por compases" completa (ningún compás del rango sin cobertura real —
+    mismo chequeo que bloquea "Ejecutar por compases" en navegador_obra.html/
+    pedirPlan) — una obra que no cumple esto todavía no se puede practicar
+    de verdad, así que no se deja publicar (ver alternar_publicacion_obra)
+    aunque el switch exista: sería confuso para quien la encuentre en la
+    biblioteca y no pueda usarla."""
     if not obra.segmentos.exists():
         return False
-    return Pagina.objects.filter(partitura__obra=obra, compases_confirmados=True).exists()
+    if not Pagina.objects.filter(partitura__obra=obra, compases_confirmados=True).exists():
+        return False
+    navegables = segmentos_navegables(obra)
+    if not navegables:
+        return False
+    pulsos, completo = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    if not completo or not pulsos:
+        return False
+    return not any(p['duracion_compases'] is None for p in pulsos)
 
 
 @login_required
@@ -353,8 +364,9 @@ def alternar_publicacion_obra(request, pk):
     if not obra.publicada and not _obra_completa(obra):
         messages.warning(
             request,
-            'Todavía no se puede publicar: hace falta un itinerario armado y al menos una '
-            'parte con los compases confirmados.',
+            'Todavía no se puede publicar: hace falta un itinerario armado, al menos una '
+            'parte con los compases confirmados, y la temporización por compases completa '
+            '(sin ningún compás sin marcar) en "Sincronizar compases".',
         )
         return redirect("partituras:obra_detalle", pk=pk)
     obra.publicada = not obra.publicada

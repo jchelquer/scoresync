@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.10.4"
+  date: "2026-07-25"
+  changes:
+    - type: mejorado
+      text: "Para poder publicar una obra ahora también hace falta que la temporización \"por compases\" esté completa (ningún compás del itinerario sin marcar, ni explícita ni interpolada — mismo chequeo que ya bloquea \"Ejecutar por compases\"), además de tener el itinerario armado y al menos una parte con los compases confirmados. El aviso junto al switch explica qué falta."
+
 - version: "1.10.3"
   date: "2026-07-25"
   changes:
