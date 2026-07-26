@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Notación — {{ obra.titulo }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 style="color: var(--ss-text-bright)">
+    {% translate "Notación de la partitura" %} — {{ obra.titulo }}
+  </h5>
+  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+</div>
+
+<p class="small mb-1" style="color: var(--ss-text-muted)">
+  {% translate "Hechos de la partitura por compás — indicación de compás, armadura, tempo base — a diferencia del itinerario (que sólo describe el orden de ejecución). Cada marca rige a partir del compás indicado, hasta la próxima marca del mismo tipo, sin importar qué fila del itinerario la usa: el compás 47 tiene la misma indicación la primera vez que se toca y en cualquier repetición." %}
+</p>
+<p class="small mb-3" style="color: var(--ss-text-muted)">
+  {% translate "Pasada vacía = rige siempre que se pase por ese compás. Completá Pasada sólo para el caso raro de que una repetición puntual necesite un valor distinto (1ra vez, 2da vez, etc. — mismo criterio que las marcas de tiempo real por compás)." %}
+</p>
+
+<form method="post">
+  {% csrf_token %}
+  {{ formset.management_form }}
+  {% if formset.non_form_errors %}
+  <div class="alert alert-danger small py-2">{{ formset.non_form_errors }}</div>
+  {% endif %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle" style="color: var(--ss-text-muted)">
+      <thead>
+        <tr>
+          <th>{% translate "Tipo" %}</th>
+          <th>{% translate "Compás" %}</th>
+          <th>{% translate "Pasada" %}</th>
+          <th>{% translate "Valor" %}</th>
+          <th>{% translate "Borrar" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for form in formset %}
+        <tr>
+          {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+          <td>{{ form.tipo }}</td>
+          <td>{{ form.compas }}</td>
+          <td>{{ form.pasada }}</td>
+          <td>{{ form.valor }}</td>
+          <td class="text-center">{{ form.DELETE }}</td>
+        </tr>
+        {% if form.errors %}
+        <tr><td colspan="5" class="text-danger small">{{ form.errors }}</td></tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <button type="submit" class="btn btn-ss">{% translate "Guardar notación" %}</button>
+</form>
+{% endblock %}

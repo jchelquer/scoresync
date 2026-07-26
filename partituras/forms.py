@@ -1,5 +1,5 @@
 from django import forms
-from .models import Obra, Partitura, Segmento
+from .models import MarcaNotacion, Obra, Partitura, Segmento
 from .services import parsear_compas_pulso, validar_indicacion_compas
 
 
@@ -60,27 +60,18 @@ class SegmentoForm(forms.ModelForm):
         model = Segmento
         fields = [
             'orden', 'desde_texto', 'hasta_texto',
-            'indicacion_compas', 'variacion_tempo', 'bpm', 'bpm_llegada',
+            'variacion_tempo', 'bpm_llegada',
             'descripcion', 'tiempo_inicio',
         ]
         widgets = {
             'orden': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;'}),
             'desde_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
             'hasta_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
-            'indicacion_compas': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;', 'placeholder': '(hereda)'}),
             'variacion_tempo': forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'width: 8rem;'}),
-            'bpm': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;'}),
             'bpm_llegada': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;', 'placeholder': '(llegada)'}),
             'descripcion': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'min-width: 10rem;'}),
             'tiempo_inicio': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 8rem;', 'placeholder': 'hh:mm:ss'}),
         }
-
-    def clean_indicacion_compas(self):
-        texto = self.cleaned_data.get('indicacion_compas', '')
-        try:
-            return validar_indicacion_compas(texto)
-        except ValueError as e:
-            raise forms.ValidationError(str(e))
 
     def clean(self):
         cleaned = super().clean()
@@ -108,4 +99,67 @@ class SegmentoForm(forms.ModelForm):
 
 SegmentoFormSet = forms.modelformset_factory(
     Segmento, form=SegmentoForm, extra=3, can_delete=True,
+)
+
+
+class MarcaNotacionForm(forms.ModelForm):
+    class Meta:
+        model = MarcaNotacion
+        fields = ['tipo', 'compas', 'pasada', 'valor']
+        widgets = {
+            'tipo': forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'width: 9rem;'}),
+            'compas': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 5rem;'}),
+            'pasada': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 5rem;', 'placeholder': '(todas)'}),
+            'valor': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 8rem;'}),
+        }
+
+    def clean_valor(self):
+        tipo = self.cleaned_data.get('tipo')
+        valor = self.cleaned_data.get('valor', '')
+        if tipo == 'compas':
+            try:
+                valor = validar_indicacion_compas(valor)
+            except ValueError as e:
+                raise forms.ValidationError(str(e))
+            if not valor:
+                raise forms.ValidationError('La indicación de compás no puede quedar vacía acá — completá "N/D" (ej: 4/4).')
+        elif tipo == 'tempo':
+            try:
+                bpm = int(valor)
+                if bpm <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise forms.ValidationError('El tempo tiene que ser un número entero de bpm mayor que 0.')
+        return valor
+
+
+class MarcaNotacionBaseFormSet(forms.BaseModelFormSet):
+    """Valida acá (no sólo con la restricción de la base) que no haya dos
+    filas del mismo envío pisándose: dos marcas GENERALES (pasada vacía)
+    para el mismo (tipo, compás) — la restricción de unicidad condicional
+    de MarcaNotacion no la detecta Model.validate_unique() (Django no valida
+    UniqueConstraint con condition a nivel Python, sólo a nivel de base) así
+    que sin este chequeo el error saldría como un IntegrityError feo en vez
+    de un mensaje por fila."""
+
+    def clean(self):
+        super().clean()
+        vistos = {}
+        for form in self.forms:
+            if not hasattr(form, 'cleaned_data') or form.cleaned_data.get('DELETE'):
+                continue
+            tipo = form.cleaned_data.get('tipo')
+            compas = form.cleaned_data.get('compas')
+            pasada = form.cleaned_data.get('pasada')
+            if tipo is None or compas is None:
+                continue
+            clave = (tipo, compas, pasada)
+            if clave in vistos:
+                form.add_error('compas', 'Ya hay otra fila con el mismo tipo/compás' + (f'/pasada {pasada}' if pasada else ' (marca general)') + ' en este envío.')
+            else:
+                vistos[clave] = form
+
+
+MarcaNotacionFormSet = forms.modelformset_factory(
+    MarcaNotacion, form=MarcaNotacionForm, formset=MarcaNotacionBaseFormSet, extra=3, can_delete=True,
 )

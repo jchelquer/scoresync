@@ -7,7 +7,7 @@ from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
-from .models import MarcaTiempoCompas, Obra, Partitura, Segmento
+from .models import MarcaNotacion, MarcaTiempoCompas, Obra, Partitura, Segmento
 
 
 @receiver(post_delete, sender=Partitura)
@@ -42,4 +42,9 @@ def obra_actualizada_por_segmento(sender, instance, **kwargs):
 
 @receiver([post_save, post_delete], sender=MarcaTiempoCompas)
 def obra_actualizada_por_marca_compas(sender, instance, **kwargs):
+    _tocar_obra(instance.obra_id)
+
+
+@receiver([post_save, post_delete], sender=MarcaNotacion)
+def obra_actualizada_por_notacion(sender, instance, **kwargs):
     _tocar_obra(instance.obra_id)

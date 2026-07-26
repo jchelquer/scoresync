@@ -78,7 +78,13 @@ class Segmento(models.Model):
     compases propio (`compas_desde` null) — así la duración de CUALQUIER
     fila, incluida la última con contenido real, sale siempre de la misma
     cuenta: tiempo_inicio de la fila siguiente menos el propio. No hace
-    falta un campo `tiempo_fin` aparte que sólo usaría la última fila."""
+    falta un campo `tiempo_fin` aparte que sólo usaría la última fila.
+
+    Indicación de compás, armadura y tempo base NO son campos de acá —
+    son hechos de la partitura por POSICIÓN, no de esta fila (ver
+    MarcaNotacion). bpm_llegada/variacion_tempo sí quedan acá: son
+    genuinamente de la fila (un accelerando/ritardando puntual de este
+    tramo, no una propiedad de la obra en general)."""
 
     VARIACIONES_TEMPO = [
         ('', 'Constante'),
@@ -119,17 +125,7 @@ class Segmento(models.Model):
         max_length=20, blank=True,
         help_text='Igual que desde_texto, pero "4" sin coma acá significa "hasta el final del compás 4", no pulso 1.',
     )
-    indicacion_compas = models.CharField(
-        max_length=10, blank=True,
-        help_text="Ej: 4/4 — vacío hereda la de la fila anterior.",
-    )
     variacion_tempo = models.CharField(max_length=12, choices=VARIACIONES_TEMPO, blank=True, default='')
-    bpm = models.PositiveIntegerField(
-        null=True, blank=True,
-        help_text="Tempo de arranque de este tramo (constante, o punto de partida si es accelerando/ritardando) "
-                   "— vacío hereda el tempo vigente (bpm_llegada si la fila anterior tenía uno, si no su bpm) "
-                   "de la fila anterior. Se usa para calcular tiempo_inicio_calculado.",
-    )
     bpm_llegada = models.PositiveIntegerField(
         null=True, blank=True,
         help_text="Sólo tiene sentido en un tramo con accelerando/ritardando: tempo al que llega al final. "
@@ -189,6 +185,65 @@ class MarcaTiempoCompas(models.Model):
 
     def __str__(self):
         return f"{self.obra} — c.{self.compas} ({self.pasada}ra vez)"
+
+
+class MarcaNotacion(models.Model):
+    """Hecho de la PARTITURA (indicación de compás, armadura, tempo base) —
+    a diferencia de Segmento, que es movimiento (qué se toca en qué orden),
+    esto es una propiedad de la POSICIÓN en la obra: el compás 47 tiene la
+    misma indicación/armadura/tempo la primera vez que se toca y en
+    cualquier repetición. Por eso se busca por compás (nunca por fila de
+    itinerario) — la búsqueda "la marca vigente más cercana hacia atrás"
+    reemplaza la vieja herencia por orden de itinerario, que se rompía en
+    saltos/repeticiones lejanas (heredaba de lo que sonó justo antes del
+    salto, no del pasaje real).
+
+    pasada=None (el caso normal) = rige en CUALQUIER pasada por ese compás.
+    pasada completo = override puntual sólo para esa ocurrencia exacta
+    (mismo criterio de "pasada" que MarcaTiempoCompas/buscar_posicion) —
+    para el caso raro de que una repetición puntual difiera (ver
+    servicios._resolver_marca_notacion).
+
+    No incluye accelerando/ritardando/calderón (eso sigue siendo
+    Segmento.bpm_llegada/variacion_tempo, fila del itinerario, no posición
+    — ver ese modelo)."""
+
+    TIPOS = [
+        ('compas', 'Indicación de compás'),
+        ('armadura', 'Armadura'),
+        ('tempo', 'Tempo'),
+    ]
+
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_notacion')
+    tipo = models.CharField(max_length=10, choices=TIPOS)
+    compas = models.PositiveIntegerField(help_text="A partir de este compás rige, hasta la próxima marca del mismo tipo.")
+    pasada = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Vacío = rige en cualquier pasada por este compás. Completo = override sólo para esa pasada puntual.",
+    )
+    valor = models.CharField(
+        max_length=20,
+        help_text='Según tipo: "4/4" (compás), "96" (tempo, en bpm), texto libre (armadura).',
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['obra', 'tipo', 'compas'], condition=models.Q(pasada__isnull=True),
+                name='unico_general_por_obra_tipo_compas',
+            ),
+            models.UniqueConstraint(
+                fields=['obra', 'tipo', 'compas', 'pasada'], condition=models.Q(pasada__isnull=False),
+                name='unico_puntual_por_obra_tipo_compas_pasada',
+            ),
+        ]
+        ordering = ['obra', 'tipo', 'compas', 'pasada']
+        verbose_name = 'Marca de notación'
+        verbose_name_plural = 'Marcas de notación'
+
+    def __str__(self):
+        sufijo = f" ({self.pasada}ra vez)" if self.pasada else ""
+        return f"{self.obra} — c.{self.compas}{sufijo}: {self.get_tipo_display()} {self.valor}"
 
 
 class Partitura(models.Model):

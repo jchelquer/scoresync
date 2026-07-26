@@ -2,6 +2,16 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.11.0"
+  date: "2026-07-26"
+  changes:
+    - type: nuevo
+      text: "Pantalla nueva \"Notación\" (junto a Itinerario/Sincronizar en la ficha de la obra): ahí se cargan ahora la indicación de compás, la armadura (nuevo) y el tempo base — cada uno como una marca a partir de un compás, vigente en cualquier repetición, en vez de depender de la fila del itinerario en la que se cargó. Antes, una repetición lejana podía llegar a heredar la indicación/tempo de lo que sonaba justo antes del salto en vez de la propia del pasaje — con esto queda resuelto de raíz."
+    - type: nuevo
+      text: "La armadura se muestra ahora durante la práctica (junto a la indicación de compás/bpm) y en \"Sincronizar compases\"."
+    - type: mejorado
+      text: "El itinerario ya no tiene columnas de Indicación ni BPM de arranque (se cargan en Notación) — sigue teniendo Tempo/BPM llegada, que es genuinamente del tramo (accelerando/ritardando puntual), no de la partitura en general."
+
 - version: "1.10.4"
   date: "2026-07-25"
   changes:

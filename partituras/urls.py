@@ -24,6 +24,7 @@ urlpatterns = [
     path('obras/<int:pk>/subir/', views.subir, name='subir'),
     path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
     path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),
+    path('obras/<int:pk>/notacion/', views.notacion_obra, name='notacion_obra'),
     # El nombre interno queda "navegador_obra" (usado por la vista y por el
     # único template que lo referencia) — sólo cambia el path visible,
     # que ahora dice "practicar" para que coincida con el botón.

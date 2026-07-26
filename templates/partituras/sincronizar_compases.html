@@ -175,6 +175,7 @@
             </div>
             <div class="small" style="color: var(--ss-text-muted);">
               {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
+              {% if entrada.armadura %} · {{ entrada.armadura }}{% endif %}
               {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
               <span class="bpm-resultante"></span>
               {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} <span class="tiempo-calc" data-segundos="{{ entrada.tiempo_inicio_calculado|unlocalize }}"></span><span class="tiempo-calc-local"></span>{% endif %}

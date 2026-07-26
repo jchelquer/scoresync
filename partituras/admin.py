@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Barra, Compas, Obra, Pagina, PreferenciaObra, PreferenciaParte, Segmento, Sistema, Partitura
+from .models import Barra, Compas, MarcaNotacion, Obra, Pagina, PreferenciaObra, PreferenciaParte, Segmento, Sistema, Partitura
 
 
 @admin.register(Obra)
@@ -10,9 +10,16 @@ class ObraAdmin(admin.ModelAdmin):
 
 @admin.register(Segmento)
 class SegmentoAdmin(admin.ModelAdmin):
-    list_display = ('obra', 'orden', 'compas_desde', 'compas_hasta', 'indicacion_compas', 'bpm', 'bpm_llegada', 'descripcion')
+    list_display = ('obra', 'orden', 'compas_desde', 'compas_hasta', 'bpm_llegada', 'descripcion')
     list_filter = ('variacion_tempo',)
     search_fields = ('obra__titulo', 'descripcion')
+
+
+@admin.register(MarcaNotacion)
+class MarcaNotacionAdmin(admin.ModelAdmin):
+    list_display = ('obra', 'tipo', 'compas', 'pasada', 'valor')
+    list_filter = ('tipo',)
+    search_fields = ('obra__titulo',)
 
 
 @admin.register(Barra)

@@ -34,6 +34,7 @@
 
   #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
   #barra-compacta #nav-indicacion-wrap,
+  #barra-compacta #nav-armadura-wrap,
   #barra-compacta #nav-bpm-wrap { font-size: 0.8rem; }
   #barra-compacta .btn,
   #score-header-extra .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
@@ -208,6 +209,9 @@
     <div class="info-extra mt-4 d-flex justify-content-center gap-4 flex-wrap">
       <span id="nav-indicacion-wrap" style="color: var(--ss-text); {% if not indicacion_compas %}display:none;{% endif %}">
         <i class="bi bi-music-note-beamed me-1"></i><span id="nav-indicacion">{{ indicacion_compas }}</span>
+      </span>
+      <span id="nav-armadura-wrap" style="color: var(--ss-text); {% if not armadura %}display:none;{% endif %}">
+        <i class="bi bi-key me-1"></i><span id="nav-armadura">{{ armadura }}</span>
       </span>
       <span id="nav-bpm-wrap" style="color: var(--ss-text); {% if not bpm %}display:none;{% endif %}">
         <i class="bi bi-speedometer2 me-1"></i><span id="nav-bpm">{{ bpm }} bpm</span>
@@ -399,6 +403,7 @@
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
+  const navArmaduraWrap = document.getElementById('nav-armadura-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
 
   // Modo "ensayo con parte" (ver alternarModoScore() más abajo): estos
@@ -421,6 +426,7 @@
   const reubicables = [
     { el: navCompas, destino: barraCompacta },
     { el: navIndicacionWrap, destino: barraCompacta },
+    { el: navArmaduraWrap, destino: barraCompacta },
     { el: navBpmWrap, destino: barraCompacta },
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
@@ -939,6 +945,7 @@
     document.getElementById('nav-compas').textContent = p.cuenta_regresiva;
     document.getElementById('nav-compas-label').textContent = '{% translate "al aire" %}';
     setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
+    setCampo('nav-armadura-wrap', 'nav-armadura', p.armadura || '');
     const bpmMostrado = bpmEscalado(p.bpm);
     setCampo('nav-bpm-wrap', 'nav-bpm', bpmMostrado ? (bpmMostrado + ' bpm') : '');
     setCampo('nav-variacion-wrap', 'nav-variacion', '');
@@ -957,6 +964,7 @@
     document.getElementById('nav-compas-label').textContent = '{% translate "compás" %}';
     document.getElementById('nav-compas').textContent = p.compas;
     setCampo('nav-indicacion-wrap', 'nav-indicacion', p.indicacion_compas || '');
+    setCampo('nav-armadura-wrap', 'nav-armadura', p.armadura || '');
     setCampo('nav-bpm-wrap', 'nav-bpm', bpmMostrado ? (bpmMostrado + ' bpm') : '');
     const variTxt = (p.variacion_tempo_display) ?
       (p.variacion_tempo_display + (bpmLlegadaMostrado ? ' → ' + bpmLlegadaMostrado : '')) : '';

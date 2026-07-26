@@ -12,9 +12,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
+from .forms import MarcaNotacionFormSet, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
 from .models import (
-    Barra, Compas, MarcaTiempoCompas, Obra, Pagina, Partitura, PreferenciaObra,
+    Barra, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura, PreferenciaObra,
     PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
@@ -764,6 +764,36 @@ def itinerario_obra(request, pk):
     })
 
 
+@login_required
+def notacion_obra(request, pk):
+    """Tabla editable de las marcas de notación de la obra (indicación de
+    compás, armadura, tempo base) — hechos de la PARTITURA por posición
+    (compás), no del itinerario (ver MarcaNotacion). Mismo patrón que
+    itinerario_obra: un formset de Django para "llenar una tabla", sin
+    orden propio que renumerar."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    queryset = MarcaNotacion.objects.filter(obra=obra).order_by("tipo", "compas", "pasada")
+
+    if request.method == "POST":
+        formset = MarcaNotacionFormSet(request.POST, queryset=queryset, prefix="notacion")
+        if formset.is_valid():
+            instancias = formset.save(commit=False)
+            for instancia in instancias:
+                instancia.obra = obra
+                instancia.save()
+            for eliminada in formset.deleted_objects:
+                eliminada.delete()
+            recalcular_tiempos_calculados(obra)
+            return redirect("partituras:notacion_obra", pk=pk)
+    else:
+        formset = MarcaNotacionFormSet(queryset=queryset, prefix="notacion")
+
+    return render(request, "partituras/notacion_obra.html", {
+        "obra": obra,
+        "formset": formset,
+    })
+
+
 def _leer_entero(valor, default):
     try:
         return int(valor) if valor not in (None, "") else default
@@ -963,6 +993,7 @@ def navegador_obra(request, pk):
         "segmento": segmento_actual,
         "compas_actual": compas_actual,
         "indicacion_compas": info_actual.get("indicacion_compas"),
+        "armadura": info_actual.get("armadura"),
         "bpm": info_actual.get("bpm"),
         "url_siguiente": url_para(siguiente),
         "url_anterior": url_para(anterior),

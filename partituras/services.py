@@ -439,36 +439,90 @@ def _tiempo_real_en_posicion(anclas, posicion):
     return None
 
 
+def _indice_notacion(obra):
+    """Marcas de MarcaNotacion de la obra, separadas por tipo, listas para
+    resolver "qué rige en el compás N": generales (pasada=None, ordenadas
+    por compás — se busca la última con compas <= N) y puntuales (override
+    de una (compas, pasada) exacta, ver _resolver_marca_notacion)."""
+    generales = {}
+    puntuales = {}
+    for m in obra.marcas_notacion.order_by('compas'):
+        if m.pasada is None:
+            generales.setdefault(m.tipo, []).append((m.compas, m.valor))
+        else:
+            puntuales[(m.tipo, m.compas, m.pasada)] = m.valor
+    return generales, puntuales
+
+
+def _resolver_marca_notacion(indice, tipo, compas, pasada):
+    """Valor vigente de `tipo` (compas/armadura/tempo) en un compás puntual
+    de la obra — override de (compas, pasada) si existe, si no la última
+    marca general con compas_marca <= compas (búsqueda hacia atrás: esto ES
+    la herencia, por posición real en la obra, no por orden de itinerario).
+    None si no hay ninguna marca aplicable. pasada=None (fila a medio
+    cargar, sin compas_hasta todavía) sólo mira las generales, nunca un
+    override puntual."""
+    if compas is None:
+        return None
+    generales, puntuales = indice
+    if pasada is not None:
+        valor = puntuales.get((tipo, compas, pasada))
+        if valor is not None:
+            return int(valor) if tipo == 'tempo' else valor
+    valor = None
+    for compas_marca, v in generales.get(tipo, []):
+        if compas_marca <= compas:
+            valor = v
+        else:
+            break
+    return int(valor) if (valor is not None and tipo == 'tempo') else valor
+
+
 def resolver_segmentos(obra):
     """Recorre los segmentos de la obra en orden, resolviendo lo que en cada
     fila quedó en blanco (hereda de la última fila con un valor propio — ver
     ayuda de cada campo en el modelo Segmento) y calculando cuánto dura cada
     tramo a partir de bpm/bpm_llegada. Devuelve una lista de dicts, uno por
     segmento, en el mismo orden, cada uno con:
-      segmento, indicacion_compas, bpm (resueltos),
+      segmento, indicacion_compas, bpm, armadura (resueltos),
       pulsos_por_compas, duracion_calculada (segundos), tiempo_inicio_calculado (segundos)
+
+    indicacion_compas/bpm/armadura salen de MarcaNotacion (hecho de la
+    partitura, por POSICIÓN — ver ese modelo), no de campos de Segmento: lo
+    único que "hereda de la fila anterior EN ORDEN DE ITINERARIO" es el
+    tempo de llegada de un accelerando/ritardando (bpm_llegada más abajo),
+    que sí es genuinamente correlativo a la reproducción (lo que suena
+    después de un tramo continúa en el tempo al que llegó ese tramo, sin
+    importar la posición en la partitura) — eso queda igual que siempre.
 
     Si en algún punto falta bpm o indicación de compás para calcular, la
     acumulación de tiempo se corta ahí — el resto de las filas quedan con
     tiempo_inicio_calculado en None en vez de inventar un valor con un
     tempo/indicación por defecto que nadie pidió."""
     segmentos = list(obra.segmentos.order_by('orden'))
+    indice = _indice_notacion(obra)
+    pasadas_por_compas = _pasadas_por_compas(obra)
     resueltos = []
     indicacion_vigente = None
     bpm_vigente = None
     tiempo_acumulado = 0.0
 
     for seg in segmentos:
-        indicacion = seg.indicacion_compas or indicacion_vigente
+        pasada_seg = pasadas_por_compas.get((seg.id, seg.compas_desde))
+        propio_indicacion = _resolver_marca_notacion(indice, 'compas', seg.compas_desde, pasada_seg)
+        indicacion = propio_indicacion or indicacion_vigente
         if indicacion:
             indicacion_vigente = indicacion
-        bpm_inicio = seg.bpm or bpm_vigente
+        propio_bpm = _resolver_marca_notacion(indice, 'tempo', seg.compas_desde, pasada_seg)
+        bpm_inicio = propio_bpm or bpm_vigente
         pulsos_compas = _pulsos_por_compas(indicacion)
+        armadura = _resolver_marca_notacion(indice, 'armadura', seg.compas_desde, pasada_seg)
 
         info = {
             'segmento': seg,
             'indicacion_compas': indicacion,
             'bpm': bpm_inicio,
+            'armadura': armadura,
             'pulsos_por_compas': pulsos_compas,
             'duracion_calculada': None,
             'tiempo_inicio_calculado': tiempo_acumulado,
@@ -477,8 +531,8 @@ def resolver_segmentos(obra):
 
         if seg.bpm_llegada:
             bpm_vigente = seg.bpm_llegada
-        elif seg.bpm:
-            bpm_vigente = seg.bpm
+        elif propio_bpm:
+            bpm_vigente = propio_bpm
 
         if seg.compas_desde is None:
             break  # fila de cierre: sólo el ancla de tiempo que ya se guardó arriba
@@ -713,6 +767,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                 'es_primer_pulso_compas': True,
                 'acento': True,
                 'indicacion_compas': info.get('indicacion_compas'),
+                'armadura': info.get('armadura'),
                 'bpm': bpm_inicio,
                 'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
                 'bpm_llegada': seg.bpm_llegada,
@@ -807,6 +862,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                     # marcarse como acentuado.
                     'acento': p == 1,
                     'indicacion_compas': info.get('indicacion_compas'),
+                    'armadura': info.get('armadura'),
                     'bpm': round(bpm_pulso),
                     'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
                     'bpm_llegada': seg.bpm_llegada,
@@ -874,6 +930,7 @@ def compases_desenrollados(obra):
                 'compas': p['compas'],
                 'pasada': pasada,
                 'indicacion_compas': p['indicacion_compas'],
+                'armadura': p['armadura'],
                 'bpm': p['bpm'],
                 'pulsos_por_compas': _pulsos_por_compas(p['indicacion_compas']),
                 'tiempo_inicio_calculado': acumulado,
@@ -891,6 +948,7 @@ def compases_desenrollados(obra):
             'compas': None,
             'pasada': None,
             'indicacion_compas': None,
+            'armadura': None,
             'bpm': None,
             'pulsos_por_compas': None,
             'tiempo_inicio_calculado': acumulado,

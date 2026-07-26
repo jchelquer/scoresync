@@ -17,7 +17,9 @@
   {% translate "Desde/Hasta: \"20\" es el compás 20 entero; \"20,1.5\" es compás 20, pulso uno y medio (coma separa compás de pulso, punto es el decimal DENTRO del pulso). En Desde, \"20\" solo significa pulso 1; en Hasta, \"20\" solo significa hasta el final del compás." %}
 </p>
 <p class="small mb-3" style="color: var(--ss-text-muted)">
-  {% translate "BPM es el tempo de arranque del tramo (o el único, si es constante). BPM llegada sólo se completa en un tramo con accelerando/ritardando, para indicar adónde llega — eso es lo que hereda la fila siguiente, no el de arranque. Un calderón se carga como su propio tramo de un solo pulso, con el BPM bajo que corresponda a la duración deseada. Tiempo calculado es una estimación a partir de los BPM cargados — se recalcula solo al guardar, es sólo de referencia hasta que se sincronice con audio/video real." %}
+  {% translate "La indicación de compás y el tempo base ya no se cargan acá — son hechos de la partitura por posición, se cargan una sola vez en" %}
+  <a href="{% url 'partituras:notacion_obra' obra.pk %}">{% translate "Notación" %}</a>.
+  {% translate "BPM llegada sólo se completa en un tramo con accelerando/ritardando, para indicar adónde llega — eso es lo que hereda la fila siguiente. Un calderón se carga como su propio tramo de un solo pulso. Tiempo calculado es una estimación a partir del tempo cargado — se recalcula solo al guardar, es sólo de referencia hasta que se sincronice con audio/video real." %}
 </p>
 
 <form method="post">
@@ -30,9 +32,7 @@
           <th>{% translate "Orden" %}</th>
           <th>{% translate "Desde" %}</th>
           <th>{% translate "Hasta" %}</th>
-          <th>{% translate "Indicación" %}</th>
           <th>{% translate "Tempo" %}</th>
-          <th>{% translate "BPM" %}</th>
           <th>{% translate "BPM llegada" %}</th>
           <th>{% translate "Descripción" %}</th>
           <th>{% translate "Tiempo inicio" %}</th>
@@ -47,9 +47,7 @@
           <td>{{ form.orden }}</td>
           <td>{{ form.desde_texto }}</td>
           <td>{{ form.hasta_texto }}</td>
-          <td>{{ form.indicacion_compas }}</td>
           <td>{{ form.variacion_tempo }}</td>
-          <td>{{ form.bpm }}</td>
           <td>{{ form.bpm_llegada }}</td>
           <td>{{ form.descripcion }}</td>
           <td>{{ form.tiempo_inicio }}</td>
@@ -57,7 +55,7 @@
           <td class="text-center">{{ form.DELETE }}</td>
         </tr>
         {% if form.errors %}
-        <tr><td colspan="11" class="text-danger small">{{ form.errors }}</td></tr>
+        <tr><td colspan="9" class="text-danger small">{{ form.errors }}</td></tr>
         {% endif %}
         {% endfor %}
       </tbody>
