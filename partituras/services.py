@@ -1153,20 +1153,39 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         # ya usa _anclas_globales.
         if not (bpm_inicio and pulsos_compas and posiciones_fila is not None):
             completo = False
-            pulsos.append({
-                'segmento_id': seg.id,
-                'compas': compas,
-                'pasada': pasadas_por_compas.get((seg.id, compas)),
-                'es_primer_pulso_compas': True,
-                'acento': True,
-                'indicacion_compas': info_c.get('indicacion_compas'),
-                'armadura': info_c.get('armadura'),
-                'bpm': bpm_inicio,
-                'variacion_tempo_display': '',
-                'bpm_llegada': None,
-                'descripcion': seg.descripcion,
-                'duracion': None,
-            })
+            # Aunque falte bpm (o la fila esté rota en otro punto), si la
+            # INDICACIÓN de compás sí resolvió (pulsos_compas truthy) ya se
+            # sabe el rango real de pulsos de este compás — emitirlos todos
+            # (no un único pulso 1 inventado) para que pulso_inicial/
+            # pulso_final en compases_desenrollados reflejen el compás
+            # COMPLETO en vez de mostrarlo como si cortara a mitad de camino
+            # (bug real: sin esto, un compás con indicación cargada pero
+            # tempo todavía sin cargar en Notación se veía en
+            # sincronizar_compases.html como "hasta pulso 1" aunque fuera un
+            # compás entero de 4/4).
+            if pulsos_compas:
+                pulso_ini, pulso_fin = _rango_pulsos_del_compas(seg, compas, pulsos_compas)
+            else:
+                pulso_ini = pulso_fin = 1
+            for p in range(pulso_ini, pulso_fin + 1):
+                pulsos.append({
+                    'segmento_id': seg.id,
+                    'compas': compas,
+                    'pasada': pasadas_por_compas.get((seg.id, compas)),
+                    'pulso': p,
+                    'pulsos_por_compas': int(pulsos_compas) if pulsos_compas else None,
+                    'es_primer_pulso_compas': p == pulso_ini,
+                    'acento': p == 1,
+                    'indicacion_compas': info_c.get('indicacion_compas'),
+                    'armadura': info_c.get('armadura'),
+                    'bpm': bpm_inicio,
+                    'variacion_tempo_display': '',
+                    'bpm_llegada': None,
+                    'descripcion': seg.descripcion,
+                    'duracion': None,
+                    'duracion_itinerario': None,
+                    'duracion_compases': None,
+                })
         else:
             if seg.id not in pulsos_por_compas_por_fila:
                 pulsos_por_compas_por_fila[seg.id] = _pulsos_por_compas_de_fila(seg, notacion_por_compas)
