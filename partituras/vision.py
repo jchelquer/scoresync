@@ -369,7 +369,10 @@ def detectar_barras_candidatas(img_bgr, sistema_px, alto_referencia=None):
     return _fusionar_barras_dobles(candidatas)
 
 
-def _fusionar_barras_dobles(candidatas, umbral_relativo=0.1):
+UMBRAL_RELATIVO_BARRA_DOBLE = 0.1
+
+
+def _fusionar_barras_dobles(candidatas, umbral_relativo=UMBRAL_RELATIVO_BARRA_DOBLE):
     """
     Dos candidatas consecutivas (dentro del mismo sistema, ya vienen
     ordenadas por x) mucho más cerca entre sí que la separación típica del
@@ -410,6 +413,87 @@ def detectar_barras(img_bgr, sistema_px, alto_referencia=None):
     necesita mostrarle las dudosas al usuario (encontrar_ancla, etc.)."""
     candidatas = detectar_barras_candidatas(img_bgr, sistema_px, alto_referencia)
     return [c['x'] for c in candidatas if c['aceptada']]
+
+
+UMBRAL_CONTENIDO_SISTEMA_DEFAULT = 0.1
+
+
+def _segmentos_contenido_sistema(img_bgr, sistema_px, alto_referencia=None, umbral_frac=UMBRAL_CONTENIDO_SISTEMA_DEFAULT):
+    """
+    Segmentos (en píxeles, mismo sistema de coordenadas que
+    detectar_barras_candidatas) de contenido real (clave, armadura, notas)
+    a lo largo de todo el ancho de este sistema — excluyendo las filas
+    donde caen las 5 líneas del pentagrama (parejas dentro de sistema_px),
+    para que el perfil caiga a cero en un tramo vacío (tenga o no las
+    líneas dibujadas ahí), a diferencia de sumar tinta cruda (que nunca
+    cae a cero, porque las 5 líneas cruzan cualquier columna con o sin
+    música). Usado tanto para el borde IZQUIERDO (detectar_borde_
+    contenido_sistema, primer segmento) como el DERECHO (detectar_borde_
+    fin_sistema, último segmento) — no intenta distinguir clave/armadura
+    de las notas reales, el borde puede caer sobre la clave misma (ver
+    contrato de desarrollo, alcance acotado a propósito). None si el
+    sistema no tiene alto o no se encuentra ningún segmento.
+
+    umbral_frac mucho más alto que el 0.002 por defecto de
+    _segmentos_no_vacios: acá `total` es la cantidad de filas incluidas de
+    UN sistema (~60-90), no el alto de toda la página — un umbral_frac
+    pensado para esa escala mucho más grande resulta, contra un total tan
+    chico, casi cero (~0.1-0.2px), así que hasta el ruido típico de un
+    escaneo (grano, textura del papel) alcanza para no caer nunca a
+    "vacío" — el segmento entonces nunca encuentra un hueco real y termina
+    en el borde de la imagen. El valor por defecto (10% de las filas
+    incluidas) deja el ruido de escaneo por debajo y el contenido real
+    (una nota, una clave, una barra de silencio de varios compases) sigue
+    detectándose bien — probado contra una partitura escaneada (8
+    sistemas, colapsan correctamente a su propia última barra real) y dos
+    casos de contenido real confirmados a mano. No hay un valor universal
+    que sirva para cualquier escaneo (depende de cuánto ruido de fondo
+    tenga esa página en particular) — por eso es ajustable por página
+    (Pagina.umbral_contenido_sistema), no una constante fija: si en una
+    página puntual la detección de bordes de sistema falla, este es el
+    primer parámetro para tocar."""
+    binaria = _binarizar(img_bgr)
+    y0, y1 = sistema_px['y0'], sistema_px['y1']
+    alto = y1 - y0
+    if alto <= 0:
+        return None
+    escala = alto_referencia if alto_referencia else alto
+    grosor = max(1, int(round(escala * 0.02)))
+    filas_excluidas = set()
+    for i in range(5):
+        centro = y0 + round(i * (alto - 1) / 4)
+        for dy in range(-grosor, grosor + 1):
+            filas_excluidas.add(centro + dy)
+    filas_incluidas = [y for y in range(y0, y1) if y not in filas_excluidas]
+    if not filas_incluidas:
+        return None
+    perfil = (binaria[filas_incluidas, :] > 0).sum(axis=0)
+    return _segmentos_no_vacios(perfil, len(filas_incluidas), umbral_frac=umbral_frac) or None
+
+
+def detectar_borde_contenido_sistema(img_bgr, sistema_px, alto_referencia=None, umbral_frac=UMBRAL_CONTENIDO_SISTEMA_DEFAULT):
+    """
+    Columna donde ARRANCA el primer contenido real de este sistema (clave,
+    armadura, etc.) — en vez de asumir que arranca en el margen de página,
+    un dato de TODA la página que no necesariamente coincide con el
+    arranque real de este sistema puntual (el primer compás de un sistema
+    no tiene ninguna barra a su izquierda contra la cual medir). None si
+    no se encuentra nada (banda vacía). Ver _segmentos_contenido_sistema."""
+    segmentos = _segmentos_contenido_sistema(img_bgr, sistema_px, alto_referencia, umbral_frac)
+    return segmentos[0][0] if segmentos else None
+
+
+def detectar_borde_fin_sistema(img_bgr, sistema_px, alto_referencia=None, umbral_frac=UMBRAL_CONTENIDO_SISTEMA_DEFAULT):
+    """
+    Columna donde TERMINA el último contenido real de este sistema —
+    mismo criterio que detectar_borde_contenido_sistema pero mirando el
+    otro extremo. Quien llama decide si ese punto ya coincide con la
+    última barra aceptada (en cuyo caso no hace falta ningún límite
+    virtual — la barra real ya cierra el compás, ver _detectar_barras_
+    pagina) o si hay contenido real más allá de ella. None si no se
+    encuentra nada (banda vacía)."""
+    segmentos = _segmentos_contenido_sistema(img_bgr, sistema_px, alto_referencia, umbral_frac)
+    return segmentos[-1][1] if segmentos else None
 
 
 def _inclinacion_barra(binaria, x_aprox, y0, y1, ventana=12):

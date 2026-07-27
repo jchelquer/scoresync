@@ -260,14 +260,17 @@ def _pulso_bounds(seg, pulsos_compas):
     return pulso_desde, pulso_hasta
 
 
-def _cantidad_pulsos_fila(seg, pulsos_compas):
+def _cantidad_pulsos_fila(seg, pulsos_por_compas):
     """Total de pulsos que dura la fila entera, cruzando compases si
-    corresponde."""
-    pulso_desde, pulso_hasta = _pulso_bounds(seg, pulsos_compas)
-    if seg.compas_desde == seg.compas_hasta:
-        return pulso_hasta - pulso_desde + 1
-    compases_completos = seg.compas_hasta - seg.compas_desde - 1
-    return (pulsos_compas - pulso_desde + 1) + (compases_completos * pulsos_compas) + pulso_hasta
+    corresponde — pulsos_por_compas es {compas: valor}, resuelto compás a
+    compás (puede variar DENTRO de la fila si Notación cambia de
+    indicación de compás a mitad de tramo, ver _resolver_notacion_por_compas
+    — antes se asumía un único valor constante para toda la fila)."""
+    total = 0.0
+    for compas in range(seg.compas_desde, seg.compas_hasta + 1):
+        ini, fin = _rango_pulsos_del_compas(seg, compas, pulsos_por_compas[compas])
+        total += fin - ini + 1
+    return total
 
 
 def _rango_pulsos_del_compas(seg, compas, pulsos_compas):
@@ -281,56 +284,127 @@ def _rango_pulsos_del_compas(seg, compas, pulsos_compas):
     return int(ini), int(fin)
 
 
-def _pulsos_antes_del_compas(seg, compas, pulsos_compas):
+def _pulsos_antes_del_compas(seg, compas, pulsos_por_compas):
     """Cuántos pulsos de la fila (no del compás) ya transcurrieron antes de
     que arranque este compás puntual — ubica al compás dentro de la
     secuencia total de pulsos de la fila, para poder interpolar el tempo
     pulso a pulso en un accelerando/ritardando en vez de saltar de a un
-    tempo fijo por compás."""
-    if compas == seg.compas_desde:
-        return 0
-    ini_primero, fin_primero = _rango_pulsos_del_compas(seg, seg.compas_desde, pulsos_compas)
-    primero = fin_primero - ini_primero + 1
-    completos_entre = max(compas - seg.compas_desde - 1, 0)
-    return primero + completos_entre * int(pulsos_compas)
+    tempo fijo por compás. pulsos_por_compas es {compas: valor} (ver
+    _cantidad_pulsos_fila)."""
+    total = 0
+    for c in range(seg.compas_desde, compas):
+        ini, fin = _rango_pulsos_del_compas(seg, c, pulsos_por_compas[c])
+        total += fin - ini + 1
+    return total
 
 
 def _pasadas_por_compas(obra):
     """Para cada ocurrencia de compás de la obra (fila, número), qué
-    "pasada" le corresponde — mismo criterio que buscar_posicion (cuenta,
-    en orden, cuántas filas navegables contienen ese número de compás) pero
-    calculado una sola vez para toda la obra en vez de buscarlo cada vez.
-    Usado tanto acá (construir_plan, para ubicar MarcaTiempoCompas) como en
-    compases_desenrollados. Devuelve {(segmento_id, compas): pasada}."""
+    "pasada" le corresponde — en general, cuenta en orden cuántas filas
+    navegables contienen ese número de compás (misma idea que usa
+    buscar_posicion, que reutiliza este mismo diccionario — única fuente de
+    verdad). Calculado una sola vez para toda la obra en vez de buscarlo
+    cada vez. Usado acá (construir_plan/resolver_segmentos, para ubicar
+    MarcaTiempoCompas/MarcaNotacion puntual) y en compases_desenrollados.
+
+    EXCEPCIÓN — continuación, no repetición: si una fila termina
+    EXPLÍCITAMENTE a mitad de compás (pulso_hasta propio) y la fila
+    SIGUIENTE en el itinerario, sin nada en el medio, retoma ESE MISMO
+    compás desde donde quedó (pulso_desde > 1), es un salto/repetición que
+    cae a mitad de compás — no un compás que se vuelve a tocar de cero. Le
+    corresponde la MISMA pasada que la fila anterior, sin incrementar el
+    contador. Una repetición real de un compás entero siempre tiene otras
+    filas en el medio (el tramo repetido), así que nunca se confunde con
+    este caso.
+
+    Devuelve {(segmento_id, compas): pasada}."""
     contador = {}
     resultado = {}
+    seg_anterior = None
     for seg in segmentos_navegables(obra):
+        continua_de_anterior = (
+            seg_anterior is not None
+            and seg_anterior.compas_hasta == seg.compas_desde
+            and seg_anterior.pulso_hasta is not None
+            and seg.pulso_desde is not None and seg.pulso_desde > 1
+        )
         for compas in range(seg.compas_desde, seg.compas_hasta + 1):
-            contador[compas] = contador.get(compas, 0) + 1
-            resultado[(seg.id, compas)] = contador[compas]
+            if continua_de_anterior and compas == seg.compas_desde:
+                pasada = resultado[(seg_anterior.id, compas)]
+            else:
+                contador[compas] = contador.get(compas, 0) + 1
+                pasada = contador[compas]
+            resultado[(seg.id, compas)] = pasada
+        seg_anterior = seg
     return resultado
 
 
-def _posiciones_calculadas_fila(seg, bpm_inicio, pulsos_compas):
-    """Posiciones (tiempo calculado acumulado por bpm/bpm_llegada, en
-    segundos desde el arranque de la fila, ANTES de cada pulso —
-    posiciones[k] es el instante en que arranca el pulso k, 0-based;
-    posiciones[-1] es la duración calculada total de la fila). Usado por
-    _anclas_globales (encadenando fila tras fila para la posición global de
-    las dos fuentes) y por construir_plan/tiempo_real_ancla (para ubicar un
-    pulso puntual dentro de su propia fila)."""
-    total_pulsos_fila = int(_cantidad_pulsos_fila(seg, pulsos_compas))
+def _pulsos_por_compas_de_fila(seg, notacion_por_compas):
+    """{compas: pulsos_por_compas} de TODOS los compases de esta fila —
+    sólo llamar cuando ya se sabe que la fila resuelve completa (ver
+    _posiciones_calculadas_fila, que devuelve None si no)."""
+    return {
+        compas: notacion_por_compas[(seg.id, compas)]['pulsos_compas']
+        for compas in range(seg.compas_desde, seg.compas_hasta + 1)
+    }
+
+
+def _posiciones_calculadas_fila(seg, notacion_por_compas):
+    """Posiciones (tiempo calculado acumulado, en segundos desde el
+    arranque de la fila, ANTES de cada pulso — posiciones[k] es el
+    instante en que arranca el pulso k, 0-based; posiciones[-1] es la
+    duración calculada total de la fila). bpm/indicación de compás se
+    resuelven COMPÁS A COMPÁS contra notacion_por_compas (pueden cambiar a
+    mitad de la fila, ver MarcaNotacion/_resolver_notacion_por_compas) en
+    vez de asumir un único valor para toda la fila.
+
+    bpm_llegada (accelerando/ritardando de Segmento — no se toca acá, ver
+    _resolver_notacion_por_compas) sigue rampeando desde el bpm resuelto en
+    el propio compas_desde de la fila hasta bpm_llegada, a lo largo de
+    TODOS los pulsos de la fila — _resolver_notacion_por_compas ya congela
+    el bpm de cada compás a ese valor de arranque cuando bpm_llegada está
+    seteado, así que esta función no necesita saber nada de esa regla,
+    sólo lee 'bpm' ya resuelto por compás.
+
+    None si la fila no tiene compas_hasta, o si CUALQUIER compás de su
+    rango no resuelve bpm/pulsos_por_compas — señal única de "incompleto"
+    (antes esto sólo se chequeaba en compas_desde, asumiendo que el resto
+    de la fila resolvía igual; ver construir_plan/_anclas_globales, que
+    usan este None para saltear/marcar incompleta TODA la fila).
+
+    Usado por _anclas_globales (encadenando fila tras fila para la
+    posición global de las dos fuentes) y por construir_plan/
+    tiempo_real_ancla (para ubicar un pulso puntual dentro de su propia
+    fila)."""
+    if seg.compas_hasta is None:
+        return None
+    pulsos_por_compas = {}
+    bpm_por_compas = {}
+    for compas in range(seg.compas_desde, seg.compas_hasta + 1):
+        info_c = notacion_por_compas.get((seg.id, compas))
+        if not info_c or not info_c.get('bpm') or not info_c.get('pulsos_compas'):
+            return None
+        pulsos_por_compas[compas] = info_c['pulsos_compas']
+        bpm_por_compas[compas] = info_c['bpm']
+
+    total_pulsos_fila = int(_cantidad_pulsos_fila(seg, pulsos_por_compas))
+    bpm_inicio = bpm_por_compas[seg.compas_desde]
     posiciones = [0.0]
-    for idx in range(total_pulsos_fila):
-        bpm_pulso = bpm_inicio
-        if seg.bpm_llegada and total_pulsos_fila > 1:
-            fraccion = idx / (total_pulsos_fila - 1)
-            bpm_pulso = bpm_inicio + (seg.bpm_llegada - bpm_inicio) * fraccion
-        posiciones.append(posiciones[-1] + 60.0 / bpm_pulso)
+    idx = 0
+    for compas in range(seg.compas_desde, seg.compas_hasta + 1):
+        ini, fin = _rango_pulsos_del_compas(seg, compas, pulsos_por_compas[compas])
+        bpm_compas = bpm_por_compas[compas]
+        for _ in range(int(fin - ini + 1)):
+            bpm_pulso = bpm_compas
+            if seg.bpm_llegada and total_pulsos_fila > 1:
+                fraccion = idx / (total_pulsos_fila - 1)
+                bpm_pulso = bpm_inicio + (seg.bpm_llegada - bpm_inicio) * fraccion
+            posiciones.append(posiciones[-1] + 60.0 / bpm_pulso)
+            idx += 1
     return posiciones
 
 
-def _anclas_globales(navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada,
+def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
                       tiempo_cierre=None):
     """Anclas reales de las DOS fuentes de temporización, para la obra
     ENTERA de una sola vez, en la MISMA posición calculada por bpm (ver
@@ -364,24 +438,32 @@ def _anclas_globales(navegables, resueltos_por_id, pasadas_por_compas, marcas_po
     anclas_compases = []
     anclas_itinerario = []
     posicion_inicio = {}
+    pasadas_ya_ancladas = set()  # (compas, pasada) — ver nota abajo
     offset_global = 0.0
     for seg in navegables:
-        info = resueltos_por_id.get(seg.id, {})
-        bpm_inicio = info.get('bpm')
-        pulsos_compas = info.get('pulsos_por_compas')
-        if not (bpm_inicio and pulsos_compas):
+        posiciones_fila = _posiciones_calculadas_fila(seg, notacion_por_compas)
+        if posiciones_fila is None:
             continue
-        posiciones_fila = _posiciones_calculadas_fila(seg, bpm_inicio, pulsos_compas)
         if seg.tiempo_inicio is not None:
             anclas_itinerario.append((offset_global, seg.tiempo_inicio.total_seconds()))
+        pulsos_por_compas_fila = _pulsos_por_compas_de_fila(seg, notacion_por_compas)
         for compas in range(seg.compas_desde, seg.compas_hasta + 1):
-            idx_compas = _pulsos_antes_del_compas(seg, compas, pulsos_compas)
+            idx_compas = _pulsos_antes_del_compas(seg, compas, pulsos_por_compas_fila)
             posicion = offset_global + posiciones_fila[idx_compas]
             posicion_inicio[(seg.id, compas)] = posicion
             pasada = pasadas_por_compas.get((seg.id, compas))
             marca = marcas_por_compas_pasada.get((compas, pasada)) if pasada else None
-            if marca is not None:
+            # Un compás partido en dos filas por continuidad comparte la
+            # MISMA pasada fusionada (ver _pasadas_por_compas) — sin este
+            # chequeo, el segundo fragmento agregaría la misma marca real
+            # de nuevo a una posición calculada distinta, creando un tramo
+            # de duración real CERO entre ambas (mismo tiempo, dos
+            # posiciones). Anclar sólo la primera vez reparte el tiempo
+            # real proporcionalmente entre los dos fragmentos, contra la
+            # próxima ancla real de verdad.
+            if marca is not None and (compas, pasada) not in pasadas_ya_ancladas:
                 anclas_compases.append((posicion, marca.total_seconds()))
+                pasadas_ya_ancladas.add((compas, pasada))
         offset_global += posiciones_fila[-1]
     if tiempo_cierre is not None:
         anclas_compases.append((offset_global, tiempo_cierre))
@@ -478,22 +560,120 @@ def _resolver_marca_notacion(indice, tipo, compas, pasada):
     return int(valor) if (valor is not None and tipo == 'tempo') else valor
 
 
+def _resolver_notacion_por_compas(segmentos, indice, pasadas_por_compas):
+    """indicacion_compas/armadura/bpm resueltos COMPÁS A COMPÁS (no una sola
+    vez por fila) contra la capa de notación (MarcaNotacion) — a diferencia
+    de mirar sólo seg.compas_desde, cualquier compás a mitad de una fila
+    recibe la marca que le corresponda por POSICIÓN, sin depender de que
+    haya un borde de fila justo ahí (bug real: una fila de compás 1 a 77
+    con una marca de tempo nueva en compás 10 quedaba pegada al tempo de
+    compás 1 para todo el tramo, porque antes sólo se resolvía en
+    compas_desde).
+
+    `segmentos`: TODOS los Segmento de la obra en orden (no sólo los
+    navegables) — así el "vigente" de fallback (ver abajo) sale igual que
+    si se recorriera fila por fila, incluida la de cierre.
+
+    "Vigente" (cuando _resolver_marca_notacion no encuentra ninguna marca
+    aplicable — sólo pasa si falta la marca general del principio de la
+    obra) se lleva COMPÁS A COMPÁS, cruzando también fronteras de fila —
+    generalización estricta del mecanismo que antes se llevaba una vez por
+    fila: da resultado idéntico a cuando no hay ningún cambio a mitad de
+    fila (ningún caso real tenía uno hasta ahora).
+
+    bpm_llegada (Segmento.bpm_llegada, el accelerando/ritardando de la
+    fila — no se toca en este fix, sigue siendo Fase 2): si está seteado,
+    el bpm de ESA fila queda CONGELADO al valor resuelto en su propio
+    compas_desde para TODOS sus compases — cualquier MarcaNotacion de
+    tempo que caiga en medio de esa misma fila se ignora a propósito
+    (combinarlas bien es tarea pendiente de la Fase 2 de accel/rit/
+    calderón). Es la única regla especial de toda la función — nada río
+    abajo (_posiciones_calculadas_fila, construir_plan) necesita conocerla,
+    sólo leen 'bpm' ya resuelto.
+
+    Devuelve (por_fila, por_compas):
+    - por_fila: {segmento_id: {indicacion_compas, armadura, bpm,
+      pulsos_compas}} — el valor en compas_desde de cada fila (incluye
+      filas a medio cargar, sin compas_hasta todavía, y la de cierre con
+      los valores heredados del último vigente) — mismo contrato que el
+      'info' que devolvía resolver_segmentos antes de este cambio.
+    - por_compas: {(segmento_id, compas): {...}} — todos los compases de
+      cada fila CON RANGO COMPLETO (compas_hasta no vacío) — nuevo."""
+    por_fila = {}
+    por_compas = {}
+    indicacion_vigente = None
+    bpm_vigente = None
+    for seg in segmentos:
+        if seg.compas_desde is None:
+            # Fila de cierre: sin compás propio, pero resolver_segmentos
+            # siempre le calculaba un 'info' heredado del vigente (aunque
+            # nada más lo consuma hoy) — se replica para no cambiar su
+            # contrato público.
+            por_fila[seg.id] = {
+                'indicacion_compas': indicacion_vigente,
+                'armadura': None,
+                'bpm': bpm_vigente,
+                'pulsos_compas': _pulsos_por_compas(indicacion_vigente),
+            }
+            continue
+
+        rango = (range(seg.compas_desde, seg.compas_hasta + 1)
+                 if seg.compas_hasta is not None else [seg.compas_desde])
+        bpm_inicio_fila = None
+        for i, compas in enumerate(rango):
+            pasada = pasadas_por_compas.get((seg.id, compas))
+
+            propio_indicacion = _resolver_marca_notacion(indice, 'compas', compas, pasada)
+            indicacion = propio_indicacion or indicacion_vigente
+            if indicacion:
+                indicacion_vigente = indicacion
+
+            propio_bpm = _resolver_marca_notacion(indice, 'tempo', compas, pasada)
+            bpm_marcado = propio_bpm or bpm_vigente
+            if propio_bpm:
+                bpm_vigente = propio_bpm
+
+            armadura = _resolver_marca_notacion(indice, 'armadura', compas, pasada)
+
+            if i == 0:
+                bpm_inicio_fila = bpm_marcado
+            bpm_efectivo = bpm_inicio_fila if seg.bpm_llegada else bpm_marcado
+
+            entrada = {
+                'indicacion_compas': indicacion,
+                'armadura': armadura,
+                'bpm': bpm_efectivo,
+                'pulsos_compas': _pulsos_por_compas(indicacion),
+            }
+            if i == 0:
+                por_fila[seg.id] = entrada
+            if seg.compas_hasta is not None:
+                por_compas[(seg.id, compas)] = entrada
+
+        if seg.bpm_llegada:
+            bpm_vigente = seg.bpm_llegada
+    return por_fila, por_compas
+
+
 def resolver_segmentos(obra):
     """Recorre los segmentos de la obra en orden, resolviendo lo que en cada
     fila quedó en blanco (hereda de la última fila con un valor propio — ver
     ayuda de cada campo en el modelo Segmento) y calculando cuánto dura cada
     tramo a partir de bpm/bpm_llegada. Devuelve una lista de dicts, uno por
     segmento, en el mismo orden, cada uno con:
-      segmento, indicacion_compas, bpm, armadura (resueltos),
+      segmento, indicacion_compas, bpm, armadura (resueltos EN compas_desde
+      — ver _resolver_notacion_por_compas para resolver un compás puntual
+      cualquiera dentro del rango de una fila, dado que puede cambiar a
+      mitad de tramo),
       pulsos_por_compas, duracion_calculada (segundos), tiempo_inicio_calculado (segundos)
 
     indicacion_compas/bpm/armadura salen de MarcaNotacion (hecho de la
     partitura, por POSICIÓN — ver ese modelo), no de campos de Segmento: lo
     único que "hereda de la fila anterior EN ORDEN DE ITINERARIO" es el
-    tempo de llegada de un accelerando/ritardando (bpm_llegada más abajo),
-    que sí es genuinamente correlativo a la reproducción (lo que suena
-    después de un tramo continúa en el tempo al que llegó ese tramo, sin
-    importar la posición en la partitura) — eso queda igual que siempre.
+    tempo de llegada de un accelerando/ritardando (bpm_llegada), que sí es
+    genuinamente correlativo a la reproducción (lo que suena después de un
+    tramo continúa en el tempo al que llegó ese tramo, sin importar la
+    posición en la partitura) — eso queda igual que siempre.
 
     Si en algún punto falta bpm o indicación de compás para calcular, la
     acumulación de tiempo se corta ahí — el resto de las filas quedan con
@@ -502,37 +682,23 @@ def resolver_segmentos(obra):
     segmentos = list(obra.segmentos.order_by('orden'))
     indice = _indice_notacion(obra)
     pasadas_por_compas = _pasadas_por_compas(obra)
+    por_fila, por_compas = _resolver_notacion_por_compas(segmentos, indice, pasadas_por_compas)
+
     resueltos = []
-    indicacion_vigente = None
-    bpm_vigente = None
     tiempo_acumulado = 0.0
 
     for seg in segmentos:
-        pasada_seg = pasadas_por_compas.get((seg.id, seg.compas_desde))
-        propio_indicacion = _resolver_marca_notacion(indice, 'compas', seg.compas_desde, pasada_seg)
-        indicacion = propio_indicacion or indicacion_vigente
-        if indicacion:
-            indicacion_vigente = indicacion
-        propio_bpm = _resolver_marca_notacion(indice, 'tempo', seg.compas_desde, pasada_seg)
-        bpm_inicio = propio_bpm or bpm_vigente
-        pulsos_compas = _pulsos_por_compas(indicacion)
-        armadura = _resolver_marca_notacion(indice, 'armadura', seg.compas_desde, pasada_seg)
-
+        entrada = por_fila.get(seg.id, {})
         info = {
             'segmento': seg,
-            'indicacion_compas': indicacion,
-            'bpm': bpm_inicio,
-            'armadura': armadura,
-            'pulsos_por_compas': pulsos_compas,
+            'indicacion_compas': entrada.get('indicacion_compas'),
+            'bpm': entrada.get('bpm'),
+            'armadura': entrada.get('armadura'),
+            'pulsos_por_compas': entrada.get('pulsos_compas'),
             'duracion_calculada': None,
             'tiempo_inicio_calculado': tiempo_acumulado,
         }
         resueltos.append(info)
-
-        if seg.bpm_llegada:
-            bpm_vigente = seg.bpm_llegada
-        elif propio_bpm:
-            bpm_vigente = propio_bpm
 
         if seg.compas_desde is None:
             break  # fila de cierre: sólo el ancla de tiempo que ya se guardó arriba
@@ -540,18 +706,30 @@ def resolver_segmentos(obra):
         if tiempo_acumulado is None:
             continue  # ya se cortó la acumulación en una fila anterior
 
-        pulso_desde, pulso_hasta = _pulso_bounds(seg, pulsos_compas) if pulsos_compas else (None, None)
-
-        if not (bpm_inicio and pulsos_compas and pulso_hasta is not None and seg.compas_hasta is not None):
+        posiciones = _posiciones_calculadas_fila(seg, por_compas)
+        if posiciones is None:
             tiempo_acumulado = None
             continue
 
-        cantidad_pulsos = _cantidad_pulsos_fila(seg, pulsos_compas)
-        duracion = max(cantidad_pulsos, 0) * (60.0 / bpm_inicio)
+        duracion = posiciones[-1]
         info['duracion_calculada'] = duracion
         tiempo_acumulado += duracion
 
     return resueltos
+
+
+def resolver_notacion_en_compas(obra, segmento, compas):
+    """indicacion_compas/armadura/bpm/pulsos_compas vigentes en UN compás
+    puntual dentro del rango de `segmento` — a diferencia de
+    resolver_segmentos, que sólo resuelve el ARRANQUE de cada fila (ver
+    _resolver_notacion_por_compas). Pensado para el primer render (del
+    lado del servidor) de navegador_obra.html en compas_actual, que puede
+    no ser compas_desde de su fila."""
+    indice = _indice_notacion(obra)
+    pasadas_por_compas = _pasadas_por_compas(obra)
+    todos_los_segmentos = list(obra.segmentos.order_by('orden'))
+    _, por_compas = _resolver_notacion_por_compas(todos_los_segmentos, indice, pasadas_por_compas)
+    return por_compas.get((segmento.id, compas), {})
 
 
 # ── Navegador manual del itinerario ─────────────────────────────────────
@@ -571,14 +749,19 @@ def buscar_posicion(obra, numero_compas, pasada=1):
     """Busca la posición para "compás X, Nda vez": el compás buscado puede
     caer en cualquier punto DENTRO del rango de una fila (no sólo en su
     borde), así que se filtra por contención — no por igualdad contra
-    compas_desde/compas_hasta — y se toma la n-ésima fila navegable (en
-    orden) cuyo rango lo contiene. Devuelve (segmento, numero_compas), o
-    None si no hay ninguna coincidencia (o no llega a haber esa pasada)."""
-    coincidencias = 0
+    compas_desde/compas_hasta. Se apoya en _pasadas_por_compas (única
+    fuente de verdad para qué pasada le toca a cada fila) en vez de contar
+    coincidencias por su cuenta — así, si un compás está partido en dos
+    filas por continuidad (misma pasada fusionada, ver _pasadas_por_compas),
+    esto devuelve naturalmente la PRIMERA fila (donde esa pasada realmente
+    empieza), no un fragmento suelto a mitad de compás.
+
+    Devuelve (segmento, numero_compas), o None si no hay ninguna
+    coincidencia (o no llega a haber esa pasada)."""
+    pasadas = _pasadas_por_compas(obra)
     for seg in segmentos_navegables(obra):
         if seg.compas_desde <= numero_compas <= seg.compas_hasta:
-            coincidencias += 1
-            if coincidencias == pasada:
+            if pasadas.get((seg.id, numero_compas)) == pasada:
                 return (seg, numero_compas)
     return None
 
@@ -715,25 +898,27 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     if not navegables:
         return [], True
 
-    resueltos_por_id = {info['segmento'].id: info for info in resolver_segmentos(obra)}
-
-    # La "pasada" de cada ocurrencia de compás y las marcas puntuales por
+    # La "pasada" de cada ocurrencia de compás, la notación (compás/
+    # armadura/tempo) resuelta compás a compás, y las marcas puntuales por
     # compás (ver MarcaTiempoCompas), más la fila de cierre — se arma una
     # sola vez acá (no adentro del loop de abajo) porque _anclas_globales
     # necesita ver TODAS las filas/marcas en orden para ubicar la posición
     # calculada global de cada una. Las dos fuentes (itinerario/compases)
     # nunca se combinan entre sí (ver _escala_en_posicion/_tiempo_real_en_posicion).
     todos_los_segmentos = list(obra.segmentos.order_by('orden'))
+    indice = _indice_notacion(obra)
     pasadas_por_compas = _pasadas_por_compas(obra)
+    _, notacion_por_compas = _resolver_notacion_por_compas(todos_los_segmentos, indice, pasadas_por_compas)
     marcas_por_compas_pasada = {
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
     }
     cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
     tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
     anclas_compases_globales, anclas_itinerario_globales, posicion_inicio_por_seg_compas = _anclas_globales(
-        navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
+        navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
     )
     posiciones_por_fila = {}  # cache: seg.id -> posiciones (ver _posiciones_calculadas_fila)
+    pulsos_por_compas_por_fila = {}  # cache: seg.id -> {compas: pulsos_por_compas}
 
     # Parte fraccionaria de desde_pulso (ej. 2.5 -> 0.5) — cuánto del primer
     # pulso EMITIDO ya "pasó" antes del punto de arranque pedido; se le
@@ -755,19 +940,30 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     while pos is not None:
         seg, compas = pos
         es_ultima_iteracion = (seg.orden, compas) >= (pos_hasta[0].orden, pos_hasta[1])
-        info = resueltos_por_id.get(seg.id, {})
-        bpm_inicio = info.get('bpm')
-        pulsos_compas = info.get('pulsos_por_compas')
+        info_c = notacion_por_compas.get((seg.id, compas), {})
+        bpm_inicio = info_c.get('bpm')
+        pulsos_compas = info_c.get('pulsos_compas')
 
-        if not (bpm_inicio and pulsos_compas):
+        if seg.id not in posiciones_por_fila:
+            posiciones_por_fila[seg.id] = _posiciones_calculadas_fila(seg, notacion_por_compas)
+        posiciones_fila = posiciones_por_fila[seg.id]
+
+        # El gate de completitud no puede mirar sólo el compás actual: un
+        # compás roto en OTRO punto de la MISMA fila (falta notación ahí)
+        # tira abajo el cálculo de posiciones de toda la fila (ver
+        # _posiciones_calculadas_fila), aunque el compás que se está
+        # emitiendo acá sí resuelva bien — mismo criterio todo-o-nada que
+        # ya usa _anclas_globales.
+        if not (bpm_inicio and pulsos_compas and posiciones_fila is not None):
             completo = False
             pulsos.append({
                 'segmento_id': seg.id,
                 'compas': compas,
+                'pasada': pasadas_por_compas.get((seg.id, compas)),
                 'es_primer_pulso_compas': True,
                 'acento': True,
-                'indicacion_compas': info.get('indicacion_compas'),
-                'armadura': info.get('armadura'),
+                'indicacion_compas': info_c.get('indicacion_compas'),
+                'armadura': info_c.get('armadura'),
                 'bpm': bpm_inicio,
                 'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
                 'bpm_llegada': seg.bpm_llegada,
@@ -775,6 +971,10 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                 'duracion': None,
             })
         else:
+            if seg.id not in pulsos_por_compas_por_fila:
+                pulsos_por_compas_por_fila[seg.id] = _pulsos_por_compas_de_fila(seg, notacion_por_compas)
+            pulsos_por_compas_fila = pulsos_por_compas_por_fila[seg.id]
+
             pulso_ini, pulso_fin = _rango_pulsos_del_compas(seg, compas, pulsos_compas)
             # pulso_ini/pulso_fin (originales, de la fila) siguen siendo la
             # base de idx_en_fila más abajo — la interpolación de tempo
@@ -785,12 +985,9 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                 pulso_ini_emitir = max(pulso_ini, int(desde_pulso))
             if es_ultima_iteracion and hasta_pulso is not None:
                 pulso_fin_emitir = min(pulso_fin, int(hasta_pulso))
-            total_pulsos_fila = _cantidad_pulsos_fila(seg, pulsos_compas)
-            offset_compas = _pulsos_antes_del_compas(seg, compas, pulsos_compas)
+            total_pulsos_fila = _cantidad_pulsos_fila(seg, pulsos_por_compas_fila)
+            offset_compas = _pulsos_antes_del_compas(seg, compas, pulsos_por_compas_fila)
 
-            if seg.id not in posiciones_por_fila:
-                posiciones_por_fila[seg.id] = _posiciones_calculadas_fila(seg, bpm_inicio, pulsos_compas)
-            posiciones_fila = posiciones_por_fila[seg.id]
             posicion_compas = posicion_inicio_por_seg_compas.get((seg.id, compas))
 
             for p in range(pulso_ini_emitir, pulso_fin_emitir + 1):
@@ -847,6 +1044,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                 pulsos.append({
                     'segmento_id': seg.id,
                     'compas': compas,
+                    'pasada': pasadas_por_compas.get((seg.id, compas)),
                     'pulso': p,
                     'pulsos_por_compas': int(pulsos_compas),
                     # Primer pulso EMITIDO de este compás (no necesariamente
@@ -861,8 +1059,8 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                     # punto de arranque no es el pulso 1 real y no debe
                     # marcarse como acentuado.
                     'acento': p == 1,
-                    'indicacion_compas': info.get('indicacion_compas'),
-                    'armadura': info.get('armadura'),
+                    'indicacion_compas': info_c.get('indicacion_compas'),
+                    'armadura': info_c.get('armadura'),
                     'bpm': round(bpm_pulso),
                     'variacion_tempo_display': seg.get_variacion_tempo_display() if seg.variacion_tempo else '',
                     'bpm_llegada': seg.bpm_llegada,
@@ -892,12 +1090,24 @@ def compases_desenrollados(obra):
     """Una entrada por CADA ocurrencia de compás de la obra completa (a
     diferencia de segmentos_navegables, que trabaja a nivel de fila del
     itinerario) — cada repetición (2da vez, D.C., etc.) es su propia
-    entrada, con su propia 'pasada'. Pensada para sincronizar_compases (tap
-    compás a compás, sincronización fina — ver MarcaTiempoCompas).
+    entrada, con su propia 'pasada'. Un compás partido en dos filas por
+    continuidad (salto que cae a mitad de compás — misma pasada fusionada,
+    ver _pasadas_por_compas) es UNA sola entrada, no dos: el segundo
+    fragmento no genera una entrada nueva, aunque dispare
+    es_primer_pulso_compas de nuevo en construir_plan. Pensada para
+    sincronizar_compases (tap compás a compás, sincronización fina — ver
+    MarcaTiempoCompas).
 
     Devuelve (entradas, completo): entradas es una lista de dicts, uno por
     ocurrencia, con segmento_id/compas/pasada/indicacion_compas/bpm/
     pulsos_por_compas (numérico, "4/4" -> 4.0 — ver _pulsos_por_compas)/
+    pulso_inicial (primer pulso REALMENTE tocado de esta ocurrencia — 1
+    salvo que la fila arranque a mitad de compás, ver Segmento.pulso_desde)/
+    pulso_final (último pulso tocado antes de pasar al compás siguiente o
+    cortar el rango — si un salto deja esta ocurrencia sin llegar al final
+    del compás, ver Segmento.pulso_hasta, queda menor que pulsos_por_compas;
+    en un compás partido en dos filas por continuidad, es el último pulso
+    del SEGUNDO fragmento, no del primero — ver más abajo)/
     tiempo_inicio_calculado (acumulado desde el primer compás de la obra,
     en segundos — None de ahí en más si en algún punto faltó bpm o
     indicación)/tiempo_inicio (real, si ya está marcado)/explicita (None si
@@ -920,12 +1130,14 @@ def compases_desenrollados(obra):
     marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
 
     entradas = []
+    entradas_por_pasada = {}  # (compas, pasada) -> dict ya agregado a `entradas`
     acumulado = 0.0
     for p in pulsos:
-        if p.get('es_primer_pulso_compas'):
-            pasada = pasadas.get((p['segmento_id'], p['compas']), 1)
-            marca = marcas.get((p['compas'], pasada))
-            entradas.append({
+        pasada = pasadas.get((p['segmento_id'], p['compas']), 1)
+        clave = (p['compas'], pasada)
+        if p.get('es_primer_pulso_compas') and clave not in entradas_por_pasada:
+            marca = marcas.get(clave)
+            entrada = {
                 'segmento_id': p['segmento_id'],
                 'compas': p['compas'],
                 'pasada': pasada,
@@ -933,11 +1145,17 @@ def compases_desenrollados(obra):
                 'armadura': p['armadura'],
                 'bpm': p['bpm'],
                 'pulsos_por_compas': _pulsos_por_compas(p['indicacion_compas']),
+                'pulso_inicial': p.get('pulso', 1),
+                'pulso_final': p.get('pulso', 1),
                 'tiempo_inicio_calculado': acumulado,
                 'tiempo_inicio': marca.tiempo_inicio if marca else None,
                 'explicita': marca.explicita if marca else None,
                 'es_cierre': False,
-            })
+            }
+            entradas.append(entrada)
+            entradas_por_pasada[clave] = entrada
+        if clave in entradas_por_pasada:
+            entradas_por_pasada[clave]['pulso_final'] = p.get('pulso', entradas_por_pasada[clave]['pulso_final'])
         if acumulado is not None:
             acumulado = (acumulado + p['duracion']) if p['duracion'] is not None else None
 
@@ -951,6 +1169,8 @@ def compases_desenrollados(obra):
             'armadura': None,
             'bpm': None,
             'pulsos_por_compas': None,
+            'pulso_inicial': None,
+            'pulso_final': None,
             'tiempo_inicio_calculado': acumulado,
             'tiempo_inicio': cierre.tiempo_inicio,
             'explicita': True if cierre.tiempo_inicio is not None else None,
@@ -975,10 +1195,13 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
     segmento = Segmento.objects.filter(pk=segmento_id).first()
     if segmento is None:
         return None
-    resueltos_por_id = {info['segmento'].id: info for info in resolver_segmentos(obra)}
-    info = resueltos_por_id.get(segmento.id, {})
-    bpm_inicio = info.get('bpm')
-    pulsos_compas = info.get('pulsos_por_compas')
+    indice = _indice_notacion(obra)
+    pasadas_por_compas = _pasadas_por_compas(obra)
+    todos_los_segmentos = list(obra.segmentos.order_by('orden'))
+    _, notacion_por_compas = _resolver_notacion_por_compas(todos_los_segmentos, indice, pasadas_por_compas)
+    info_c = notacion_por_compas.get((segmento.id, compas), {})
+    bpm_inicio = info_c.get('bpm')
+    pulsos_compas = info_c.get('pulsos_compas')
     if not (bpm_inicio and pulsos_compas):
         return None
     pulso_ini_compas, _ = _rango_pulsos_del_compas(segmento, compas, pulsos_compas)
@@ -987,23 +1210,24 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
     # _anclas_globales) — sólo cambia contra qué lista de anclas reales se
     # busca, según `fuente`; nunca se combinan entre sí.
     navegables = segmentos_navegables(obra)
-    pasadas_por_compas = _pasadas_por_compas(obra)
     marcas_por_compas_pasada = {
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
     }
-    todos_los_segmentos = list(obra.segmentos.order_by('orden'))
     cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
     tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
     anclas_compases, anclas_itinerario, posicion_inicio = _anclas_globales(
-        navegables, resueltos_por_id, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
+        navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada, tiempo_cierre,
     )
     anclas = anclas_compases if fuente == 'compases' else anclas_itinerario
 
     posicion_compas = posicion_inicio.get((segmento.id, compas))
     if posicion_compas is None:
         return None
-    posiciones_fila = _posiciones_calculadas_fila(segmento, bpm_inicio, pulsos_compas)
-    offset_compas_local = _pulsos_antes_del_compas(segmento, compas, pulsos_compas)
+    posiciones_fila = _posiciones_calculadas_fila(segmento, notacion_por_compas)
+    if posiciones_fila is None:
+        return None
+    pulsos_por_compas_fila = _pulsos_por_compas_de_fila(segmento, notacion_por_compas)
+    offset_compas_local = _pulsos_antes_del_compas(segmento, compas, pulsos_por_compas_fila)
     idx_en_fila = offset_compas_local + (pulso - pulso_ini_compas)
     if idx_en_fila < 0 or idx_en_fila + 1 >= len(posiciones_fila):
         return None

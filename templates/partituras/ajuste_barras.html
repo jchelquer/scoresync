@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Barras y compases — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -21,6 +21,15 @@
   .linea-barra.dudosa { background: rgba(231, 76, 60, 0.35); }
   .linea-barra:hover { background: rgba(255, 255, 255, 0.5); }
   .linea-barra.seleccionada { outline: 2px solid var(--ss-accent); outline-offset: 2px; }
+  .linea-borde-sistema {
+    position: absolute;
+    width: 4px;
+    margin-left: -2px;
+    cursor: pointer;
+    background: rgba(90, 170, 255, 0.45);
+    box-shadow: 0 0 2px #000;
+  }
+  .linea-borde-sistema:hover { background: rgba(90, 170, 255, 0.75); }
   .compas-caja {
     position: absolute;
     border-left: 1px dashed rgba(255, 255, 255, 0.18);
@@ -183,6 +192,15 @@
       <hr style="border-color: #2a4a47;">
       <form method="post" class="mb-2">
         {% csrf_token %}
+        <label for="input-umbral-contenido" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
+          {% translate "Umbral de contenido de sistema (%)" %}
+        </label>
+        <p class="small mb-2" style="color: var(--ss-text-muted)">
+          {% translate "Usado para detectar dónde empieza/termina realmente un sistema (bordes de compás extremos). Si la detección falla en esta página — se ve un borde muy corrido o nunca aparece — probá cambiar este valor: más alto para páginas escaneadas con ruido de fondo, más bajo si un contenido real muy tenue (una nota suelta) queda cortado." %}
+        </p>
+        <input type="number" name="umbral_contenido_pct" id="input-umbral-contenido"
+               class="form-control form-control-sm mb-2" min="0.05" max="50" step="0.05"
+               value="{{ umbral_contenido_pct|unlocalize }}">
         <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
           <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
         </button>
@@ -223,6 +241,15 @@ let ultimoClickTiempo = 0;
 // se llama sincrónicamente más abajo en este mismo script.
 let seleccionBarras = new Set();
 const btnBorrarSeleccion = document.getElementById('btn-borrar-seleccion');
+
+// Bordes de sistema detectados (contenido_x0/contenido_x1, ver
+// Sistema.contenido_x0/x1) que el usuario descartó en ESTA edición — claves
+// 'inicio-<id>'/'fin-<id>'. Sólo de cliente, como `seleccionBarras`: no se
+// persiste (recargar la página los vuelve a mostrar) — no son Barra reales
+// (no marcan el fin de un compás, reemplazan el arranque/cierre implícito
+// del sistema), así que no tienen el mismo click-toggle-aceptada/dudosa ni
+// doble-click-borrar que una barra normal — un solo clic los descarta.
+let bordesOcultos = new Set();
 
 function actualizarBotonSeleccion() {
   if (!btnBorrarSeleccion) return;
@@ -325,27 +352,19 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
 // Muchas partituras no tienen una barra de compás pegada al borde derecho
 // real del sistema — el pentagrama simplemente termina ahí. Ese tramo final
 // (entre la última barra aceptada y el borde) es un compás real igual, y
-// sin esto se quedaba sin caja y sin número. Lo agregamos como un límite
-// "virtual" (misma lógica que el arranque del sistema en x=0, que tampoco
-// tiene una barra real) sólo cuando el hueco final es comparable al ancho
-// típico de los demás compases del sistema — así no inventamos un compás
-// de más por el margen de imprecisión normal de la detección.
+// sin esto se quedaba sin caja y sin número. sistema.contenido_x1 (ver
+// Sistema.contenido_x1) ya trae la respuesta calculada del lado del
+// servidor con contenido real de la imagen, no con un supuesto de ancho
+// típico: viene en None cuando el sistema YA cierra con una barra real
+// (no hace falta ningún límite virtual — antes esto se detectaba a ciegas
+// por "el hueco final es comparable al ancho típico de compás", lo que
+// creaba un compás fantasma cuando esa barra de cierre real quedaba
+// seguida de blanco).
 function conCierreDeSistema(propias, sistemaId) {
   if (propias.length === 0) return propias;
-  const ultima = propias[propias.length - 1];
-  const hueco = 1 - ultima.x;
-  if (hueco <= 0) return propias;
-
-  const anchos = [];
-  let xPrev = 0;
-  propias.forEach(b => { anchos.push(b.x - xPrev); xPrev = b.x; });
-  anchos.sort((a, b) => a - b);
-  const anchoTipico = anchos[Math.floor(anchos.length / 2)];
-
-  if (hueco > anchoTipico * 0.4) {
-    return [...propias, { x: 1, sistema_id: sistemaId, _key: 'fin-sistema-' + sistemaId }];
-  }
-  return propias;
+  const s = sistemaDe(sistemaId);
+  if (!s || s.contenido_x1 == null || bordesOcultos.has('fin-' + sistemaId)) return propias;
+  return [...propias, { x: s.contenido_x1, sistema_id: sistemaId, _key: 'fin-sistema-' + sistemaId }];
 }
 
 function recalcularCompases() {
@@ -374,7 +393,14 @@ function recalcularCompases() {
   clavesViejas.forEach((k, idx) => repeticionesPorClave.set(k, repeticionesViejos[idx]));
 
   compases = [];
-  const xInicioPorSistema = new Map();
+  // Arranca con el borde real de contenido de cada sistema (clave/armadura
+  // — ver Sistema.contenido_x0), no con 0: el primer compás de un sistema
+  // no tiene ninguna barra a su izquierda contra la cual medir, así que
+  // sin esto quedaría en el borde de la imagen escaneada, no en donde
+  // realmente arranca el sistema.
+  const xInicioPorSistema = new Map(sistemas.map(s => [
+    s.id, (bordesOcultos.has('inicio-' + s.id) ? 0 : (s.contenido_x0 ?? 0)),
+  ]));
   aceptadasOrdenadas.forEach((b, idx) => {
     const xInicio = xInicioPorSistema.get(b.sistema_id) ?? 0;
     compases.push({
@@ -396,7 +422,7 @@ function marcarSucio() {
 
 function render() {
   recalcularCompases();
-  lienzo.querySelectorAll('.banda-sistema, .linea-barra, .compas-caja, .numero-compas').forEach(el => el.remove());
+  lienzo.querySelectorAll('.banda-sistema, .linea-barra, .linea-borde-sistema, .compas-caja, .numero-compas').forEach(el => el.remove());
 
   sistemas.forEach(s => {
     const banda = document.createElement('div');
@@ -412,6 +438,38 @@ function render() {
       render();
     });
     lienzo.appendChild(banda);
+  });
+
+  // Bordes de sistema detectados (arranque/cierre, ver Sistema.contenido_x0/
+  // x1) — se dibujan como si fueran una barra más (mismo tipo de línea),
+  // pero con su propio estilo (azul) para distinguirlos a simple vista de
+  // una barra real, y con un único gesto: un clic los descarta para esta
+  // edición (no el mismo click-toggle-aceptada/dudosa/doble-click-borrar
+  // que una barra normal, porque no son una barra — ver conCierreDeSistema/
+  // xInicioPorSistema).
+  sistemas.forEach(s => {
+    const bordes = [];
+    if (s.contenido_x0 != null && !bordesOcultos.has('inicio-' + s.id)) {
+      bordes.push({ x: s.contenido_x0, clave: 'inicio-' + s.id, titulo: '{% translate "Borde de sistema detectado (arranque) — clic para descartarlo en esta edición" %}' });
+    }
+    if (s.contenido_x1 != null && !bordesOcultos.has('fin-' + s.id)) {
+      bordes.push({ x: s.contenido_x1, clave: 'fin-' + s.id, titulo: '{% translate "Borde de sistema detectado (cierre) — clic para descartarlo en esta edición" %}' });
+    }
+    bordes.forEach(({ x, clave, titulo }) => {
+      const marca = document.createElement('div');
+      marca.className = 'linea-borde-sistema';
+      marca.style.left = (x * 100) + '%';
+      marca.style.top = (s.y * 100) + '%';
+      marca.style.height = (s.height * 100) + '%';
+      marca.title = titulo;
+      marca.addEventListener('click', e => {
+        e.stopPropagation();
+        bordesOcultos.add(clave);
+        marcarSucio();
+        render();
+      });
+      lienzo.appendChild(marca);
+    });
   });
 
   compases.forEach(c => {

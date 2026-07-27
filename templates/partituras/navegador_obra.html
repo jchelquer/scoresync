@@ -1101,6 +1101,21 @@
     }
   }
 
+  // Cuando no hay sistema anterior/siguiente en la página (el actual es el
+  // primero/último), NO conviene caer en el margen de página como borde —
+  // el margen detectado incluye cualquier título/pie de página real que
+  // haya ahí (la detección de márgenes no distingue eso de la música,
+  // sólo descarta artefactos de escaneo), así que puede dejar un hueco en
+  // blanco grande antes de que arranque el primer sistema. Se extiende, en
+  // cambio, UN ALTO DE SISTEMA más allá del propio borde — acotado a los
+  // bordes reales de la imagen [0,1], nunca al margen.
+  function extenderArriba(sistema) {
+    return Math.max(sistema.y - sistema.height, 0);
+  }
+  function extenderAbajo(sistema) {
+    return Math.min(sistema.y + sistema.height * 2, 1);
+  }
+
   function calcularCaja(entrada, pagina) {
     // entrada viene de porCompas: entrada.numero es el número REAL de la
     // fila en la base (el primero de la serie si repeticiones > 1), no
@@ -1119,8 +1134,8 @@
     // "lo visible en pantalla"), el borde es el margen de contenido ya
     // confirmado — así la caja no depende de qué haya scrolleado/zoomeado
     // nadie, sale sólo de datos ya guardados.
-    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : pagina.margen_y0;
-    const bottom = siguienteSistema ? (sistema.y + sistema.height + siguienteSistema.y) / 2 : pagina.margen_y1;
+    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : extenderArriba(sistema);
+    const bottom = siguienteSistema ? (sistema.y + sistema.height + siguienteSistema.y) / 2 : extenderAbajo(sistema);
 
     const delMismoSistema = pagina.compases
       .filter(c => c.sistema_orden === compas.sistema_orden)
@@ -1211,7 +1226,7 @@
 
     const topPrimero = idxAncla > 0
       ? (sistemas[idxAncla - 1].y + sistemas[idxAncla - 1].height + sistemas[idxAncla].y) / 2
-      : pagina.margen_y0;
+      : extenderArriba(sistemas[idxAncla]);
 
     // Arranca en el sistema ancla y suma los siguientes mientras entren en
     // el alto medido en vivo del contenedor — nunca queda vacía: si ni
@@ -1224,7 +1239,7 @@
       const siguienteSistema = sistemas[idx + 1] || null;
       const bottomEste = siguienteSistema
         ? (sistema.y + sistema.height + siguienteSistema.y) / 2
-        : pagina.margen_y1;
+        : extenderAbajo(sistema);
       if (incluidos.length > 0 && (bottomEste - topPrimero) > altoDisponibleFrac) break;
       incluidos.push(sistema);
       limiteInferior = bottomEste;
@@ -1537,10 +1552,10 @@
     const siguienteEnPagina = pagina.sistemas[idxEnPagina + 1] || null;
     const topAviso = anteriorEnPagina
       ? (anteriorEnPagina.y + anteriorEnPagina.height + sistemaAviso.y) / 2
-      : pagina.margen_y0;
+      : extenderArriba(sistemaAviso);
     const bottomAviso = siguienteEnPagina
       ? (sistemaAviso.y + sistemaAviso.height + siguienteEnPagina.y) / 2
-      : pagina.margen_y1;
+      : extenderAbajo(sistemaAviso);
 
     const py0 = (topAviso - ventana.top) * img.naturalHeight * escala;
     const py1 = (bottomAviso - ventana.top) * img.naturalHeight * escala;

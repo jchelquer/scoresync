@@ -3,6 +3,7 @@ from datetime import timedelta
 from urllib.parse import urlencode
 
 import cv2
+import numpy as np
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -25,10 +26,11 @@ from .services import (
     interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
     parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
-    resolver_segmentos, retroceder_compas, segmentos_navegables, tiempo_real_ancla,
+    resolver_notacion_en_compas, resolver_segmentos, retroceder_compas, segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
-    buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_margenes,
+    UMBRAL_CONTENIDO_SISTEMA_DEFAULT, UMBRAL_RELATIVO_BARRA_DOBLE, buscar_barra_en_rectangulo,
+    detectar_barras_candidatas, detectar_borde_contenido_sistema, detectar_borde_fin_sistema, detectar_margenes,
     detectar_sistemas, encontrar_ancla,
 )
 
@@ -872,8 +874,6 @@ def navegador_obra(request, pk):
             "obra": obra, "sin_contenido": True,
         })
 
-    resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
-
     # Preferencias guardadas de este usuario para esta obra (rango, loop,
     # velocidad, compases al aire, última parte elegida) — se usan como
     # segundo nivel de default, por debajo de la querystring: un link
@@ -986,7 +986,7 @@ def navegador_obra(request, pk):
         params = dict(base_params, segmento=seg.id, compas=compas)
         return f"?{urlencode(params)}"
 
-    info_actual = resueltos_por_id.get(segmento_actual.id, {})
+    info_actual = resolver_notacion_en_compas(obra, segmento_actual, compas_actual)
 
     return render(request, "partituras/navegador_obra.html", {
         "obra": obra,
@@ -1007,7 +1007,7 @@ def navegador_obra(request, pk):
         "velocidad_guardada": pref.velocidad if pref else 100,
         "compases_al_aire_guardado": pref.compases_al_aire if pref else 1,
         "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
-        "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else False,
+        "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else bool(obra.audio),
         "fuente_temporizacion_guardada": pref.fuente_temporizacion if pref else "compases",
         "modo_guardado": pref.modo_score if pref else "",
     })
@@ -1685,6 +1685,9 @@ def _detectar_barras_pagina(partitura, pagina):
     h, w = normalizada.shape[:2]
     rh, rw = recortada.shape[:2]
     alto_referencia = (pagina.ancla_linea_y1 - pagina.ancla_linea_y0) * h
+    umbral_contenido = pagina.umbral_contenido_sistema
+    if umbral_contenido is None:
+        umbral_contenido = UMBRAL_CONTENIDO_SISTEMA_DEFAULT
 
     for sistema in pagina.sistemas.order_by("orden"):
         # sistema.y/height son relativos a la página normalizada COMPLETA
@@ -1697,6 +1700,32 @@ def _detectar_barras_pagina(partitura, pagina):
         if sy1 <= sy0:
             continue
         candidatas = detectar_barras_candidatas(recortada, {'y0': sy0, 'y1': sy1}, alto_referencia=alto_referencia)
+
+        # Borde real de FIN de contenido de este sistema — el límite real
+        # del último compás. Si la última barra candidata cae ahí mismo (a
+        # una distancia comparable a la que separa los dos trazos de una
+        # barra doble — ver UMBRAL_RELATIVO_BARRA_DOBLE/_fusionar_barras_
+        # dobles en vision.py — no hace falta que sea doble, el criterio es
+        # sólo de distancia), esa barra no marca la división con un compás
+        # siguiente real (no hay ninguno en este sistema) — es redundante
+        # con contenido_x1 y se excluye de las Barra guardadas, para no
+        # dejar un dato editable que no representa nada real. contenido_x1
+        # pasa a ser SIEMPRE el límite del último compás (antes se guardaba
+        # None cuando coincidía con una barra real, dejando que esa barra
+        # hiciera de límite — eso es lo que se cambia acá).
+        fin_col = detectar_borde_fin_sistema(recortada, {'y0': sy0, 'y1': sy1}, alto_referencia=alto_referencia, umbral_frac=umbral_contenido)
+        xs_candidatas = [c['x'] for c in candidatas]
+        separaciones = [b - a for a, b in zip(xs_candidatas, xs_candidatas[1:])]
+        tipica = float(np.median(separaciones)) if len(separaciones) >= 1 else None
+        tolerancia_px = tipica * UMBRAL_RELATIVO_BARRA_DOBLE if tipica else max(3, (alto_referencia or (sy1 - sy0)) * 0.05)
+        ultima_aceptada_col = max((c['x'] for c in candidatas if c['aceptada']), default=None)
+        ya_es_barra = (
+            fin_col is not None and ultima_aceptada_col is not None
+            and abs(fin_col - ultima_aceptada_col) < tolerancia_px
+        )
+        if ya_es_barra:
+            candidatas = [c for c in candidatas if not (c['aceptada'] and c['x'] == ultima_aceptada_col)]
+
         Barra.objects.bulk_create([
             Barra(
                 sistema=sistema,
@@ -1706,6 +1735,17 @@ def _detectar_barras_pagina(partitura, pagina):
             )
             for c in candidatas
         ])
+
+        # Borde real de contenido de este sistema (clave/armadura) — usado
+        # por el JS de ajuste_barras.html como arranque del primer compás,
+        # en vez del placeholder x=0 (no hay ninguna barra a la izquierda
+        # del primer compás contra la cual medir). Mismo offset_x/w que la
+        # conversión de Barra.x de arriba, mismo sistema de coordenadas.
+        borde_col = detectar_borde_contenido_sistema(recortada, {'y0': sy0, 'y1': sy1}, alto_referencia=alto_referencia, umbral_frac=umbral_contenido)
+        sistema.contenido_x0 = (borde_col + offset_x) / w if borde_col is not None else None
+        sistema.contenido_x1 = (fin_col + offset_x) / w if fin_col is not None else None
+
+        sistema.save(update_fields=['contenido_x0', 'contenido_x1'])
 
 
 @login_required
@@ -1732,6 +1772,13 @@ def ajuste_barras(request, pk, numero):
 
         if accion == "redetectar":
             if pagina.ancla_confirmada and pagina.sistemas_confirmados:
+                umbral_pct_raw = request.POST.get("umbral_contenido_pct")
+                if umbral_pct_raw:
+                    try:
+                        pagina.umbral_contenido_sistema = max(0.0005, min(0.5, float(umbral_pct_raw) / 100))
+                        pagina.save(update_fields=["umbral_contenido_sistema"])
+                    except ValueError:
+                        pass
                 _detectar_barras_pagina(partitura, pagina)
                 pagina.barras_confirmadas = False
                 pagina.save(update_fields=["barras_confirmadas"])
@@ -1779,7 +1826,7 @@ def ajuste_barras(request, pk, numero):
     if not pagina.ignorada and not pagina.tiene_barras_detectadas:
         _detectar_barras_pagina(partitura, pagina)
 
-    sistemas = list(pagina.sistemas.order_by("orden").values("id", "y", "height"))
+    sistemas = list(pagina.sistemas.order_by("orden").values("id", "y", "height", "contenido_x0", "contenido_x1"))
     barras = list(
         Barra.objects.filter(sistema__pagina=pagina)
         .order_by("sistema__orden", "x")
@@ -1790,6 +1837,9 @@ def ajuste_barras(request, pk, numero):
         .order_by("sistema__orden", "x")
         .values("id", "sistema_id", "x", "y", "width", "height", "numero", "repeticiones")
     )
+    umbral_actual = pagina.umbral_contenido_sistema
+    if umbral_actual is None:
+        umbral_actual = UMBRAL_CONTENIDO_SISTEMA_DEFAULT
     return render(request, "partituras/ajuste_barras.html", {
         "partitura": partitura,
         "pagina": pagina,
@@ -1798,4 +1848,5 @@ def ajuste_barras(request, pk, numero):
         "barras_json": json.dumps(barras),
         "compases_json": json.dumps(compases),
         "numero_inicial": numero_inicial_pagina(pagina),
+        "umbral_contenido_pct": round(umbral_actual * 100, 1),
     })

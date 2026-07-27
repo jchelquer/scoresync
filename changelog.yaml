@@ -2,6 +2,24 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.12.0"
+  date: "2026-07-26"
+  changes:
+    - type: corregido
+      text: "La indicación de compás, la armadura y el tempo ahora se resuelven compás a compás dentro de una fila del itinerario, no una sola vez al principio de la fila — si dentro de una fila larga cambiaba alguno de estos a mitad de camino (p. ej. un cambio de tempo en el compás 10 de una fila que arranca en el compás 1), antes quedaba ignorado hasta la fila siguiente. Se nota tanto practicando como sincronizando por compases."
+    - type: corregido
+      text: "Al entrar directo a un compás donde cambia la indicación/armadura/tempo (por link, o al recomenzar ahí), el encabezado ya muestra el valor correcto desde el primer instante, sin esperar a Ejecutar."
+    - type: nuevo
+      text: "Botón Reiniciar también disponible en modo marcado de \"Sincronizar compases\" (antes sólo estaba en modo reproducción)."
+    - type: mejorado
+      text: "En \"Sincronizar compases\", los compases interpolados o todavía sin marcar se ven con un fondo más claro, para distinguirlos de un vistazo de los ya confirmados."
+    - type: mejorado
+      text: "La ventana del pentagrama (practicando y sincronizando por compases) ya no cae en el margen de la página cuando arranca o termina justo en un sistema — se extiende un alto de sistema hacia atrás/adelante para no cortar en medio de un título o una marca de edición."
+    - type: mejorado
+      text: "Al practicar con audio cargado, el modo \"con audio\" arranca activado por default."
+    - type: nuevo
+      text: "Detección automática de dónde arranca y termina realmente cada sistema (más allá del margen de página) al ajustar barras — el primer compás ya no arranca en el margen sino después de la clave/armadura, y el último ya no deja una barra ni un compás vacío de más cuando ya cierra bien con una barra real seguida de blanco. Ajustable por página (útil en páginas escaneadas con ruido de fondo) desde la pantalla de Ajuste de barras."
+
 - version: "1.11.0"
   date: "2026-07-26"
   changes:

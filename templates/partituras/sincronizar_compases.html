@@ -10,11 +10,13 @@
     padding: 0.4rem 0.6rem;
   }
   .fila-sync:hover { background: rgba(255,255,255,0.04); }
-  /* No-explícita (interpolada, ver botón Interpolar): definida ANTES de
+  /* No-explícita (interpolada, ver botón Interpolar) y sin-marcar (ni
+     siquiera hay un cálculo — tiempo_inicio en None): definidas ANTES de
      .armada a propósito, para que .armada gane la cascada cuando las dos
      clases coinciden en una fila — el compás armado siempre se ve armado,
-     sea o no explícita su marca. */
-  .fila-sync.no-explicita { background: rgba(255, 255, 255, 0.05); }
+     sea cual sea su estado de marcado. Fondo bien claro para que salte a
+     la vista, de un vistazo, qué falta terminar de marcar/confirmar. */
+  .fila-sync.no-explicita, .fila-sync.sin-marcar { background: rgba(255, 255, 255, 0.10); }
   .fila-sync.no-explicita .tiempo-real { opacity: 0.6; font-style: italic; }
   .fila-sync.armada {
     background: rgba(233, 69, 96, 0.18);
@@ -155,20 +157,29 @@
       <div class="card-body p-0">
         <div id="sync-filas" style="max-height: 60vh; overflow-y: auto;">
           {% for entrada in entradas %}
-          <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% endif %}"
+          <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% else %} sin-marcar{% endif %}"
                data-index="{{ forloop.counter0 }}"
                data-compas="{{ entrada.compas|default_if_none:'' }}"
                data-pasada="{{ entrada.pasada|default_if_none:'' }}"
                data-segmento-id="{{ entrada.segmento_id }}"
                data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}"
                data-explicita="{% if entrada.explicita %}1{% elif entrada.explicita == False %}0{% endif %}"
-               data-pulsos="{{ entrada.pulsos_por_compas|default_if_none:''|unlocalize }}">
+               data-pulsos="{{ entrada.pulsos_por_compas|default_if_none:''|unlocalize }}"
+               data-pulso-inicial="{{ entrada.pulso_inicial|default_if_none:''|unlocalize }}"
+               data-pulso-final="{{ entrada.pulso_final|default_if_none:''|unlocalize }}">
             <div class="d-flex justify-content-between">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
                   {% translate "— fin de la obra —" %}
                 {% else %}
                   {% translate "Compás" %} {{ entrada.compas }}{% if entrada.pasada > 1 %} <small style="color: var(--ss-text-muted)">({{ entrada.pasada }}ª {% translate "vez" %})</small>{% endif %}
+                  {% if entrada.pulso_inicial > 1 or entrada.pulso_final < entrada.pulsos_por_compas %}
+                  <small class="text-warning" title="{% translate 'Este tramo no cubre el compás completo — un salto cae a mitad de compás acá.' %}">
+                    {% if entrada.pulso_inicial > 1 %}{% translate "desde pulso" %} {{ entrada.pulso_inicial }}{% endif %}
+                    {% if entrada.pulso_inicial > 1 and entrada.pulso_final < entrada.pulsos_por_compas %}·{% endif %}
+                    {% if entrada.pulso_final < entrada.pulsos_por_compas %}{% translate "hasta pulso" %} {{ entrada.pulso_final }}{% endif %}
+                  </small>
+                  {% endif %}
                 {% endif %}
               </span>
               <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:''|unlocalize }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
@@ -289,7 +300,13 @@
   }
 
   function actualizarBotonesReproduccion() {
-    if (btnReiniciar) btnReiniciar.classList.toggle('d-none', !(modo === 'reproduccion' && estadoReproduccion === 'pausado'));
+    // En marcado, Reiniciar siempre está disponible (no hay estado de
+    // pausa que lo condicione, a diferencia de reproducción).
+    if (btnReiniciar) {
+      btnReiniciar.classList.toggle('d-none', !(
+        modo === 'marcado' || (modo === 'reproduccion' && estadoReproduccion === 'pausado')
+      ));
+    }
   }
 
   btnPlayPause.addEventListener('click', () => {
@@ -307,7 +324,14 @@
   });
   if (btnReiniciar) {
     btnReiniciar.addEventListener('click', () => {
-      if (modo === 'reproduccion') iniciarReproduccionDesde(primerIndiceSeleccion());
+      if (modo === 'reproduccion') {
+        iniciarReproduccionDesde(primerIndiceSeleccion());
+      } else {
+        // Mismo destino que Play en reproducción (primer seleccionado, o
+        // el compás 1 si no hay selección) — reposiciona el audio 2
+        // compases antes, mismo contexto que armar un compás por click.
+        armar(primerIndiceSeleccion(), { reposicionar: true });
+      }
     });
   }
   btnBack1.addEventListener('click', () => saltar(-1));
@@ -513,15 +537,14 @@
       primerPulsoTiempoRealGlobal = data.primer_pulso_tiempo_real;
       acumuladosRealesGlobal = [];
       pasadaPorPulsoGlobal = [];
-      const contador = {};
       let total = 0;
-      let pasadaActual = 1;
       pulsosGlobal.forEach((p) => {
-        if (p.es_primer_pulso_compas) {
-          contador[p.compas] = (contador[p.compas] || 0) + 1;
-          pasadaActual = contador[p.compas];
-        }
-        pasadaPorPulsoGlobal.push(pasadaActual);
+        // La pasada ya viene calculada del servidor (ver
+        // services._pasadas_por_compas) — ahí se sabe distinguir un compás
+        // partido en dos filas por continuidad (misma pasada fusionada) de
+        // una repetición real, algo que no se puede recalcular acá sólo
+        // mirando es_primer_pulso_compas por compás.
+        pasadaPorPulsoGlobal.push(p.pasada);
         acumuladosRealesGlobal.push(total);
         // duracion_compases puede ser null (tramo sin marca real, ver
         // construir_plan) — se suma 0 en vez de caer al calculado, así el
@@ -554,10 +577,14 @@
     // Compases seleccionados para el ajuste fino (ver más abajo) — se
     // pintan aparte en la partitura, además del armado/sonando, para ver
     // de un vistazo a cuáles les va a pegar el próximo ajuste.
-    const numerosSeleccionados = Array.from(seleccion)
+    const seleccionados = Array.from(seleccion)
       .map(i => filas[i])
       .filter(f => f.dataset.esCierre !== '1')
-      .map(f => parseInt(f.dataset.compas, 10));
+      .map(f => Object.assign({ numero: parseInt(f.dataset.compas, 10) }, fracDeFila(f)));
+
+    const sonando = compasSonando != null
+      ? { numero: compasSonando, fracIni: sonandoFracIni, fracFin: sonandoFracFin }
+      : null;
 
     if (modo === 'reproduccion') {
       // Acá no hay nada "armado para marcar" — el recorte se ancla en lo
@@ -566,7 +593,7 @@
       // dejar el panel vacío, pero sin pintar su caja roja (dibujarArmado=false).
       const numeroCrop = compasSonando != null ? compasSonando
         : (idxArmada >= 0 && filas[idxArmada].dataset.esCierre !== '1' ? parseInt(filas[idxArmada].dataset.compas, 10) : null);
-      mostrarCompas(numeroCrop, null, compasSonando, numerosSeleccionados, false);
+      mostrarCompas(numeroCrop, null, sonando, seleccionados, false);
       return;
     }
 
@@ -584,9 +611,24 @@
     const filaCrop = filas[idxCrop];
     const numeroCrop = filaCrop.dataset.esCierre === '1' ? null : parseInt(filaCrop.dataset.compas, 10);
     const filaArmada = filas[idxArmada];
-    const numeroArmado = filaArmada.dataset.esCierre === '1' ? null : parseInt(filaArmada.dataset.compas, 10);
-    mostrarCompas(numeroCrop, numeroArmado, compasSonando, numerosSeleccionados);
+    const armado = filaArmada.dataset.esCierre === '1' ? null
+      : Object.assign({ numero: parseInt(filaArmada.dataset.compas, 10) }, fracDeFila(filaArmada));
+    mostrarCompas(numeroCrop, armado, sonando, seleccionados);
   }
+
+  // Fracción [fracIni, fracFin] (0..1) del compás que esta fila REALMENTE
+  // cubre — ver Segmento.pulso_desde/pulso_hasta y
+  // services.compases_desenrollados (pulso_inicial/pulso_final). Default
+  // 0..1 (compás completo) si falta algún dato.
+  function fracDeFila(f) {
+    const n = parseFloat(f.dataset.pulsos);
+    const pi = parseFloat(f.dataset.pulsoInicial);
+    const pf = parseFloat(f.dataset.pulsoFinal);
+    if (!n || isNaN(pi) || isNaN(pf)) return { fracIni: 0, fracFin: 1 };
+    return { fracIni: (pi - 1) / n, fracFin: pf / n };
+  }
+
+  let sonandoFracIni = 0, sonandoFracFin = 1;
 
   function actualizarSonando() {
     const i = pulsoEnTiempo(audio.currentTime);
@@ -600,6 +642,9 @@
         f.classList.toggle('sonando', esSonando);
         if (esSonando) filaSonando = f;
       });
+      const fracSonando = filaSonando ? fracDeFila(filaSonando) : { fracIni: 0, fracFin: 1 };
+      sonandoFracIni = fracSonando.fracIni;
+      sonandoFracFin = fracSonando.fracFin;
       // Sólo en modo reproducción: en marcado el scroll ya lo maneja armar()
       // (la fila armada), y hacerlo también acá pelearía contra eso si el
       // tap está más atrás/adelante de lo que suena.
@@ -711,7 +756,7 @@
     // siempre pisa/promueve eso (ver marcar_tiempo_compas en el backend).
     fila.dataset.explicita = '1';
     fila.classList.add('marcada');
-    fila.classList.remove('no-explicita');
+    fila.classList.remove('no-explicita', 'sin-marcar');
     historialMarcas.push(idxArmada);
     // Sin esto, el plan usado por "sonando"/reproducción quedaba con las
     // duraciones de ANTES de esta marca — el ajuste no se reflejaba hasta
@@ -752,6 +797,7 @@
     tiempoEl.dataset.segundos = '';
     fila.dataset.explicita = '';
     fila.classList.remove('marcada', 'no-explicita');
+    fila.classList.add('sin-marcar');
     cargarPlanGlobal();
     actualizarDerivados();
     limpiarSeleccion();
@@ -794,6 +840,7 @@
         tiempoEl.dataset.segundos = segundos === null ? '' : String(segundos);
         fila.dataset.explicita = segundos === null ? '' : '1';
         fila.classList.toggle('marcada', segundos !== null);
+        fila.classList.toggle('sin-marcar', segundos === null);
         fila.classList.remove('no-explicita');
         cargarPlanGlobal();
         actualizarDerivados();
@@ -917,7 +964,7 @@
       tiempoEl.textContent = formatearTiempo(r.tiempo_inicio);
       tiempoEl.dataset.segundos = String(r.tiempo_inicio);
       fila.dataset.explicita = '0';
-      fila.classList.remove('marcada');
+      fila.classList.remove('marcada', 'sin-marcar');
       fila.classList.add('no-explicita');
     });
     if ((data.no_resueltos || []).length) {
@@ -953,6 +1000,7 @@
       tiempoEl.dataset.segundos = '';
       fila.dataset.explicita = '';
       fila.classList.remove('marcada', 'no-explicita');
+      fila.classList.add('sin-marcar');
     });
     avisoInterpolar.style.display = 'none';
     cargarPlanGlobal();
@@ -1101,12 +1149,27 @@
   const SISTEMAS_ANTES = 1;
   const SISTEMAS_ADELANTE = 2;
 
+  // Cuando no hay sistema anterior/siguiente en la página (el actual es el
+  // primero/último), NO conviene caer en el margen de página como borde —
+  // el margen detectado incluye cualquier título/pie de página real que
+  // haya ahí (la detección de márgenes no distingue eso de la música,
+  // sólo descarta artefactos de escaneo), así que puede dejar un hueco en
+  // blanco grande antes de que arranque el primer sistema. Se extiende, en
+  // cambio, UN ALTO DE SISTEMA más allá del propio borde — acotado a los
+  // bordes reales de la imagen [0,1], nunca al margen.
+  function extenderArriba(sistema) {
+    return Math.max(sistema.y - sistema.height, 0);
+  }
+  function extenderAbajo(sistema) {
+    return Math.min(sistema.y + sistema.height * 2, 1);
+  }
+
   function limitesSistema(pagina, sistema) {
     const idx = pagina.sistemas.findIndex(s => s.orden === sistema.orden);
     const anterior = pagina.sistemas[idx - 1] || null;
     const siguiente = pagina.sistemas[idx + 1] || null;
-    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : pagina.margen_y0;
-    const bottom = siguiente ? (sistema.y + sistema.height + siguiente.y) / 2 : pagina.margen_y1;
+    const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : extenderArriba(sistema);
+    const bottom = siguiente ? (sistema.y + sistema.height + siguiente.y) / 2 : extenderAbajo(sistema);
     return { top, bottom };
   }
 
@@ -1119,12 +1182,12 @@
     const idxInicial = Math.max(idx - SISTEMAS_ANTES, 0);
     const sistemaInicialReal = pagina.sistemas[idxInicial];
     const anterior = pagina.sistemas[idxInicial - 1] || null;
-    const top = anterior ? (anterior.y + anterior.height + sistemaInicialReal.y) / 2 : pagina.margen_y0;
+    const top = anterior ? (anterior.y + anterior.height + sistemaInicialReal.y) / 2 : extenderArriba(sistemaInicialReal);
 
     const idxFinal = Math.min(idx + SISTEMAS_ADELANTE, pagina.sistemas.length - 1);
     const sistemaFinal = pagina.sistemas[idxFinal];
     const siguiente = pagina.sistemas[idxFinal + 1] || null;
-    const bottom = siguiente ? (sistemaFinal.y + sistemaFinal.height + siguiente.y) / 2 : pagina.margen_y1;
+    const bottom = siguiente ? (sistemaFinal.y + sistemaFinal.height + siguiente.y) / 2 : extenderAbajo(sistemaFinal);
     return { top, bottom };
   }
 
@@ -1170,19 +1233,36 @@
     ctx.strokeRect(caja.x0, caja.y0 + 1, caja.bw, caja.bh - 2);
   }
 
+  // Recorta una caja de compás completa a la porción [fracIni, fracFin]
+  // (0..1) de su ancho — un tramo que no cubre el compás entero (ver
+  // fracDeFila/Segmento.pulso_desde-pulso_hasta) se pinta sólo en esa
+  // franja, no en el compás completo. Mismo criterio que
+  // renderizarCompasActualSync en navegador_obra.html.
+  function recortarCaja(caja, fracIni, fracFin) {
+    const ini = fracIni != null ? fracIni : 0;
+    const fin = fracFin != null ? fracFin : 1;
+    return {
+      x0: caja.x0 + ini * caja.bw,
+      y0: caja.y0,
+      bw: Math.max((fin - ini) * caja.bw, 1),
+      bh: caja.bh,
+    };
+  }
+
   // numeroCrop: define el recorte/crop (qué se VE) — null para la fila de
-  // cierre (no hay un compás puntual que recortar). numeroArmado: qué se
-  // pinta en rojo (lo armado para marcar) — puede ser DISTINTO de
-  // numeroCrop (ver refrescarPanelScore: seleccionar reposiciona la vista
-  // en el primer compás de la selección sin cambiar qué está armado).
-  // numeroSonando/numerosSeleccionados: opcionales — cada uno se dibuja
-  // sólo si cae dentro del MISMO recorte que ya se armó para numeroCrop
-  // (ver calcularCajaCompas); si numeroCrop es null no hay recorte
-  // posible, así que ninguno se llega a dibujar tampoco.
+  // cierre (no hay un compás puntual que recortar). armado: {numero,
+  // fracIni, fracFin} — qué se pinta en rojo (lo armado para marcar),
+  // puede ser DISTINTO del compás de numeroCrop (ver refrescarPanelScore:
+  // seleccionar reposiciona la vista en el primer compás de la selección
+  // sin cambiar qué está armado). sonando/seleccionados: mismo shape,
+  // opcionales — cada uno se dibuja sólo si cae dentro del MISMO recorte
+  // que ya se armó para numeroCrop (ver calcularCajaCompas); si numeroCrop
+  // es null no hay recorte posible, así que ninguno se llega a dibujar
+  // tampoco.
   // dibujarArmado (default true): en "modo reproducción" no hay nada
-  // "armado para marcar" — se pasa numeroArmado=null y no se pinta nada de
-  // rojo de todos modos.
-  async function mostrarCompas(numeroCrop, numeroArmado, numeroSonando, numerosSeleccionados, dibujarArmado) {
+  // "armado para marcar" — se pasa armado=null y no se pinta nada de rojo
+  // de todos modos.
+  async function mostrarCompas(numeroCrop, armado, sonando, seleccionados, dibujarArmado) {
     const miGeneracion = ++generacionMostrar;
     if (!geometria) return;
     if (numeroCrop == null) {
@@ -1237,20 +1317,20 @@
 
     // Seleccionados primero (fondo), armada y sonando encima — para que el
     // contorno rojo/verde no quede tapado por el de selección si coinciden.
-    (numerosSeleccionados || []).forEach((numero) => {
-      if (numero === numeroArmado || isNaN(numero)) return;
-      const caja = calcularCajaCompas(pagina, numero, bordesFranja, img, escala);
-      if (caja) dibujarCaja(ctx, caja, 'rgba(90, 170, 255, 0.22)', '#5aaaff');
+    (seleccionados || []).forEach((sel) => {
+      if (!sel || isNaN(sel.numero) || (armado && sel.numero === armado.numero)) return;
+      const caja = calcularCajaCompas(pagina, sel.numero, bordesFranja, img, escala);
+      if (caja) dibujarCaja(ctx, recortarCaja(caja, sel.fracIni, sel.fracFin), 'rgba(90, 170, 255, 0.22)', '#5aaaff');
     });
 
-    if (dibujarArmado !== false && numeroArmado != null) {
-      const cajaArmada = calcularCajaCompas(pagina, numeroArmado, bordesFranja, img, escala);
-      if (cajaArmada) dibujarCaja(ctx, cajaArmada, 'rgba(233, 69, 96, 0.28)', '#e94560');
+    if (dibujarArmado !== false && armado != null) {
+      const cajaArmada = calcularCajaCompas(pagina, armado.numero, bordesFranja, img, escala);
+      if (cajaArmada) dibujarCaja(ctx, recortarCaja(cajaArmada, armado.fracIni, armado.fracFin), 'rgba(233, 69, 96, 0.28)', '#e94560');
     }
 
-    if (numeroSonando != null) {
-      const cajaSonando = calcularCajaCompas(pagina, numeroSonando, bordesFranja, img, escala);
-      if (cajaSonando) dibujarCaja(ctx, cajaSonando, 'rgba(45, 201, 111, 0.28)', '#2dc96f');
+    if (sonando != null) {
+      const cajaSonando = calcularCajaCompas(pagina, sonando.numero, bordesFranja, img, escala);
+      if (cajaSonando) dibujarCaja(ctx, recortarCaja(cajaSonando, sonando.fracIni, sonando.fracFin), 'rgba(45, 201, 111, 0.28)', '#2dc96f');
     }
 
     // Números de compás de referencia sobre TODO lo que entra en el
@@ -1280,6 +1360,7 @@
     }
   }
 
+  actualizarBotonesReproduccion();
   cargarGeometria();
   {% endif %}
 })();

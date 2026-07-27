@@ -373,6 +373,15 @@ class Pagina(models.Model):
     compases_confirmados = models.BooleanField(default=False)
     ignorada = models.BooleanField(default=False, help_text="Página en blanco, portada, etc. — se excluye del análisis.")
 
+    # % (0-1) de tinta requerida en una columna para considerarla "con
+    # contenido" al buscar dónde empieza/termina realmente un sistema (ver
+    # vision._segmentos_contenido_sistema) — None usa el default global
+    # (vision.UMBRAL_CONTENIDO_SISTEMA_DEFAULT). No hay un valor universal:
+    # una página escaneada con ruido de fondo necesita uno más alto que una
+    # generada por editor; ajustable por página para cuando el usuario ve
+    # que la detección de bordes de sistema falla y sospecha de esto.
+    umbral_contenido_sistema = models.FloatField(null=True, blank=True)
+
     class Meta:
         unique_together = [('partitura', 'numero')]
         ordering = ['numero']
@@ -421,6 +430,18 @@ class Sistema(models.Model):
     height = models.FloatField(help_text="Alto relativo (0-1)")
     origen = models.CharField(max_length=10, choices=ORIGENES, default='auto')
     confirmado = models.BooleanField(default=False)
+    contenido_x0 = models.FloatField(
+        null=True, blank=True,
+        help_text="Columna real (0-1) donde arranca el contenido de este sistema (clave/armadura) — "
+                   "a diferencia del margen de página, que es un dato de toda la página. Vacío si no "
+                   "se pudo detectar (sistema vacío): el primer compás cae al margen en ese caso.",
+    )
+    contenido_x1 = models.FloatField(
+        null=True, blank=True,
+        help_text="Columna real (0-1) donde termina el contenido de este sistema, SÓLO cuando no "
+                   "coincide con la última barra aceptada (si coincide, esa barra ya cierra bien el "
+                   "compás y esto queda en None — no hace falta ningún límite virtual de cierre).",
+    )
 
     class Meta:
         ordering = ['pagina__numero', 'orden']
