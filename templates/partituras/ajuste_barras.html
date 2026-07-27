@@ -177,10 +177,14 @@
       <p class="small" style="color: var(--ss-text-muted)">
         {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número: aparecen dos cajitas, el número y cuántos compases vale (para un silencio de varios compases) — completá la que te resulte más cómoda, lo que sigue se acomoda solo. Nada se guarda hasta Confirmar." %}
       </p>
+      <p class="small" style="color: var(--ss-text-muted)">
+        {% translate "Borde de sistema (línea azul) — marca dónde arranca/termina de verdad el contenido, más allá del margen de página. Clic sobre la línea: la descarta. Clic en la zona antes de ella (o después, si es la de cierre): la reubica ahí — así se corrige de un solo clic si la detección se equivocó." %}
+      </p>
       <form method="post" id="form-barras">
         {% csrf_token %}
         <input type="hidden" name="barras" id="input-barras">
         <input type="hidden" name="compases" id="input-compases">
+        <input type="hidden" name="bordes_sistema" id="input-bordes-sistema">
         <button type="submit" name="accion" value="confirmar" class="btn btn-ss w-100 mb-2">
           {% translate "Confirmar" %}
           {% if pagina.numero < total %}→{% endif %}
@@ -242,14 +246,16 @@ let ultimoClickTiempo = 0;
 let seleccionBarras = new Set();
 const btnBorrarSeleccion = document.getElementById('btn-borrar-seleccion');
 
-// Bordes de sistema detectados (contenido_x0/contenido_x1, ver
-// Sistema.contenido_x0/x1) que el usuario descartó en ESTA edición — claves
-// 'inicio-<id>'/'fin-<id>'. Sólo de cliente, como `seleccionBarras`: no se
-// persiste (recargar la página los vuelve a mostrar) — no son Barra reales
-// (no marcan el fin de un compás, reemplazan el arranque/cierre implícito
-// del sistema), así que no tienen el mismo click-toggle-aceptada/dudosa ni
-// doble-click-borrar que una barra normal — un solo clic los descarta.
-let bordesOcultos = new Set();
+// Bordes de sistema (contenido_x0/contenido_x1, ver Sistema.contenido_x0/x1)
+// viven directo en `sistemas[i].contenido_x0/x1` (mutados en el cliente, ver
+// más abajo) — no son Barra reales (no marcan el fin de un compás, reemplazan
+// el arranque/cierre implícito del sistema), así que no tienen el mismo
+// click-toggle-aceptada/dudosa que una barra normal: un clic en la línea la
+// descarta (null), un clic en la zona muerta de su lado (antes de la primera
+// barra aceptada / después de la última) la reubica ahí — ver render()/
+// recalcularCompases(). A diferencia de antes, esto SÍ se manda a guardar
+// junto con barras/compases (ver el submit del formulario, más abajo) — no
+// es sólo un descarte efímero de esta edición.
 
 function actualizarBotonSeleccion() {
   if (!btnBorrarSeleccion) return;
@@ -363,7 +369,7 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
 function conCierreDeSistema(propias, sistemaId) {
   if (propias.length === 0) return propias;
   const s = sistemaDe(sistemaId);
-  if (!s || s.contenido_x1 == null || bordesOcultos.has('fin-' + sistemaId)) return propias;
+  if (!s || s.contenido_x1 == null) return propias;
   return [...propias, { x: s.contenido_x1, sistema_id: sistemaId, _key: 'fin-sistema-' + sistemaId }];
 }
 
@@ -398,9 +404,7 @@ function recalcularCompases() {
   // no tiene ninguna barra a su izquierda contra la cual medir, así que
   // sin esto quedaría en el borde de la imagen escaneada, no en donde
   // realmente arranca el sistema.
-  const xInicioPorSistema = new Map(sistemas.map(s => [
-    s.id, (bordesOcultos.has('inicio-' + s.id) ? 0 : (s.contenido_x0 ?? 0)),
-  ]));
+  const xInicioPorSistema = new Map(sistemas.map(s => [s.id, s.contenido_x0 ?? 0]));
   aceptadasOrdenadas.forEach((b, idx) => {
     const xInicio = xInicioPorSistema.get(b.sistema_id) ?? 0;
     compases.push({
@@ -433,29 +437,46 @@ function render() {
       if (e.target !== banda) return;  // una línea hija maneja su propio clic
       const r = lienzo.getBoundingClientRect();
       const fracX = (e.clientX - r.left) / r.width;
-      barras.push({ id: null, sistema_id: s.id, x: fracX, estado: 'aceptada', origen: 'manual', _key: 'nuevo-' + Math.random() });
+      // Clic en la zona MUERTA (antes de la primera barra aceptada, o
+      // después de la última) reubica el borde de sistema ahí en vez de
+      // agregar una barra — una barra sólo puede marcar el CIERRE de un
+      // compás, nunca el arranque del primero de un sistema; agregarla ahí
+      // creaba un compás fantasma entre el borde de la imagen y el clic (ver
+      // conCierreDeSistema/xInicioPorSistema). Si no hay ninguna barra
+      // aceptada todavía en el sistema, no hay zona muerta que distinguir —
+      // se comporta como siempre (agrega una barra cualquiera).
+      const propias = barras.filter(b => b.sistema_id === s.id && b.estado === 'aceptada').sort((a, b) => a.x - b.x);
+      const primera = propias[0];
+      const ultima = propias[propias.length - 1];
+      if (primera && fracX < primera.x) {
+        s.contenido_x0 = fracX;
+      } else if (ultima && fracX > ultima.x) {
+        s.contenido_x1 = fracX;
+      } else {
+        barras.push({ id: null, sistema_id: s.id, x: fracX, estado: 'aceptada', origen: 'manual', _key: 'nuevo-' + Math.random() });
+      }
       marcarSucio();
       render();
     });
     lienzo.appendChild(banda);
   });
 
-  // Bordes de sistema detectados (arranque/cierre, ver Sistema.contenido_x0/
-  // x1) — se dibujan como si fueran una barra más (mismo tipo de línea),
-  // pero con su propio estilo (azul) para distinguirlos a simple vista de
-  // una barra real, y con un único gesto: un clic los descarta para esta
-  // edición (no el mismo click-toggle-aceptada/dudosa/doble-click-borrar
-  // que una barra normal, porque no son una barra — ver conCierreDeSistema/
-  // xInicioPorSistema).
+  // Bordes de sistema (arranque/cierre, ver Sistema.contenido_x0/x1) — se
+  // dibujan como si fueran una barra más (mismo tipo de línea), pero con su
+  // propio estilo (azul) para distinguirlos a simple vista de una barra
+  // real. Un clic en la línea la descarta (null); un clic en la zona muerta
+  // de su lado la reubica (ver el handler de `banda` de arriba) — así que
+  // corregir una detectada mal es UN solo clic en el lugar correcto, sin
+  // pasar primero por descartarla.
   sistemas.forEach(s => {
     const bordes = [];
-    if (s.contenido_x0 != null && !bordesOcultos.has('inicio-' + s.id)) {
-      bordes.push({ x: s.contenido_x0, clave: 'inicio-' + s.id, titulo: '{% translate "Borde de sistema detectado (arranque) — clic para descartarlo en esta edición" %}' });
+    if (s.contenido_x0 != null) {
+      bordes.push({ x: s.contenido_x0, rol: 'inicio', titulo: '{% translate "Borde de sistema (arranque) — clic para descartarlo, clic en la zona antes de él para reubicarlo" %}' });
     }
-    if (s.contenido_x1 != null && !bordesOcultos.has('fin-' + s.id)) {
-      bordes.push({ x: s.contenido_x1, clave: 'fin-' + s.id, titulo: '{% translate "Borde de sistema detectado (cierre) — clic para descartarlo en esta edición" %}' });
+    if (s.contenido_x1 != null) {
+      bordes.push({ x: s.contenido_x1, rol: 'fin', titulo: '{% translate "Borde de sistema (cierre) — clic para descartarlo, clic en la zona después de él para reubicarlo" %}' });
     }
-    bordes.forEach(({ x, clave, titulo }) => {
+    bordes.forEach(({ x, rol, titulo }) => {
       const marca = document.createElement('div');
       marca.className = 'linea-borde-sistema';
       marca.style.left = (x * 100) + '%';
@@ -464,7 +485,7 @@ function render() {
       marca.title = titulo;
       marca.addEventListener('click', e => {
         e.stopPropagation();
-        bordesOcultos.add(clave);
+        if (rol === 'inicio') s.contenido_x0 = null; else s.contenido_x1 = null;
         marcarSucio();
         render();
       });
@@ -625,6 +646,8 @@ document.getElementById('form-barras').addEventListener('submit', () => {
   document.getElementById('input-barras').value = JSON.stringify(payloadBarras);
   const payloadCompases = compases.map(c => ({ sistema_id: c.sistema_id, x: c.x, width: c.width, numero: c.numero, repeticiones: c.repeticiones }));
   document.getElementById('input-compases').value = JSON.stringify(payloadCompases);
+  const payloadBordes = sistemas.map(s => ({ id: s.id, contenido_x0: s.contenido_x0, contenido_x1: s.contenido_x1 }));
+  document.getElementById('input-bordes-sistema').value = JSON.stringify(payloadBordes);
 });
 
 imagen.addEventListener('load', render);

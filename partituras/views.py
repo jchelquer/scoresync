@@ -1960,6 +1960,15 @@ def ajuste_barras(request, pk, numero):
                 if sistema:
                     Barra.objects.create(sistema=sistema, x=d["x"], estado=d["estado"], origen="manual")
 
+        try:
+            datos_bordes = json.loads(request.POST.get("bordes_sistema", "[]"))
+        except (json.JSONDecodeError, ValueError):
+            return HttpResponseBadRequest("JSON de bordes de sistema inválido")
+        for d in datos_bordes:
+            Sistema.objects.filter(id=d.get("id"), pagina=pagina).update(
+                contenido_x0=d.get("contenido_x0"), contenido_x1=d.get("contenido_x1"),
+            )
+
         if accion == "confirmar":
             try:
                 datos_compases = json.loads(request.POST.get("compases", "[]"))

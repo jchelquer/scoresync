@@ -554,14 +554,17 @@ class Sistema(models.Model):
     contenido_x0 = models.FloatField(
         null=True, blank=True,
         help_text="Columna real (0-1) donde arranca el contenido de este sistema (clave/armadura) — "
-                   "a diferencia del margen de página, que es un dato de toda la página. Vacío si no "
-                   "se pudo detectar (sistema vacío): el primer compás cae al margen en ese caso.",
+                   "a diferencia del margen de página, que es un dato de toda la página. Detectado "
+                   "automáticamente, pero también editable a mano desde Ajuste de barras (clic en la "
+                   "zona antes de la primera barra para reubicarlo, clic en la línea para descartarlo). "
+                   "Vacío si no se pudo detectar o si se descartó: el primer compás cae al margen en ese caso.",
     )
     contenido_x1 = models.FloatField(
         null=True, blank=True,
         help_text="Columna real (0-1) donde termina el contenido de este sistema, SÓLO cuando no "
                    "coincide con la última barra aceptada (si coincide, esa barra ya cierra bien el "
-                   "compás y esto queda en None — no hace falta ningún límite virtual de cierre).",
+                   "compás y esto queda en None — no hace falta ningún límite virtual de cierre). "
+                   "Igual que contenido_x0, también editable a mano desde Ajuste de barras.",
     )
 
     class Meta:

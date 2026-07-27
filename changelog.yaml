@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.1"
+  date: "2026-07-27"
+  changes:
+    - type: mejorado
+      text: "En \"Ajuste de barras\", la marca de comienzo/cierre de sistema (línea azul) ahora se corrige de un solo clic en el lugar correcto en vez de quedar pegada al margen de página si la detección automática se equivocaba y se descartaba — antes no había forma de indicar dónde arranca/termina de verdad, y la corrección se perdía al recargar la página; ahora queda guardada."
+
 - version: "1.15.0"
   date: "2026-07-27"
   changes:
