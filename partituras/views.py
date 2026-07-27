@@ -16,7 +16,7 @@ from django.views.decorators.http import require_POST
 from .forms import MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
 from .models import (
     Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura,
-    PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema,
+    PreferenciaObra, PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, rasterizar_pagina
@@ -307,11 +307,13 @@ def obras(request):
     admin ve TODO, publicado o no.
 
     Filtros y orden vienen todos de la querystring (GET simple, sin form
-    de sesión) — repertorio/ciclo/compositor/arreglista/publicada acotan
-    por campo, "q" es una búsqueda libre entre título/compositor/
-    arreglista/repertorio/ciclo. Repertorio y Ciclo se gestionan sólo desde
+    de sesión) — "q" es una búsqueda libre entre título/compositor/
+    arreglista/repertorio/ciclo (cubre lo que antes eran filtros de campo
+    separados para compositor/arreglista/título); ciclo y publicada
+    acotan por campo aparte. Repertorio y Ciclo se gestionan sólo desde
     el admin (ver Repertorio/Ciclo en models.py) — acá sólo se filtra por
-    los que ya existen."""
+    los que ya existen (no hace falta un filtro de Repertorio aparte: el
+    de Ciclo ya lo compone, ver Ciclo.__str__)."""
     if _es_admin(request.user):
         lista = Obra.objects.select_related("owner", "ciclo__repertorio")
     else:
@@ -325,15 +327,6 @@ def obras(request):
             Q(titulo__icontains=q) | Q(compositor__icontains=q) | Q(arreglista__icontains=q)
             | Q(ciclo__nombre__icontains=q) | Q(ciclo__repertorio__nombre__icontains=q)
         )
-    compositor = request.GET.get("compositor", "").strip()
-    if compositor:
-        lista = lista.filter(compositor__icontains=compositor)
-    arreglista = request.GET.get("arreglista", "").strip()
-    if arreglista:
-        lista = lista.filter(arreglista__icontains=arreglista)
-    repertorio_id = request.GET.get("repertorio", "").strip()
-    if repertorio_id:
-        lista = lista.filter(ciclo__repertorio_id=repertorio_id)
     ciclo_id = request.GET.get("ciclo", "").strip()
     if ciclo_id:
         lista = lista.filter(ciclo_id=ciclo_id)
@@ -349,7 +342,6 @@ def obras(request):
     return render(request, "partituras/obras.html", {
         "obras": lista,
         "es_admin": _es_admin(request.user),
-        "repertorios": Repertorio.objects.all(),
         "ciclos": Ciclo.objects.select_related("repertorio").all(),
         "filtros": request.GET,
         "orden": orden,

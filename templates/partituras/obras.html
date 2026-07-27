@@ -33,24 +33,7 @@
     <input type="text" name="q" value="{{ filtros.q }}" class="form-control form-control-sm" style="width: 12rem;" placeholder="{% translate 'título, compositor...' %}">
   </div>
   <div class="col-auto">
-    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compositor" %}</label>
-    <input type="text" name="compositor" value="{{ filtros.compositor }}" class="form-control form-control-sm" style="width: 10rem;">
-  </div>
-  <div class="col-auto">
-    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Arreglista" %}</label>
-    <input type="text" name="arreglista" value="{{ filtros.arreglista }}" class="form-control form-control-sm" style="width: 10rem;">
-  </div>
-  <div class="col-auto">
-    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Repertorio" %}</label>
-    <select name="repertorio" class="form-select form-select-sm">
-      <option value="">{% translate "Todos" %}</option>
-      {% for r in repertorios %}
-      <option value="{{ r.pk }}" {% if filtros.repertorio == r.pk|stringformat:"s" %}selected{% endif %}>{{ r.nombre }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-auto">
-    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Ciclo" %}</label>
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Repertorio-ciclo" %}</label>
     <select name="ciclo" class="form-select form-select-sm">
       <option value="">{% translate "Todos" %}</option>
       {% for c in ciclos %}
