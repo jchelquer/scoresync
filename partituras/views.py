@@ -15,8 +15,8 @@ from django.views.decorators.http import require_POST
 
 from .forms import MarcaNotacionFormSet, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
 from .models import (
-    Barra, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura, PreferenciaObra,
-    PreferenciaParte, Segmento, Sistema,
+    Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura,
+    PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, rasterizar_pagina
@@ -290,6 +290,13 @@ def _obra_completa(obra):
     return not any(p['duracion_compases'] is None for p in pulsos)
 
 
+ORDENES_BIBLIOTECA = {
+    "titulo": ("titulo",),
+    "compositor": ("compositor", "titulo"),
+    "repertorio": ("ciclo__repertorio__nombre", "ciclo__nombre", "titulo", "compositor"),
+}
+
+
 @login_required
 def obras(request):
     """La biblioteca: todas las obras PUBLICADAS (de cualquier usuario, no
@@ -297,14 +304,56 @@ def obras(request):
     su parte a cualquier obra), más las propias despublicadas (para que el
     dueño las siga viendo y pueda republicarlas) — también punto de entrada
     para crear una obra sin depender de tener ya una partitura cargada. Un
-    admin ve TODO, publicado o no."""
+    admin ve TODO, publicado o no.
+
+    Filtros y orden vienen todos de la querystring (GET simple, sin form
+    de sesión) — repertorio/ciclo/compositor/arreglista/publicada acotan
+    por campo, "q" es una búsqueda libre entre título/compositor/
+    arreglista/repertorio/ciclo. Repertorio y Ciclo se gestionan sólo desde
+    el admin (ver Repertorio/Ciclo en models.py) — acá sólo se filtra por
+    los que ya existen."""
     if _es_admin(request.user):
-        lista = Obra.objects.select_related("owner").order_by("titulo")
+        lista = Obra.objects.select_related("owner", "ciclo__repertorio")
     else:
-        lista = Obra.objects.select_related("owner").filter(
+        lista = Obra.objects.select_related("owner", "ciclo__repertorio").filter(
             Q(publicada=True) | Q(owner=request.user)
-        ).order_by("titulo")
-    return render(request, "partituras/obras.html", {"obras": lista, "es_admin": _es_admin(request.user)})
+        )
+
+    q = request.GET.get("q", "").strip()
+    if q:
+        lista = lista.filter(
+            Q(titulo__icontains=q) | Q(compositor__icontains=q) | Q(arreglista__icontains=q)
+            | Q(ciclo__nombre__icontains=q) | Q(ciclo__repertorio__nombre__icontains=q)
+        )
+    compositor = request.GET.get("compositor", "").strip()
+    if compositor:
+        lista = lista.filter(compositor__icontains=compositor)
+    arreglista = request.GET.get("arreglista", "").strip()
+    if arreglista:
+        lista = lista.filter(arreglista__icontains=arreglista)
+    repertorio_id = request.GET.get("repertorio", "").strip()
+    if repertorio_id:
+        lista = lista.filter(ciclo__repertorio_id=repertorio_id)
+    ciclo_id = request.GET.get("ciclo", "").strip()
+    if ciclo_id:
+        lista = lista.filter(ciclo_id=ciclo_id)
+    publicada = request.GET.get("publicada", "").strip()
+    if publicada == "si":
+        lista = lista.filter(publicada=True)
+    elif publicada == "no":
+        lista = lista.filter(publicada=False)
+
+    orden = request.GET.get("orden", "titulo")
+    lista = lista.order_by(*ORDENES_BIBLIOTECA.get(orden, ORDENES_BIBLIOTECA["titulo"]))
+
+    return render(request, "partituras/obras.html", {
+        "obras": lista,
+        "es_admin": _es_admin(request.user),
+        "repertorios": Repertorio.objects.all(),
+        "ciclos": Ciclo.objects.select_related("repertorio").all(),
+        "filtros": request.GET,
+        "orden": orden,
+    })
 
 
 @login_required

@@ -2,6 +2,16 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.14.0"
+  date: "2026-07-26"
+  changes:
+    - type: nuevo
+      text: "Repertorio y Ciclo para organizar la biblioteca (p. ej. las obras de una banda, sub-agrupadas por año) — cada obra puede asignarse a un ciclo. Se gestionan desde el panel de administración."
+    - type: nuevo
+      text: "Filtros en la biblioteca: búsqueda libre, compositor, arreglista, repertorio, ciclo y publicada/no."
+    - type: nuevo
+      text: "Orden en la biblioteca: por título, por compositor, o por repertorio/ciclo (y dentro de eso, título y compositor)."
+
 - version: "1.13.0"
   date: "2026-07-26"
   changes:

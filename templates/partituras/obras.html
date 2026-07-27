@@ -27,6 +27,59 @@
 </div>
 {% endif %}
 
+<form method="get" class="row g-2 align-items-end mb-4">
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Búsqueda libre" %}</label>
+    <input type="text" name="q" value="{{ filtros.q }}" class="form-control form-control-sm" style="width: 12rem;" placeholder="{% translate 'título, compositor...' %}">
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Compositor" %}</label>
+    <input type="text" name="compositor" value="{{ filtros.compositor }}" class="form-control form-control-sm" style="width: 10rem;">
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Arreglista" %}</label>
+    <input type="text" name="arreglista" value="{{ filtros.arreglista }}" class="form-control form-control-sm" style="width: 10rem;">
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Repertorio" %}</label>
+    <select name="repertorio" class="form-select form-select-sm">
+      <option value="">{% translate "Todos" %}</option>
+      {% for r in repertorios %}
+      <option value="{{ r.pk }}" {% if filtros.repertorio == r.pk|stringformat:"s" %}selected{% endif %}>{{ r.nombre }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Ciclo" %}</label>
+    <select name="ciclo" class="form-select form-select-sm">
+      <option value="">{% translate "Todos" %}</option>
+      {% for c in ciclos %}
+      <option value="{{ c.pk }}" {% if filtros.ciclo == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Publicada" %}</label>
+    <select name="publicada" class="form-select form-select-sm">
+      <option value="">{% translate "Todas" %}</option>
+      <option value="si" {% if filtros.publicada == "si" %}selected{% endif %}>{% translate "Sí" %}</option>
+      <option value="no" {% if filtros.publicada == "no" %}selected{% endif %}>{% translate "No" %}</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Ordenar por" %}</label>
+    <select name="orden" class="form-select form-select-sm">
+      <option value="titulo" {% if orden == "titulo" %}selected{% endif %}>{% translate "Título" %}</option>
+      <option value="compositor" {% if orden == "compositor" %}selected{% endif %}>{% translate "Compositor" %}</option>
+      <option value="repertorio" {% if orden == "repertorio" %}selected{% endif %}>{% translate "Repertorio/ciclo, título y compositor" %}</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-ss btn-sm">{% translate "Filtrar" %}</button>
+    <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">{% translate "Limpiar" %}</a>
+  </div>
+</form>
+
 {% if obras %}
 <div class="row g-3">
   {% for obra in obras %}
@@ -39,6 +92,9 @@
             {% if not obra.publicada %}<span class="badge bg-secondary ms-1">{% translate "Despublicada" %}</span>{% endif %}
           </h6>
           <p class="small mb-1" style="color: var(--ss-text-muted)">{{ obra.compositor|default:"—" }}{% if obra.arreglista %} · {% translate "arr." %} {{ obra.arreglista }}{% endif %}</p>
+          {% if obra.ciclo %}
+          <p class="small mb-1" style="color: var(--ss-text-muted)"><i class="bi bi-collection me-1"></i>{{ obra.ciclo.repertorio.nombre }} · {{ obra.ciclo.nombre }}</p>
+          {% endif %}
           <p class="small mb-0" style="color: var(--ss-text-muted)">
             {{ obra.partituras.count }} {% translate "parte(s)" %}
             {% if obra.owner_id == request.user.id %}

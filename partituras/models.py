@@ -21,6 +21,40 @@ def _upload_path_audio(instance, filename):
     return f"partituras/u{instance.owner_id}/audio_{uuid.uuid4().hex}.{ext}"
 
 
+class Repertorio(models.Model):
+    """Agrupador de más alto nivel para organizar la biblioteca (p.ej. las
+    obras de una banda) — compartido entre todos los usuarios, igual que la
+    biblioteca misma (ver Obra.ciclo). Se gestiona desde el admin, mismo
+    criterio que crear una Obra (ver views.crear_obra)."""
+    nombre = models.CharField(max_length=200, unique=True)
+
+    class Meta:
+        ordering = ['nombre']
+        verbose_name = 'Repertorio'
+        verbose_name_plural = 'Repertorios'
+
+    def __str__(self):
+        return self.nombre
+
+
+class Ciclo(models.Model):
+    """Sub-agrupador dentro de un Repertorio (p.ej. por año) — una Obra se
+    asigna a lo sumo a un Ciclo (ver Obra.ciclo); el Repertorio de esa obra
+    sale siempre de ciclo.repertorio, no hay un campo separado en Obra para
+    eso (evita duplicar el dato)."""
+    repertorio = models.ForeignKey(Repertorio, related_name='ciclos', on_delete=models.CASCADE)
+    nombre = models.CharField(max_length=200)
+
+    class Meta:
+        unique_together = [('repertorio', 'nombre')]
+        ordering = ['repertorio__nombre', 'nombre']
+        verbose_name = 'Ciclo'
+        verbose_name_plural = 'Ciclos'
+
+    def __str__(self):
+        return f"{self.repertorio} — {self.nombre}"
+
+
 class Obra(models.Model):
     """La pieza musical en sí, independiente de cualquier instrumento — varias
     Partitura (una por parte/instrumento) pueden pertenecer a la misma Obra.
@@ -30,6 +64,10 @@ class Obra(models.Model):
     titulo = models.CharField(max_length=200)
     compositor = models.CharField(max_length=200, blank=True)
     arreglista = models.CharField(max_length=200, blank=True)
+    ciclo = models.ForeignKey(
+        Ciclo, null=True, blank=True, on_delete=models.SET_NULL, related_name='obras',
+        help_text="Organización opcional de biblioteca (repertorio/ciclo) — no afecta la ejecución de la obra.",
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

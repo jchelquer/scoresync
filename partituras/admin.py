@@ -1,14 +1,27 @@
 from django.contrib import admin
 from .models import (
-    Barra, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, PreferenciaObra,
-    PreferenciaParte, Segmento, Sistema, Partitura,
+    Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, PreferenciaObra,
+    PreferenciaParte, Repertorio, Segmento, Sistema, Partitura,
 )
+
+
+@admin.register(Repertorio)
+class RepertorioAdmin(admin.ModelAdmin):
+    list_display = ('nombre',)
+    search_fields = ('nombre',)
+
+
+@admin.register(Ciclo)
+class CicloAdmin(admin.ModelAdmin):
+    list_display = ('nombre', 'repertorio')
+    list_filter = ('repertorio',)
+    search_fields = ('nombre', 'repertorio__nombre')
 
 
 @admin.register(Obra)
 class ObraAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'compositor', 'arreglista', 'owner', 'publicada', 'creado')
-    list_filter = ('publicada',)
+    list_display = ('titulo', 'compositor', 'arreglista', 'ciclo', 'owner', 'publicada', 'creado')
+    list_filter = ('publicada', 'ciclo__repertorio', 'ciclo')
     search_fields = ('titulo', 'compositor', 'arreglista', 'owner__username')
 
 
