@@ -1,9 +1,11 @@
 import json
 from datetime import timedelta
+from pathlib import Path
 from urllib.parse import urlencode
 
 import cv2
 import numpy as np
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -1417,10 +1419,33 @@ def iniciar_normalizacion(request, pk):
                 "confirmada": False,
             },
         )
+        # Recrear/rehacer la página puede cambiar rotacion_aplicada/
+        # angulo_deskew_aplicado respecto de un intento anterior — sin esto,
+        # una imagen cacheada de esa vez quedaba sirviéndose de nuevo con el
+        # valor viejo.
+        _invalidar_cache_imagen_normalizada(partitura.pk, numero)
 
     partitura.estado_normalizacion = "propuesta"
     partitura.save(update_fields=["estado_normalizacion"])
     return redirect("partituras:ajuste_orientacion", pk=pk, numero=1)
+
+
+def _ruta_cache_imagen_normalizada(partitura_id, numero):
+    """Dónde vive en disco el PNG cacheado de una página (ver
+    pagina_imagen_normalizada) — derivado, no un FileField: se regenera solo,
+    no hace falta modelo/migración ni que aparezca en el admin."""
+    return Path(settings.MEDIA_ROOT) / "cache_paginas" / str(partitura_id) / f"{numero}.png"
+
+
+def _invalidar_cache_imagen_normalizada(partitura_id, numero):
+    """Borra el PNG cacheado de esta página — llamar siempre que
+    rotacion_aplicada/angulo_deskew_aplicado cambien (ver ajuste_orientacion),
+    para que la próxima visita regenere la imagen con el valor nuevo en vez
+    de seguir sirviendo la vieja."""
+    try:
+        _ruta_cache_imagen_normalizada(partitura_id, numero).unlink()
+    except FileNotFoundError:
+        pass
 
 
 @login_required
@@ -1429,15 +1454,33 @@ def pagina_imagen_normalizada(request, pk, numero):
     confirmados) aplicados. No exige ser dueño de la partitura: además de
     usarse en la edición propia, score_geometria_obra arma URLs acá para
     mostrar el score durante la ejecución, y ahí puede ser una parte de
-    otro usuario (ver navegador_obra)."""
+    otro usuario (ver navegador_obra).
+
+    Cacheado en disco (rasterizar a 300 DPI + deskew + encode PNG es caro,
+    y esta vista se pide de nuevo cada vez que se muestra una página del
+    score, aunque su rotación/deskew no haya cambiado) — real, no
+    hipotético: un pico de reproceso repetido de esto mientras se navegaba
+    rápido entre obras fue lo que tumbó el worker de gunicorn por falta de
+    memoria en la VPS (2026-07-27). Sin cambios en los headers de caché del
+    lado del navegador (sigue en `no-store`) para no arriesgar servir una
+    imagen vieja justo en ajuste_orientacion, donde el usuario necesita ver
+    el resultado de rotar/enderezar al toque — el caché es sólo del lado
+    del servidor, invisible para el cliente."""
     partitura = get_object_or_404(Partitura, pk=pk)
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
-    img = rasterizar_pagina(partitura.archivo_original.path, numero, dpi=DPI)
-    corregida = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)
-    ok, buf = cv2.imencode(".png", corregida)
-    if not ok:
-        return HttpResponseBadRequest("No se pudo generar la imagen")
-    response = HttpResponse(buf.tobytes(), content_type="image/png")
+    ruta_cache = _ruta_cache_imagen_normalizada(pk, numero)
+    if ruta_cache.exists():
+        png_bytes = ruta_cache.read_bytes()
+    else:
+        img = rasterizar_pagina(partitura.archivo_original.path, numero, dpi=DPI)
+        corregida = normalizar_pagina(img, pagina.rotacion_aplicada, pagina.angulo_deskew_aplicado)
+        ok, buf = cv2.imencode(".png", corregida)
+        if not ok:
+            return HttpResponseBadRequest("No se pudo generar la imagen")
+        png_bytes = buf.tobytes()
+        ruta_cache.parent.mkdir(parents=True, exist_ok=True)
+        ruta_cache.write_bytes(png_bytes)
+    response = HttpResponse(png_bytes, content_type="image/png")
     response["Cache-Control"] = "no-store"
     return response
 
@@ -1455,15 +1498,18 @@ def ajuste_orientacion(request, pk, numero):
         if accion == "rotar_izq":
             pagina.rotacion_aplicada = (pagina.rotacion_aplicada - 90) % 360
             pagina.save(update_fields=["rotacion_aplicada"])
+            _invalidar_cache_imagen_normalizada(pk, numero)
         elif accion == "rotar_der":
             pagina.rotacion_aplicada = (pagina.rotacion_aplicada + 90) % 360
             pagina.save(update_fields=["rotacion_aplicada"])
+            _invalidar_cache_imagen_normalizada(pk, numero)
         elif accion == "ajustar_angulo":
             try:
                 pagina.angulo_deskew_aplicado = float(request.POST.get("angulo", 0))
             except ValueError:
                 pass
             pagina.save(update_fields=["angulo_deskew_aplicado"])
+            _invalidar_cache_imagen_normalizada(pk, numero)
         elif accion == "confirmar":
             if pagina.confirmada:
                 # Ya estaba confirmada: esto es un rehacer, no la primera

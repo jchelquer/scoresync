@@ -2,6 +2,18 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.3"
+  date: "2026-07-27"
+  changes:
+    - type: mejorado
+      text: "Las imágenes de página normalizadas (rotación/enderezado aplicados) ahora se cachean en el servidor en vez de recalcularse en cada visita — evita reprocesar innecesariamente cuando se navega entre obras, más liviano para el servidor."
+
+- version: "1.15.2"
+  date: "2026-07-27"
+  changes:
+    - type: corregido
+      text: "En \"Sincronizar compases\", un compás que todavía no tenía el tempo cargado en Notación (aunque sí la indicación de compás) se mostraba como \"hasta pulso 1\" en vez de como un compás entero — quedaba marcado como si se cortara a mitad de camino sin ser el caso."
+
 - version: "1.15.1"
   date: "2026-07-27"
   changes:
