@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.14.1"
+  date: "2026-07-26"
+  changes:
+    - type: nuevo
+      text: "Botón \"Editar\" en la ficha de la obra (dueño o admin) para corregir título, compositor, arreglista y ciclo — antes sólo se podía hacer desde el panel de administración."
+
 - version: "1.14.0"
   date: "2026-07-26"
   changes:

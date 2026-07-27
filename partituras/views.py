@@ -13,7 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import MarcaNotacionFormSet, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
+from .forms import MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
 from .models import (
     Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura,
     PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema,
@@ -397,6 +397,27 @@ def obra_detalle(request, pk):
         ),
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
+
+
+@login_required
+def editar_obra(request, pk):
+    """Corrige título/compositor/arreglista/ciclo de una obra ya creada —
+    del dueño o de un admin (mismo criterio que publicar/despublicar, ver
+    alternar_publicacion_obra). Repertorio/Ciclo en sí (qué existe) se
+    gestiona sólo desde el admin — acá sólo se elige entre los ya
+    creados (ver ObraEditForm)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    if request.method == "POST":
+        form = ObraEditForm(request.POST, instance=obra)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Se guardaron los cambios de "{obra}".')
+            return redirect("partituras:obra_detalle", pk=obra.pk)
+    else:
+        form = ObraEditForm(instance=obra)
+    return render(request, "partituras/editar_obra.html", {"form": form, "obra": obra})
 
 
 @login_required

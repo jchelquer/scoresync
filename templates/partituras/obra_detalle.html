@@ -17,7 +17,14 @@
         {{ obra.titulo }}
         {% if not obra.publicada %}<span class="badge bg-secondary ms-2 align-middle">{% translate "Despublicada" %}</span>{% endif %}
       </h4>
-      <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a Obras" %}</a>
+      <div class="d-flex gap-2">
+        {% if es_dueño or es_admin %}
+        <a href="{% url 'partituras:editar_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Editar' %}">
+          <i class="bi bi-pencil"></i>
+        </a>
+        {% endif %}
+        <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a Obras" %}</a>
+      </div>
     </div>
     {% if es_dueño or es_admin %}
     <form method="post" action="{% url 'partituras:alternar_publicacion_obra' obra.pk %}" class="form-check form-switch mb-3">
@@ -42,6 +49,7 @@
         <p class="small mb-3" style="color: var(--ss-text-muted)">
           {{ obra.compositor|default:"—" }}
           {% if obra.arreglista %} · {% translate "arr." %} {{ obra.arreglista }}{% endif %}
+          {% if obra.ciclo %} · <i class="bi bi-collection me-1"></i>{{ obra.ciclo.repertorio.nombre }} · {{ obra.ciclo.nombre }}{% endif %}
         </p>
 
         <h6 style="color: var(--ss-text-bright)">{% translate "Audio de referencia" %}</h6>

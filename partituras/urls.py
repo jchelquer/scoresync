@@ -19,6 +19,7 @@ urlpatterns = [
     path('obras/', views.obras, name='obras'),
     path('obras/nueva/', views.crear_obra, name='crear_obra'),
     path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
+    path('obras/<int:pk>/editar/', views.editar_obra, name='editar_obra'),
     path('obras/<int:pk>/borrar/', views.borrar_obra, name='borrar_obra'),
     path('obras/<int:pk>/publicar/', views.alternar_publicacion_obra, name='alternar_publicacion_obra'),
     path('obras/<int:pk>/subir/', views.subir, name='subir'),

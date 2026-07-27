@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load i18n %}
+{% block title %}Editar {{ obra.titulo }} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">{% translate "Editar obra" %}</h4>
+        <form method="post">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
+              {{ field }}
+              {% if field.name == 'ciclo' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">{% translate "Organización de biblioteca (opcional) — repertorios y ciclos se crean desde el admin." %}</div>
+              {% endif %}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-ss flex-fill">{% translate "Guardar" %}</button>
+            <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

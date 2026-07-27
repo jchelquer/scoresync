@@ -55,6 +55,24 @@ class ObraForm(forms.ModelForm):
         }
 
 
+class ObraEditForm(forms.ModelForm):
+    """Corrige los datos de una obra ya creada — título/compositor/
+    arreglista/ciclo (organización de biblioteca, ver Obra.ciclo). No el
+    audio (ver obra_detalle, que lo maneja aparte) ni publicada (switch
+    propio, ver alternar_publicacion_obra). Repertorio/Ciclo en sí se
+    gestionan sólo desde el admin — acá sólo se elige entre los que ya
+    existen."""
+    class Meta:
+        model = Obra
+        fields = ['titulo', 'compositor', 'arreglista', 'ciclo']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'ciclo': forms.Select(attrs={'class': 'form-select'}),
+        }
+
+
 class SegmentoForm(forms.ModelForm):
     class Meta:
         model = Segmento
