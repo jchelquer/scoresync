@@ -1791,16 +1791,44 @@
   // primero si estaba corriendo (mismo criterio que Anterior/Siguiente) y
   // reposiciona el audio real si "Ejecutar con audio" está activo (ver
   // irAPulso) — Continuar retoma desde ahí con el audio mandando de nuevo.
+  //
+  // En 'inicial' (detenido, antes de Ejecutar) no hay plan/pulsos cargados
+  // para saltar en memoria — en vez de bloquearse, el click escribe "desde
+  // c."/"vez" en el form de rango (única fuente de verdad, en vez de un
+  // estado paralelo) y reposiciona la vista previa con lo que ya hay
+  // (scoreGeometria, ver actualizarScore).
   if (scoreVentanaCanvas) {
     scoreVentanaCanvas.style.cursor = 'pointer';
     scoreVentanaCanvas.addEventListener('click', (e) => {
-      if (!planCargado || !ventanaActiva) return;
+      if (!ventanaActiva) return;
       const numero = compasEnClick(ventanaActiva, e);
       if (numero == null) return;
+      if (!planCargado) {
+        if (formRango) {
+          formRango.elements['desde_compas'].value = numero;
+          formRango.elements['desde_pasada'].value = 1;
+          programarGuardadoPreferencias();
+        }
+        actualizarScore(numero);
+        return;
+      }
       const idx = pulsos.findIndex(p => p.compas === numero && p.es_primer_pulso_compas);
       if (idx === -1) return; // ese compás no está en el rango cargado
       if (rafId) pausar();
       irAPulso(idx);
+    });
+  }
+
+  // Tipear "desde c." a mano también reposiciona/marca la partitura —
+  // sólo en 'inicial': en pausa/reproduciendo la posición real la manda el
+  // reloj/pulso vigente, este campo recién se aplica al próximo Ejecutar/
+  // Continuar (ver pedirPlan/rangoCambio).
+  const inputDesdeCompas = formRango ? formRango.elements['desde_compas'] : null;
+  if (inputDesdeCompas) {
+    inputDesdeCompas.addEventListener('input', () => {
+      if (planCargado || !scoreGeometria) return;
+      const numero = parseInt(inputDesdeCompas.value, 10);
+      if (!isNaN(numero) && scoreGeometria.porCompas[numero]) actualizarScore(numero);
     });
   }
   if (toggleNumerosCompas) toggleNumerosCompas.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });

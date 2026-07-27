@@ -2,6 +2,20 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.13.0"
+  date: "2026-07-26"
+  changes:
+    - type: nuevo
+      text: "En \"Sincronizar compases\", ahora se puede elegir compás haciendo clic directo en la partitura (antes sólo desde la lista) — funciona en modo marcado y en reproducción, con Shift+click para seleccionar un rango igual que en la lista."
+    - type: nuevo
+      text: "En \"Sincronizar compases\", nuevo selector de rango (\"desde compás/vez — hasta compás/vez\") como una tercera forma de elegir compases, sincronizada con la lista y con la partitura: elegir por cualquiera de las tres vías se refleja en las otras dos."
+    - type: nuevo
+      text: "En \"Sincronizar compases\", botones ↑/↓ junto a la partitura para pasear la ventana un sistema por vez y buscar un compás visualmente, sin tocar la selección vigente — un clic posterior (en la lista o en la partitura) hace que la ventana vuelva a seguirla."
+    - type: mejorado
+      text: "Al practicar, un clic en la partitura mientras el reproductor está detenido ya no se ignora — escribe directamente \"desde c.\" en el rango (que a su vez reposiciona la vista previa); tipear \"desde c.\" a mano también reposiciona la partitura."
+    - type: mejorado
+      text: "En la lista de compases, el bpm real calculado se lee más claro: \"88 bpm | 91 real\" en vez de \"88 bpm bpm real:91\"."
+
 - version: "1.12.0"
   date: "2026-07-26"
   changes:

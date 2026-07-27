@@ -90,9 +90,15 @@
   <div class="col-lg-7">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body">
-        <div class="form-check form-switch d-flex align-items-center mb-2">
-          <input class="form-check-input" type="checkbox" id="sync-toggle-numeros" checked>
-          <label class="form-check-label small ms-1" for="sync-toggle-numeros" style="color: var(--ss-text-muted);">{% translate "Mostrar números de compás" %}</label>
+        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+          <div class="form-check form-switch d-flex align-items-center mb-0">
+            <input class="form-check-input" type="checkbox" id="sync-toggle-numeros" checked>
+            <label class="form-check-label small ms-1" for="sync-toggle-numeros" style="color: var(--ss-text-muted);">{% translate "Mostrar números de compás" %}</label>
+          </div>
+          <div class="btn-group btn-group-sm" role="group" title="{% translate 'Buscar visualmente subiendo/bajando la ventana, sin cambiar la selección' %}">
+            <button id="sync-btn-sistema-anterior" type="button" class="btn btn-outline-light">↑</button>
+            <button id="sync-btn-sistema-siguiente" type="button" class="btn btn-outline-light">↓</button>
+          </div>
         </div>
         <div id="sync-score-wrap" style="position: relative; width: 100%; background: #222; border-radius: 4px; min-height: 120px; overflow: hidden;">
           <canvas id="sync-score-canvas" style="display: block; width: 100%;"></canvas>
@@ -139,6 +145,26 @@
           <button id="sync-btn-saltear" type="button" class="btn btn-outline-light btn-sm">⇥ {% translate "Saltear (Tab)" %}</button>
           <button id="sync-btn-deshacer" type="button" class="btn btn-outline-light btn-sm">↺ {% translate "Deshacer (Backspace)" %}</button>
           <span id="sync-armada-label" class="small ms-2" style="color: var(--ss-text-muted);"></span>
+        </div>
+        <div class="d-flex align-items-end gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
+          <span class="small" style="color: var(--ss-text-muted);">{% translate "Rango" %}:</span>
+          <div>
+            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "desde c." %}</label>
+            <input type="number" id="sync-rango-desde-compas" class="form-control form-control-sm" style="width: 4.5rem;">
+          </div>
+          <div>
+            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+            <input type="number" id="sync-rango-desde-vez" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
+          </div>
+          <div>
+            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "hasta c." %}</label>
+            <input type="number" id="sync-rango-hasta-compas" class="form-control form-control-sm" style="width: 4.5rem;">
+          </div>
+          <div>
+            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+            <input type="number" id="sync-rango-hasta-vez" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
+          </div>
+          <button id="sync-btn-rango-aplicar" type="button" class="btn btn-outline-light btn-sm">{% translate "Aplicar" %}</button>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
           <span class="small" style="color: var(--ss-text-muted);">{% translate "Ajuste fino" %}:</span>
@@ -236,6 +262,11 @@
   const btnAjusteP1 = document.getElementById('sync-btn-ajuste-p1');
   const labelSeleccion = document.getElementById('sync-seleccion-label');
   const toggleNumeros = document.getElementById('sync-toggle-numeros');
+  const rangoDesdeCompas = document.getElementById('sync-rango-desde-compas');
+  const rangoDesdeVez = document.getElementById('sync-rango-desde-vez');
+  const rangoHastaCompas = document.getElementById('sync-rango-hasta-compas');
+  const rangoHastaVez = document.getElementById('sync-rango-hasta-vez');
+  const btnRangoAplicar = document.getElementById('sync-btn-rango-aplicar');
 
   function getCookie(nombre) {
     const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
@@ -459,7 +490,7 @@
           const tSiguiente = tiempoDeFila(i + 1);
           spanBpm.textContent = (!pulsos || tActual == null || tSiguiente == null || tSiguiente <= tActual)
             ? ''
-            : ` · {% translate "bpm real:" %} ${Math.round(60 * pulsos / (tSiguiente - tActual))}`;
+            : ` | ${Math.round(60 * pulsos / (tSiguiente - tActual))} {% translate "real" %}`;
         }
       }
 
@@ -512,6 +543,12 @@
   // arriba porque refrescarPanelScore() ya la necesita.
   let seleccion = new Set();
   let anclaSeleccion = null;
+  // Paginado manual de la ventana de partitura (▲/▼, ver avanzarVerticalSync
+  // más abajo) — {pagina_numero, orden} del sistema que el usuario pidió
+  // ver, independiente de qué esté armado/seleccionado. null = seguir a la
+  // selección, como siempre. Toda selección real (lista, partitura o rango)
+  // la limpia — ver seleccionarFila.
+  let anclaManualSistema = null;
 
   // ── Compás "sonando" en vivo ─────────────────────────────────────────
   // Independiente del modo: mientras el audio suena, se sigue el MISMO plan
@@ -867,8 +904,54 @@
       ? seleccion.size + ' {% translate "compases seleccionados" %}'
       : '';
     actualizarBotonesSeleccion();
+    actualizarInputsRango();
     refrescarPanelScore();
   }
+
+  // Tercera vía de selección (rango numérico) sincronizada con las otras
+  // dos: acá se refleja hacia los inputs cualquier selección hecha por
+  // lista o partitura — las otras dos direcciones (rango → selección) las
+  // maneja aplicarRango().
+  function actualizarInputsRango() {
+    if (!rangoDesdeCompas) return;
+    const noCierre = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
+    if (!noCierre.length) return; // sin selección, no pisar lo que haya tipeado a mano
+    const ini = filas[Math.min(...noCierre)];
+    const fin = filas[Math.max(...noCierre)];
+    rangoDesdeCompas.value = ini.dataset.compas;
+    rangoDesdeVez.value = ini.dataset.pasada;
+    rangoHastaCompas.value = fin.dataset.compas;
+    rangoHastaVez.value = fin.dataset.pasada;
+  }
+
+  // Fila (índice) para un compás/vez puntual — pasada default 1 si no se
+  // especifica. -1 si no existe esa combinación.
+  function filaDeCompas(numero, pasada) {
+    const pasadaNum = pasada ? parseInt(pasada, 10) : 1;
+    return filas.findIndex(f => f.dataset.esCierre !== '1'
+      && parseInt(f.dataset.compas, 10) === numero && parseInt(f.dataset.pasada, 10) === pasadaNum);
+  }
+
+  function aplicarRango() {
+    const desde = parseInt(rangoDesdeCompas.value, 10);
+    if (isNaN(desde)) return;
+    const ini = filaDeCompas(desde, rangoDesdeVez.value);
+    const hastaVal = rangoHastaCompas.value;
+    const fin = hastaVal ? filaDeCompas(parseInt(hastaVal, 10), rangoHastaVez.value) : ini;
+    if (ini === -1 || fin === -1) return; // combinación compás/vez inexistente — no hay a dónde seleccionar
+    anclaManualSistema = null;
+    const iniOrden = Math.min(ini, fin), finOrden = Math.max(ini, fin);
+    seleccion = new Set();
+    for (let k = iniOrden; k <= finOrden; k++) seleccion.add(k);
+    anclaSeleccion = ini;
+    actualizarClasesSeleccion();
+    armar(iniOrden, { reposicionar: false }); // mismo criterio que Shift+click
+  }
+  if (btnRangoAplicar) btnRangoAplicar.addEventListener('click', aplicarRango);
+  [rangoDesdeCompas, rangoDesdeVez, rangoHastaCompas, rangoHastaVez].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarRango(); } });
+  });
 
   // Interpolar aparece si hay algo sin marca explícita en la selección
   // (sin marca, o con una interpolada de antes); Borrar aparece si hay
@@ -881,24 +964,36 @@
     if (btnBorrarTiempos) btnBorrarTiempos.classList.toggle('d-none', !conAlgo);
   }
 
+  // Lógica compartida por las TRES formas de elegir compás (lista, clic en
+  // partitura, selector de rango) — mismo comportamiento shift/ctrl/simple
+  // sea cual sea el origen del click, para que las tres queden
+  // sincronizadas por construcción (todas mutan el mismo seleccion/
+  // idxArmada y llaman al mismo refresco). También limpia el paginado
+  // manual de la ventana (ver anclaManualSistema) — una selección real
+  // hecha por cualquier vía hace que la ventana vuelva a seguirla.
+  function seleccionarFila(i, { shift, ctrlOrMeta, reposicionar }) {
+    anclaManualSistema = null;
+    if (shift && anclaSeleccion !== null) {
+      const ini = Math.min(anclaSeleccion, i), fin = Math.max(anclaSeleccion, i);
+      seleccion = new Set();
+      for (let k = ini; k <= fin; k++) seleccion.add(k);
+      actualizarClasesSeleccion();
+      armar(i, { reposicionar: false });
+    } else if (ctrlOrMeta) {
+      if (seleccion.has(i)) seleccion.delete(i); else seleccion.add(i);
+      anclaSeleccion = i;
+      actualizarClasesSeleccion();
+    } else {
+      seleccion = new Set([i]);
+      anclaSeleccion = i;
+      actualizarClasesSeleccion();
+      armar(i, { reposicionar: reposicionar !== false });
+    }
+  }
+
   filas.forEach((f, i) => {
     f.addEventListener('click', (e) => {
-      if (e.shiftKey && anclaSeleccion !== null) {
-        const ini = Math.min(anclaSeleccion, i), fin = Math.max(anclaSeleccion, i);
-        seleccion = new Set();
-        for (let k = ini; k <= fin; k++) seleccion.add(k);
-        actualizarClasesSeleccion();
-        armar(i, { reposicionar: false });
-      } else if (e.ctrlKey || e.metaKey) {
-        if (seleccion.has(i)) seleccion.delete(i); else seleccion.add(i);
-        anclaSeleccion = i;
-        actualizarClasesSeleccion();
-      } else {
-        seleccion = new Set([i]);
-        anclaSeleccion = i;
-        actualizarClasesSeleccion();
-        armar(i, { reposicionar: true });
-      }
+      seleccionarFila(i, { shift: e.shiftKey, ctrlOrMeta: e.ctrlKey || e.metaKey });
     });
     const tiempoEl = f.querySelector('.tiempo-real');
     tiempoEl.addEventListener('click', (e) => {
@@ -1087,6 +1182,11 @@
   let geometria = null;
   const imagenesPorPagina = {};
   let generacionMostrar = 0;
+  // Último recorte efectivamente dibujado — lo necesitan tanto el hit-test
+  // de clicks sobre la partitura (compasEnClickSync) como el paginado
+  // manual (sistemaVisibleActual, para saber desde dónde arrancar la
+  // primera vez que se aprieta ▲/▼).
+  let ultimoRenderSync = null;
   {% endif %}
 
   if (filas.length) armar(idxArmada, { reposicionar: true });
@@ -1249,6 +1349,85 @@
     };
   }
 
+  // Click sobre la partitura → número de compás, reusando calcularCajaCompas
+  // (ya en píxeles de canvas, mismo bucle que dibuja los números de
+  // referencia) contra el último recorte efectivamente dibujado
+  // (ultimoRenderSync, ver mostrarCompas). null si cayó fuera de cualquier
+  // caja o si todavía no se dibujó nada.
+  function compasEnClickSync(evt) {
+    if (!ultimoRenderSync) return null;
+    const { pagina, img, escala, bordesFranja } = ultimoRenderSync;
+    const rect = scoreCanvas.getBoundingClientRect();
+    const escalaX = scoreCanvas.width / rect.width;
+    const escalaY = scoreCanvas.height / rect.height;
+    const px = (evt.clientX - rect.left) * escalaX;
+    const py = (evt.clientY - rect.top) * escalaY;
+    for (const compas of pagina.compases) {
+      const caja = calcularCajaCompas(pagina, compas.numero, bordesFranja, img, escala);
+      if (caja && px >= caja.x0 && px <= caja.x0 + caja.bw && py >= caja.y0 && py <= caja.y0 + caja.bh) {
+        return compas.numero;
+      }
+    }
+    return null;
+  }
+
+  // Un número de compás no alcanza para elegir la FILA — puede repetirse
+  // (varias "veces"/pasadas). En vez de caer siempre a la 1ª ocurrencia
+  // (como hace navegador_obra.html), se toma la de índice más cercano a lo
+  // ya armado — así un click repetido sobre el mismo compás físico no
+  // salta siempre atrás si ya se está en la 2ª/3ª vez.
+  function filaMasCercana(numero, idxReferencia) {
+    let mejor = -1, mejorDist = Infinity;
+    filas.forEach((f, i) => {
+      if (f.dataset.esCierre === '1' || parseInt(f.dataset.compas, 10) !== numero) return;
+      const dist = Math.abs(i - idxReferencia);
+      if (dist < mejorDist) { mejor = i; mejorDist = dist; }
+    });
+    return mejor;
+  }
+
+  if (scoreCanvas) {
+    scoreCanvas.style.cursor = 'pointer';
+    scoreCanvas.addEventListener('click', (e) => {
+      const numero = compasEnClickSync(e);
+      if (numero == null) return;
+      const i = filaMasCercana(numero, idxArmada >= 0 ? idxArmada : 0);
+      if (i === -1) return;
+      seleccionarFila(i, { shift: e.shiftKey, ctrlOrMeta: e.ctrlKey || e.metaKey });
+    });
+  }
+
+  // Paginado manual (▲/▼) — de dónde partir la primera vez: el ancla
+  // manual si ya se estaba paginando, si no el sistema realmente mostrado
+  // en el último render (ver ultimoRenderSync/mostrarCompas).
+  function sistemaVisibleActual() {
+    if (anclaManualSistema) return anclaManualSistema;
+    if (ultimoRenderSync) return { pagina_numero: ultimoRenderSync.pagina.numero, orden: ultimoRenderSync.sistema.orden };
+    return null;
+  }
+
+  function avanzarVerticalSync(direccion) {
+    const actual = sistemaVisibleActual();
+    if (!actual || !geometria) return;
+    const pagina = geometria.porPagina[actual.pagina_numero];
+    if (!pagina) return;
+    const idx = pagina.sistemas.findIndex(s => s.orden === actual.orden);
+    const idxDestino = idx + direccion;
+    if (idxDestino >= 0 && idxDestino < pagina.sistemas.length) {
+      anclaManualSistema = { pagina_numero: pagina.numero, orden: pagina.sistemas[idxDestino].orden };
+    } else {
+      const paginaDestino = geometria.porPagina[pagina.numero + direccion];
+      if (!paginaDestino || !paginaDestino.sistemas.length) return;
+      const sistemaDestino = direccion > 0 ? paginaDestino.sistemas[0] : paginaDestino.sistemas[paginaDestino.sistemas.length - 1];
+      anclaManualSistema = { pagina_numero: paginaDestino.numero, orden: sistemaDestino.orden };
+    }
+    refrescarPanelScore();
+  }
+  const btnSistemaAnteriorSync = document.getElementById('sync-btn-sistema-anterior');
+  const btnSistemaSiguienteSync = document.getElementById('sync-btn-sistema-siguiente');
+  if (btnSistemaAnteriorSync) btnSistemaAnteriorSync.addEventListener('click', () => avanzarVerticalSync(-1));
+  if (btnSistemaSiguienteSync) btnSistemaSiguienteSync.addEventListener('click', () => avanzarVerticalSync(1));
+
   // numeroCrop: define el recorte/crop (qué se VE) — null para la fila de
   // cierre (no hay un compás puntual que recortar). armado: {numero,
   // fracIni, fracFin} — qué se pinta en rojo (lo armado para marcar),
@@ -1265,23 +1444,37 @@
   async function mostrarCompas(numeroCrop, armado, sonando, seleccionados, dibujarArmado) {
     const miGeneracion = ++generacionMostrar;
     if (!geometria) return;
-    if (numeroCrop == null) {
-      if (miGeneracion === generacionMostrar) {
-        mostrarErrorScore('{% translate "(fin de la obra — no hay un compás puntual que mostrar)" %}');
-      }
-      return;
+
+    // Con paginado manual activo (ver anclaManualSistema/avanzarVerticalSync),
+    // el sistema a mostrar sale de ahí, no de numeroCrop — sólo se sigue
+    // usando numeroCrop (más abajo) para decidir qué cajas de armado/
+    // sonando/seleccionados dibujar SI caen dentro de lo que se termina
+    // mostrando; si no caen, no se dibuja nada ahí (correcto: es sólo
+    // "estar mirando alrededor", sin tocar la selección real).
+    let pagina, sistema;
+    if (anclaManualSistema) {
+      pagina = geometria.porPagina[anclaManualSistema.pagina_numero];
+      sistema = pagina && pagina.sistemas.find(s => s.orden === anclaManualSistema.orden);
     }
-    const entrada = geometria.porCompas[numeroCrop];
-    if (!entrada) {
-      if (miGeneracion === generacionMostrar) {
-        mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numeroCrop + '.');
+    if (!pagina || !sistema) {
+      if (numeroCrop == null) {
+        if (miGeneracion === generacionMostrar) {
+          mostrarErrorScore('{% translate "(fin de la obra — no hay un compás puntual que mostrar)" %}');
+        }
+        return;
       }
-      return;
+      const entrada = geometria.porCompas[numeroCrop];
+      if (!entrada) {
+        if (miGeneracion === generacionMostrar) {
+          mostrarErrorScore('{% translate "Esta parte no tiene el compás" %} ' + numeroCrop + '.');
+        }
+        return;
+      }
+      pagina = geometria.porPagina[entrada.pagina_numero];
+      const compas = pagina.compases.find(c => c.numero === entrada.numero);
+      if (!compas) return;
+      sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
     }
-    const pagina = geometria.porPagina[entrada.pagina_numero];
-    const compas = pagina.compases.find(c => c.numero === entrada.numero);
-    if (!compas) return;
-    const sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
     const bordesFranja = limitesFranja(pagina, sistema);
 
     let img;
@@ -1314,6 +1507,8 @@
     const ctx = scoreCanvas.getContext('2d');
     ctx.clearRect(0, 0, w, h);
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+
+    ultimoRenderSync = { pagina, sistema, img, escala, bordesFranja };
 
     // Seleccionados primero (fondo), armada y sonando encima — para que el
     // contorno rojo/verde no quede tapado por el de selección si coinciden.
