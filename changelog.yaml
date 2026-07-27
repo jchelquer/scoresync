@@ -2,6 +2,18 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.0"
+  date: "2026-07-27"
+  changes:
+    - type: nuevo
+      text: "En \"Notación\", nueva sección de efectos de tempo: accelerando, ritardando y calderón, ubicados por compás (y opcionalmente pulso) — reemplazan lo que antes se cargaba como Tempo/BPM llegada en el itinerario, que dependía de en qué fila estaban escritos. Ahora un accelerando puede empezar a mitad de una fila y terminar a mitad de la fila siguiente sin cortarse en el borde."
+    - type: mejorado
+      text: "El itinerario ya no tiene columnas de Tempo ni BPM llegada — se cargan en Notación, junto con Indicación/Armadura/BPM base."
+    - type: nuevo
+      text: "En \"Sincronizar compases\", cada compás tiene un botón para ajustar la posición real de un pulso individual arrastrando un punto mientras se reproduce el audio (con una barra de referencia a velocidad constante como ayuda) — para corregir casos puntuales donde el cálculo automático no cae exactamente donde se escucha en la grabación."
+    - type: corregido
+      text: "El último compás de cada sistema ya no se muestra ni se recorta estirado hasta el margen de la página al practicar o sincronizar por compases — usa el borde real de cierre del sistema, que ya se detectaba bien desde la pantalla de Ajuste de barras pero no se aprovechaba acá."
+
 - version: "1.14.1"
   date: "2026-07-26"
   changes:

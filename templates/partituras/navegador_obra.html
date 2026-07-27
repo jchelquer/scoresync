@@ -215,8 +215,8 @@
       </span>
       <span id="nav-bpm-wrap" style="color: var(--ss-text); {% if not bpm %}display:none;{% endif %}">
         <i class="bi bi-speedometer2 me-1"></i><span id="nav-bpm">{{ bpm }} bpm</span>
-        <small id="nav-variacion-wrap" style="color: var(--ss-text-muted); {% if not segmento.variacion_tempo %}display:none;{% endif %}">
-          (<span id="nav-variacion">{{ segmento.get_variacion_tempo_display }}{% if segmento.bpm_llegada %} → {{ segmento.bpm_llegada }}{% endif %}</span>)
+        <small id="nav-variacion-wrap" style="color: var(--ss-text-muted); {% if not variacion_tempo_display %}display:none;{% endif %}">
+          (<span id="nav-variacion">{{ variacion_tempo_display }}{% if bpm_llegada %} → {{ bpm_llegada }}{% endif %}</span>)
         </small>
       </span>
       <span id="nav-tiempo-wrap" style="color: var(--ss-text); {% if not segmento.tiempo_inicio_calculado %}display:none;{% endif %}">
@@ -1137,12 +1137,6 @@
     const top = anterior ? (anterior.y + anterior.height + sistema.y) / 2 : extenderArriba(sistema);
     const bottom = siguienteSistema ? (sistema.y + sistema.height + siguienteSistema.y) / 2 : extenderAbajo(sistema);
 
-    const delMismoSistema = pagina.compases
-      .filter(c => c.sistema_orden === compas.sistema_orden)
-      .sort((a, b) => a.x - b.x);
-    const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
-    const proximoEnSistema = delMismoSistema[posEnSistema + 1] || null;
-
     // El PRIMER compás de un sistema puede tener x=0 en los datos (antes
     // del margen de la página — ver Compas.x) porque nace antes del borde
     // izquierdo de lo que realmente está dibujado (el contenido arranca en
@@ -1150,7 +1144,15 @@
     // dentro de la caja (recorte parcial, cursor) queda corrido porque el
     // ancho de referencia (right-left) sale más grande que el real.
     const left = Math.max(compas.x, pagina.margen_x0);
-    const right = proximoEnSistema ? proximoEnSistema.x : pagina.margen_x1;
+    // right = compas.x + compas.width, NUNCA "next compás, si no margen de
+    // página" — compas.width ya incorpora el borde real de cierre del
+    // sistema (Sistema.contenido_x1, ver ajuste_barras.html/
+    // recalcularCompases) tanto para un compás intermedio (cierra con la
+    // barra siguiente) como para el ÚLTIMO de un sistema (cierra con esa
+    // barra real O con el borde de contenido detectado si la barra final
+    // es espúrea — ver V1.12.0). Usar el margen de página ahí ignoraba ese
+    // dato ya confirmado y mostraba el compás estirado hasta el margen.
+    const right = compas.x + compas.width;
 
     // Caja completa entre barras — si es un silencio de varios compases
     // (repeticiones > 1) NO se recorta a la porción de este número puntual:

@@ -13,10 +13,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .forms import MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm, PartituraForm, SegmentoFormSet
+from .forms import (
+    EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm, PartituraForm,
+    SegmentoFormSet,
+)
 from .models import (
-    Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, Partitura,
-    PreferenciaObra, PreferenciaParte, Segmento, Sistema,
+    Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
+    Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, rasterizar_pagina
@@ -26,7 +29,8 @@ from .services import (
     interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
     parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
-    resolver_notacion_en_compas, resolver_segmentos, retroceder_compas, segmentos_navegables, tiempo_real_ancla,
+    resolver_efecto_tempo_en_compas, resolver_notacion_en_compas, resolver_segmentos, retroceder_compas,
+    segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
     UMBRAL_CONTENIDO_SISTEMA_DEFAULT, UMBRAL_RELATIVO_BARRA_DOBLE, buscar_barra_en_rectangulo,
@@ -615,6 +619,73 @@ def marcar_tiempo_compas(request, pk):
     })
 
 
+@login_required
+@require_POST
+def marcar_tiempo_pulso(request, pk):
+    """Guarda (o borra) el tiempo real de UN pulso puntual dentro de una
+    ocurrencia de compás (compas+pasada+pulso) — ancla más fina que
+    MarcaTiempoCompas, misma fuente "por compases" (ver
+    services._anclas_globales). Se llama por fetch() desde el arrastre de
+    pulsos en sincronizar_compases.html, mismo criterio que
+    marcar_tiempo_compas: sin pantalla ni redirect asociado."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        compas = int(request.POST.get("compas"))
+        pasada = int(request.POST.get("pasada"))
+        pulso = int(request.POST.get("pulso"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "compás/pasada/pulso inválido"}, status=400)
+
+    segundos_raw = request.POST.get("segundos")
+    if segundos_raw in (None, ""):
+        MarcaTiempoPulso.objects.filter(obra=obra, compas=compas, pasada=pasada, pulso=pulso).delete()
+        return JsonResponse({"ok": True, "compas": compas, "pasada": pasada, "pulso": pulso, "tiempo_inicio": None})
+
+    try:
+        segundos = float(segundos_raw)
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "segundos inválido"}, status=400)
+    marca, _creada = MarcaTiempoPulso.objects.update_or_create(
+        obra=obra, compas=compas, pasada=pasada, pulso=pulso,
+        defaults={"tiempo_inicio": timedelta(seconds=max(segundos, 0)), "explicita": True},
+    )
+    return JsonResponse({
+        "ok": True, "compas": compas, "pasada": pasada, "pulso": pulso,
+        "tiempo_inicio": str(marca.tiempo_inicio),
+    })
+
+
+@login_required
+def pulsos_compas_actual(request, pk):
+    """Tiempo real ACTUAL (explícito o interpolado) de cada pulso de una
+    ocurrencia de compás puntual — usado para posicionar los puntos
+    arrastrables al abrir el panel de "ajustar pulsos" en
+    sincronizar_compases.html, antes de que el usuario corrija nada.
+    GET segmento/compas/pasada."""
+    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    try:
+        segmento_id = int(request.GET.get("segmento"))
+        compas = int(request.GET.get("compas"))
+        pasada = int(request.GET.get("pasada"))
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "segmento/compás/pasada inválido"}, status=400)
+
+    segmento = get_object_or_404(Segmento, pk=segmento_id, obra=obra)
+    info = resolver_notacion_en_compas(obra, segmento, compas)
+    pulsos_compas = info.get("pulsos_compas")
+    if not pulsos_compas:
+        return JsonResponse({"ok": False, "error": "no se pudo resolver la notación de este compás"}, status=400)
+
+    explicitos = set(
+        MarcaTiempoPulso.objects.filter(obra=obra, compas=compas, pasada=pasada).values_list("pulso", flat=True)
+    )
+    pulsos = []
+    for pulso in range(1, int(pulsos_compas) + 1):
+        tiempo = tiempo_real_ancla(obra, segmento_id, compas, pulso, "compases")
+        pulsos.append({"pulso": pulso, "tiempo_inicio": tiempo, "explicita": pulso in explicitos})
+    return JsonResponse({"ok": True, "compas": compas, "pasada": pasada, "pulsos": pulsos})
+
+
 def _parsear_compas_pasada_lista(texto):
     """"5:1,5:2,6:1" -> [(5,1),(5,2),(6,1)] — formato compartido en que el
     cliente manda una selección múltiple de sincronizar_compases.html
@@ -831,30 +902,45 @@ def itinerario_obra(request, pk):
 @login_required
 def notacion_obra(request, pk):
     """Tabla editable de las marcas de notación de la obra (indicación de
-    compás, armadura, tempo base) — hechos de la PARTITURA por posición
-    (compás), no del itinerario (ver MarcaNotacion). Mismo patrón que
-    itinerario_obra: un formset de Django para "llenar una tabla", sin
-    orden propio que renumerar."""
+    compás, armadura, tempo base — ver MarcaNotacion) y de sus efectos de
+    tempo (accelerando/ritardando/calderón — ver EfectoTempo): dos formsets
+    en la misma pantalla, ambos hechos de la PARTITURA por posición
+    (compás[,pulso]), no del itinerario. Mismo patrón que itinerario_obra:
+    formsets de Django para "llenar una tabla", sin orden propio que
+    renumerar."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
-    queryset = MarcaNotacion.objects.filter(obra=obra).order_by("tipo", "compas", "pasada")
+    queryset_notacion = MarcaNotacion.objects.filter(obra=obra).order_by("tipo", "compas", "pasada")
+    queryset_efectos = EfectoTempo.objects.filter(obra=obra).order_by("compas_desde", "pulso_desde")
 
     if request.method == "POST":
-        formset = MarcaNotacionFormSet(request.POST, queryset=queryset, prefix="notacion")
-        if formset.is_valid():
-            instancias = formset.save(commit=False)
-            for instancia in instancias:
-                instancia.obra = obra
-                instancia.save()
-            for eliminada in formset.deleted_objects:
-                eliminada.delete()
-            recalcular_tiempos_calculados(obra)
+        formset = MarcaNotacionFormSet(request.POST, queryset=queryset_notacion, prefix="notacion")
+        formset_efectos = EfectoTempoFormSet(request.POST, queryset=queryset_efectos, prefix="efectos")
+        if formset.is_valid() and formset_efectos.is_valid():
+            with transaction.atomic():
+                instancias = formset.save(commit=False)
+                for instancia in instancias:
+                    instancia.obra = obra
+                    instancia.save()
+                for eliminada in formset.deleted_objects:
+                    eliminada.delete()
+
+                instancias_efectos = formset_efectos.save(commit=False)
+                for instancia in instancias_efectos:
+                    instancia.obra = obra
+                    instancia.save()
+                for eliminada in formset_efectos.deleted_objects:
+                    eliminada.delete()
+
+                recalcular_tiempos_calculados(obra)
             return redirect("partituras:notacion_obra", pk=pk)
     else:
-        formset = MarcaNotacionFormSet(queryset=queryset, prefix="notacion")
+        formset = MarcaNotacionFormSet(queryset=queryset_notacion, prefix="notacion")
+        formset_efectos = EfectoTempoFormSet(queryset=queryset_efectos, prefix="efectos")
 
     return render(request, "partituras/notacion_obra.html", {
         "obra": obra,
         "formset": formset,
+        "formset_efectos": formset_efectos,
     })
 
 
@@ -1049,6 +1135,7 @@ def navegador_obra(request, pk):
         return f"?{urlencode(params)}"
 
     info_actual = resolver_notacion_en_compas(obra, segmento_actual, compas_actual)
+    variacion_tempo_display, bpm_llegada = resolver_efecto_tempo_en_compas(obra, segmento_actual, compas_actual)
 
     return render(request, "partituras/navegador_obra.html", {
         "obra": obra,
@@ -1057,6 +1144,8 @@ def navegador_obra(request, pk):
         "indicacion_compas": info_actual.get("indicacion_compas"),
         "armadura": info_actual.get("armadura"),
         "bpm": info_actual.get("bpm"),
+        "variacion_tempo_display": variacion_tempo_display,
+        "bpm_llegada": bpm_llegada,
         "url_siguiente": url_para(siguiente),
         "url_anterior": url_para(anterior),
         "en_fin_de_rango": en_fin_de_rango and not loop,

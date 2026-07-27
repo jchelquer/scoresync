@@ -45,6 +45,44 @@
   .btn-ajuste-pos:hover { background: rgba(45, 201, 111, 0.3); color: var(--ss-text-bright); }
   .btn-ajuste-pos-fuerte { background: rgba(45, 201, 111, 0.32); border-color: rgba(45, 201, 111, 0.7); }
   .btn-ajuste-pos-fuerte:hover { background: rgba(45, 201, 111, 0.46); }
+
+  /* Panel de ajuste de pulsos: puntos arrastrables por pulso dentro de un
+     compás, más una barra de referencia a velocidad constante durante la
+     reproducción — ver services.MarcaTiempoPulso. */
+  .btn-ajustar-pulsos { padding: 0 0.4rem; line-height: 1.4; }
+  .panel-pulsos {
+    position: relative;
+    height: 2.6rem;
+    margin-top: 0.35rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+    touch-action: none;
+  }
+  .punto-pulso {
+    position: absolute;
+    top: 50%;
+    width: 0.9rem;
+    height: 0.9rem;
+    margin: -0.45rem 0 0 -0.45rem;
+    border-radius: 50%;
+    background: var(--ss-text-muted);
+    border: 2px solid var(--ss-surface);
+    cursor: grab;
+    z-index: 2;
+  }
+  .punto-pulso.explicita { background: var(--ss-accent); }
+  .punto-pulso.arrastrando { cursor: grabbing; box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.35); }
+  .barra-referencia-pulso {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #2dc96f;
+    opacity: 0.85;
+    z-index: 1;
+    display: none;
+  }
 </style>
 {% endblock %}
 
@@ -210,13 +248,19 @@
               </span>
               <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:''|unlocalize }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
             </div>
-            <div class="small" style="color: var(--ss-text-muted);">
+            <div class="small d-flex align-items-center gap-2" style="color: var(--ss-text-muted);">
               {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
               {% if entrada.armadura %} · {{ entrada.armadura }}{% endif %}
               {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
               <span class="bpm-resultante"></span>
               {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} <span class="tiempo-calc" data-segundos="{{ entrada.tiempo_inicio_calculado|unlocalize }}"></span><span class="tiempo-calc-local"></span>{% endif %}
+              {% if not entrada.es_cierre and entrada.pulsos_por_compas %}
+              <button type="button" class="btn btn-outline-light btn-sm btn-ajustar-pulsos ms-auto" title="{% translate "Ajustar pulsos dentro de este compás" %}">⋯ {% translate "pulsos" %}</button>
+              {% endif %}
             </div>
+            {% if not entrada.es_cierre and entrada.pulsos_por_compas %}
+            <div class="panel-pulsos" style="display:none;"></div>
+            {% endif %}
           </div>
           {% endfor %}
         </div>
@@ -668,6 +712,7 @@
   let sonandoFracIni = 0, sonandoFracFin = 1;
 
   function actualizarSonando() {
+    actualizarBarraReferenciaPulsos();
     const i = pulsoEnTiempo(audio.currentTime);
     const nuevaClave = i >= 0 ? `${pulsosGlobal[i].compas}:${pasadaPorPulsoGlobal[i]}` : null;
     if (nuevaClave !== claveSonando) {
@@ -777,6 +822,161 @@
       body: params.toString(),
     });
     return resp.ok;
+  }
+
+  // ── Ajuste de pulsos dentro de un compás (arrastre de "pelotitas") ──────
+  // Un pulso corregido a mano es una ancla más FINA de la misma fuente "por
+  // compases" (ver services.MarcaTiempoPulso/_anclas_globales) — se guarda
+  // como un tiempo real absoluto, calculado a partir de dónde cae el punto
+  // dentro del tramo real [inicio de ESTE compás, inicio del SIGUIENTE] (la
+  // misma fila de la lista, no una fuente nueva).
+  let panelPulsoAbierto = null; // { idx, panelEl, barra, spanIni, spanFin, puntos: [{el, pulso, frac}] }
+
+  function spanRealFila(idx) {
+    const iniEl = filas[idx].querySelector('.tiempo-real');
+    const siguiente = filas[idx + 1];
+    const finEl = siguiente ? siguiente.querySelector('.tiempo-real') : null;
+    const ini = iniEl.dataset.segundos !== '' ? parseFloat(iniEl.dataset.segundos) : null;
+    const fin = finEl && finEl.dataset.segundos !== '' ? parseFloat(finEl.dataset.segundos) : null;
+    return { ini, fin };
+  }
+
+  function cerrarPanelPulsos() {
+    if (!panelPulsoAbierto) return;
+    panelPulsoAbierto.panelEl.style.display = 'none';
+    panelPulsoAbierto.panelEl.innerHTML = '';
+    panelPulsoAbierto = null;
+  }
+
+  async function abrirPanelPulsos(idx) {
+    const fila = filas[idx];
+    const panelEl = fila.querySelector('.panel-pulsos');
+    if (!panelEl) return;
+    if (panelPulsoAbierto && panelPulsoAbierto.idx === idx) {
+      cerrarPanelPulsos();
+      return;
+    }
+    cerrarPanelPulsos();
+
+    const params = new URLSearchParams();
+    params.set('segmento', fila.dataset.segmentoId);
+    params.set('compas', fila.dataset.compas);
+    params.set('pasada', fila.dataset.pasada);
+    let data;
+    try {
+      const resp = await fetch('{% url "partituras:pulsos_compas_actual" obra.pk %}?' + params.toString());
+      data = await resp.json();
+    } catch (e) {
+      return;
+    }
+    if (!data || !data.ok) return;
+
+    panelEl.style.display = '';
+    panelEl.innerHTML = '';
+    const barra = document.createElement('div');
+    barra.className = 'barra-referencia-pulso';
+    panelEl.appendChild(barra);
+
+    const { ini, fin } = spanRealFila(idx);
+    panelPulsoAbierto = { idx, panelEl, barra, spanIni: ini, spanFin: fin, puntos: [] };
+
+    data.pulsos.forEach((p) => {
+      const punto = document.createElement('div');
+      punto.className = 'punto-pulso' + (p.explicita ? ' explicita' : '');
+      punto.dataset.pulso = String(p.pulso);
+      punto.title = '{% translate "Pulso" %} ' + p.pulso;
+      const frac = (ini != null && fin != null && fin > ini && p.tiempo_inicio != null)
+        ? Math.min(1, Math.max(0, (p.tiempo_inicio - ini) / (fin - ini)))
+        : (p.pulso - 1) / data.pulsos.length;
+      punto.style.left = (frac * 100) + '%';
+      panelEl.appendChild(punto);
+      panelPulsoAbierto.puntos.push({ el: punto, pulso: p.pulso, frac });
+      engancharArrastrePulso(punto, idx);
+    });
+  }
+
+  function engancharArrastrePulso(punto, idx) {
+    let arrastrando = false;
+    punto.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      arrastrando = true;
+      punto.classList.add('arrastrando');
+      punto.setPointerCapture(e.pointerId);
+    });
+    punto.addEventListener('pointermove', (e) => {
+      if (!arrastrando || !panelPulsoAbierto || panelPulsoAbierto.idx !== idx) return;
+      const rect = panelPulsoAbierto.panelEl.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      punto.style.left = (frac * 100) + '%';
+      const entry = panelPulsoAbierto.puntos.find((p) => p.el === punto);
+      if (entry) entry.frac = frac;
+    });
+    async function soltar(e) {
+      if (!arrastrando) return;
+      arrastrando = false;
+      punto.classList.remove('arrastrando');
+      if (!panelPulsoAbierto || panelPulsoAbierto.idx !== idx) return;
+      const { spanIni, spanFin } = panelPulsoAbierto;
+      if (spanIni == null || spanFin == null || spanFin <= spanIni) return; // sin span real, no hay a qué correr
+      const entry = panelPulsoAbierto.puntos.find((p) => p.el === punto);
+      if (!entry) return;
+      const segundos = spanIni + entry.frac * (spanFin - spanIni);
+      const fila = filas[idx];
+      const params = new URLSearchParams();
+      params.set('compas', fila.dataset.compas);
+      params.set('pasada', fila.dataset.pasada);
+      params.set('pulso', punto.dataset.pulso);
+      params.set('segundos', String(segundos));
+      const resp = await fetch('{% url "partituras:marcar_tiempo_pulso" obra.pk %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+        body: params.toString(),
+      });
+      if (resp.ok) {
+        punto.classList.add('explicita');
+        cargarPlanGlobal();
+      }
+    }
+    punto.addEventListener('pointerup', soltar);
+    punto.addEventListener('dblclick', async (e) => {
+      e.stopPropagation();
+      const fila = filas[idx];
+      const params = new URLSearchParams();
+      params.set('compas', fila.dataset.compas);
+      params.set('pasada', fila.dataset.pasada);
+      params.set('pulso', punto.dataset.pulso);
+      params.set('segundos', '');
+      const resp = await fetch('{% url "partituras:marcar_tiempo_pulso" obra.pk %}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+        body: params.toString(),
+      });
+      if (resp.ok) {
+        cargarPlanGlobal();
+        abrirPanelPulsos(idx); // recarga posiciones (vuelve a la interpolada)
+      }
+    });
+  }
+
+  // Barra de referencia a velocidad CONSTANTE dentro del panel abierto —
+  // ayuda visual neutra (no sigue la curva de bpm) para comparar contra lo
+  // que se escucha mientras se decide dónde arrastrar cada punto. Se llama
+  // desde el mismo loop de rAF que ya mueve el cursor "sonando".
+  function actualizarBarraReferenciaPulsos() {
+    if (!panelPulsoAbierto) return;
+    const { spanIni, spanFin, barra } = panelPulsoAbierto;
+    if (spanIni == null || spanFin == null || spanFin <= spanIni || audio.paused) {
+      barra.style.display = 'none';
+      return;
+    }
+    const frac = (audio.currentTime - spanIni) / (spanFin - spanIni);
+    if (frac < 0 || frac > 1) {
+      barra.style.display = 'none';
+      return;
+    }
+    barra.style.display = '';
+    barra.style.left = (frac * 100) + '%';
   }
 
   async function marcarActual() {
@@ -1000,6 +1200,13 @@
       e.stopPropagation();
       iniciarEdicion(i, tiempoEl);
     });
+    const btnAjustarPulsos = f.querySelector('.btn-ajustar-pulsos');
+    if (btnAjustarPulsos) {
+      btnAjustarPulsos.addEventListener('click', (e) => {
+        e.stopPropagation();
+        abrirPanelPulsos(i);
+      });
+    }
   });
 
   async function ajustarSeleccion(delta) {
@@ -1306,13 +1513,12 @@
     const bordesSistema = limitesSistema(pagina, sistema);
     if (bordesSistema.bottom <= bordesFranja.top || bordesSistema.top >= bordesFranja.bottom) return null;
 
-    const delMismoSistema = pagina.compases
-      .filter(c => c.sistema_orden === compas.sistema_orden)
-      .sort((a, b) => a.x - b.x);
-    const posEnSistema = delMismoSistema.findIndex(c => c.numero === compas.numero);
-    const proximo = delMismoSistema[posEnSistema + 1] || null;
     const left = Math.max(compas.x, pagina.margen_x0);
-    const right = proximo ? proximo.x : pagina.margen_x1;
+    // right = compas.x + compas.width (no "próximo compás, si no margen de
+    // página") — mismo fix que navegador_obra.html::calcularCaja: width ya
+    // incorpora el borde real de cierre del sistema (Sistema.contenido_x1),
+    // el margen de página lo ignoraba y estiraba el último compás hasta ahí.
+    const right = compas.x + compas.width;
 
     const repeticiones = entrada.repeticiones || 1;
     const offset = entrada.offset || 0;

@@ -1,5 +1,5 @@
 from django import forms
-from .models import MarcaNotacion, Obra, Partitura, Segmento
+from .models import EfectoTempo, MarcaNotacion, Obra, Partitura, Segmento
 from .services import parsear_compas_pulso, validar_indicacion_compas
 
 
@@ -78,15 +78,12 @@ class SegmentoForm(forms.ModelForm):
         model = Segmento
         fields = [
             'orden', 'desde_texto', 'hasta_texto',
-            'variacion_tempo', 'bpm_llegada',
             'descripcion', 'tiempo_inicio',
         ]
         widgets = {
             'orden': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;'}),
             'desde_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
             'hasta_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
-            'variacion_tempo': forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'width: 8rem;'}),
-            'bpm_llegada': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;', 'placeholder': '(llegada)'}),
             'descripcion': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'min-width: 10rem;'}),
             'tiempo_inicio': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 8rem;', 'placeholder': 'hh:mm:ss'}),
         }
@@ -180,4 +177,78 @@ class MarcaNotacionBaseFormSet(forms.BaseModelFormSet):
 
 MarcaNotacionFormSet = forms.modelformset_factory(
     MarcaNotacion, form=MarcaNotacionForm, formset=MarcaNotacionBaseFormSet, extra=3, can_delete=True,
+)
+
+
+class EfectoTempoForm(forms.ModelForm):
+    class Meta:
+        model = EfectoTempo
+        fields = ['tipo', 'desde_texto', 'hasta_texto', 'valor']
+        widgets = {
+            'tipo': forms.Select(attrs={'class': 'form-select form-select-sm', 'style': 'width: 9rem;'}),
+            'desde_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
+            'hasta_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
+            'valor': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 8rem;'}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('DELETE'):
+            return cleaned
+
+        tipo = cleaned.get('tipo')
+
+        try:
+            compas_desde, pulso_desde = parsear_compas_pulso(cleaned.get('desde_texto', ''), pulso_default=1)
+        except ValueError:
+            compas_desde = None
+            self.add_error('desde_texto', 'Formato inválido — usá "compás" o "compás,pulso" (ej: 10 o 10,2.5).')
+        else:
+            if compas_desde is None:
+                self.add_error('desde_texto', 'Hace falta indicar dónde arranca el efecto.')
+            self.instance.compas_desde = compas_desde
+            self.instance.pulso_desde = pulso_desde
+
+        hasta_texto = cleaned.get('hasta_texto', '')
+        if tipo == 'calderon':
+            if hasta_texto:
+                self.add_error('hasta_texto', 'Un calderón es un punto — dejá "Hasta" vacío.')
+            self.instance.compas_hasta = None
+            self.instance.pulso_hasta = None
+        else:
+            try:
+                compas_hasta, pulso_hasta = parsear_compas_pulso(hasta_texto, pulso_default=None)
+            except ValueError:
+                compas_hasta = None
+                self.add_error('hasta_texto', 'Formato inválido — usá "compás" o "compás,pulso" (ej: 20 o 20,3).')
+            else:
+                if compas_hasta is None:
+                    self.add_error('hasta_texto', 'Un accelerando/ritardando necesita dónde termina.')
+                self.instance.compas_hasta = compas_hasta
+                self.instance.pulso_hasta = pulso_hasta
+
+        return cleaned
+
+    def clean_valor(self):
+        tipo = self.cleaned_data.get('tipo')
+        valor = self.cleaned_data.get('valor', '')
+        if tipo == 'calderon':
+            try:
+                factor = float(valor)
+                if factor <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise forms.ValidationError('El factor de duración del calderón tiene que ser un número mayor que 0 (ej: 1.5).')
+        else:
+            try:
+                bpm = int(valor)
+                if bpm <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise forms.ValidationError('El bpm de llegada tiene que ser un número entero mayor que 0.')
+        return valor
+
+
+EfectoTempoFormSet = forms.modelformset_factory(
+    EfectoTempo, form=EfectoTempoForm, extra=3, can_delete=True,
 )

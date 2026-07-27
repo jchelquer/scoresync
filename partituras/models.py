@@ -120,15 +120,10 @@ class Segmento(models.Model):
 
     Indicación de compás, armadura y tempo base NO son campos de acá —
     son hechos de la partitura por POSICIÓN, no de esta fila (ver
-    MarcaNotacion). bpm_llegada/variacion_tempo sí quedan acá: son
-    genuinamente de la fila (un accelerando/ritardando puntual de este
-    tramo, no una propiedad de la obra en general)."""
-
-    VARIACIONES_TEMPO = [
-        ('', 'Constante'),
-        ('accelerando', 'Accelerando'),
-        ('ritardando', 'Ritardando'),
-    ]
+    MarcaNotacion). Accelerando/ritardando/calderón tampoco: son hechos de
+    posición también (ver EfectoTempo) — antes vivían acá como
+    bpm_llegada/variacion_tempo, atados a esta fila, lo que impedía que un
+    efecto cruzara un límite de fila."""
 
     obra = models.ForeignKey(Obra, related_name='segmentos', on_delete=models.CASCADE)
     orden = models.PositiveIntegerField(
@@ -162,12 +157,6 @@ class Segmento(models.Model):
     hasta_texto = models.CharField(
         max_length=20, blank=True,
         help_text='Igual que desde_texto, pero "4" sin coma acá significa "hasta el final del compás 4", no pulso 1.',
-    )
-    variacion_tempo = models.CharField(max_length=12, choices=VARIACIONES_TEMPO, blank=True, default='')
-    bpm_llegada = models.PositiveIntegerField(
-        null=True, blank=True,
-        help_text="Sólo tiene sentido en un tramo con accelerando/ritardando: tempo al que llega al final. "
-                   "Es lo que hereda la fila siguiente (no el bpm de arranque) cuando está presente.",
     )
     descripcion = models.CharField(max_length=200, blank=True, help_text="Rótulo libre (ej: 'Exposición', 'Coda') — sin efecto en la secuencia.")
     tiempo_inicio = models.DurationField(
@@ -225,6 +214,37 @@ class MarcaTiempoCompas(models.Model):
         return f"{self.obra} — c.{self.compas} ({self.pasada}ra vez)"
 
 
+class MarcaTiempoPulso(models.Model):
+    """Tiempo real de un PULSO puntual dentro de una ocurrencia de compás —
+    extensión más fina de MarcaTiempoCompas (compas+pasada), para el caso
+    en que el pulso calculado (interpolado entre dos MarcaTiempoCompas
+    siguiendo la curva de bpm) no cae exactamente donde se escucha en la
+    grabación real. Sparse a propósito: sólo existe para los pulsos que el
+    usuario corrigió a mano arrastrando en sincronizar_compases.html — el
+    resto de los pulsos de ese mismo compás sigue saliendo de la
+    interpolación de siempre.
+
+    Es una ancla MÁS de la misma fuente "por compases" (nunca "por
+    itinerario", mismo criterio que MarcaTiempoCompas) — no una fuente
+    nueva: _anclas_globales la agrega al mismo anclas_compases, sólo más
+    precisa que una marca de compás entero (ver services.py)."""
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_tiempo_pulso')
+    compas = models.PositiveIntegerField()
+    pasada = models.PositiveIntegerField(default=1)
+    pulso = models.PositiveIntegerField()
+    tiempo_inicio = models.DurationField()
+    explicita = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = [('obra', 'compas', 'pasada', 'pulso')]
+        ordering = ['obra', 'compas', 'pasada', 'pulso']
+        verbose_name = 'Marca de tiempo de pulso'
+        verbose_name_plural = 'Marcas de tiempo de pulso'
+
+    def __str__(self):
+        return f"{self.obra} — c.{self.compas} p.{self.pulso} ({self.pasada}ra vez)"
+
+
 class MarcaNotacion(models.Model):
     """Hecho de la PARTITURA (indicación de compás, armadura, tempo base) —
     a diferencia de Segmento, que es movimiento (qué se toca en qué orden),
@@ -242,9 +262,9 @@ class MarcaNotacion(models.Model):
     para el caso raro de que una repetición puntual difiera (ver
     servicios._resolver_marca_notacion).
 
-    No incluye accelerando/ritardando/calderón (eso sigue siendo
-    Segmento.bpm_llegada/variacion_tempo, fila del itinerario, no posición
-    — ver ese modelo)."""
+    No incluye accelerando/ritardando/calderón — a diferencia de esto (un
+    valor "vigente hasta la próxima marca"), esos son tramos/puntos
+    ACOTADOS, no un valor persistente (ver EfectoTempo)."""
 
     TIPOS = [
         ('compas', 'Indicación de compás'),
@@ -282,6 +302,69 @@ class MarcaNotacion(models.Model):
     def __str__(self):
         sufijo = f" ({self.pasada}ra vez)" if self.pasada else ""
         return f"{self.obra} — c.{self.compas}{sufijo}: {self.get_tipo_display()} {self.valor}"
+
+
+class EfectoTempo(models.Model):
+    """Accelerando/ritardando/calderón — a diferencia de MarcaNotacion (un
+    valor vigente hasta la próxima marca), esto es un tramo (accelerando/
+    ritardando, con extremo propio) o un punto (calderón) ACOTADO, anclado
+    a POSICIÓN en la obra (compás+pulso, nunca fila de itinerario) — así
+    puede empezar a mitad de una fila del itinerario y terminar a mitad de
+    la fila siguiente, sin que el límite de fila le importe. Reemplaza a
+    Segmento.bpm_llegada/variacion_tempo (ver docstring de ese modelo).
+
+    Sin campo `pasada` (a diferencia de MarcaNotacion/MarcaTiempoCompas):
+    el efecto aplica siempre que se pase por esa posición, no hace falta
+    distinguir 1ra/2da vez.
+
+    accelerando/ritardando: el bpm rampa linealmente, por CANTIDAD DE
+    PULSOS (no de tiempo), desde el bpm vigente en (compas_desde,
+    pulso_desde) hasta `valor` (bpm de llegada), terminando en
+    (compas_hasta, pulso_hasta) — compas_hasta/pulso_hasta obligatorios.
+    calderón: sólo tiene (compas_desde, pulso_desde) — compas_hasta/
+    pulso_hasta quedan vacíos — multiplica la duración calculada de ESE
+    pulso por `valor` (factor, ej. "1.5" = 50% más largo). No dice nada de
+    cómo se reparte visualmente dentro del compás — eso es tarea de
+    sincronización con audio real, no de este modelo."""
+
+    TIPOS = [
+        ('accelerando', 'Accelerando'),
+        ('ritardando', 'Ritardando'),
+        ('calderon', 'Calderón'),
+    ]
+
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='efectos_tempo')
+    tipo = models.CharField(max_length=12, choices=TIPOS)
+    # Mismo patrón que Segmento.desde_texto/hasta_texto -> compas_desde/
+    # pulso_desde/compas_hasta/pulso_hasta (ver parsear_compas_pulso):
+    # texto crudo + campos resueltos, a propósito, en vez de un campo de
+    # formulario custom que reparta un solo input en dos campos de modelo.
+    desde_texto = models.CharField(
+        max_length=20,
+        help_text='Dónde arranca el efecto: "compás" (pulso 1) o "compás,pulso" (ej: "10,2.5").',
+    )
+    compas_desde = models.PositiveIntegerField()
+    pulso_desde = models.FloatField(null=True, blank=True)
+    hasta_texto = models.CharField(
+        max_length=20, blank=True,
+        help_text='Vacío en calderón. Dónde termina (accelerando/ritardando) — mismo formato que desde_texto.',
+    )
+    compas_hasta = models.PositiveIntegerField(null=True, blank=True)
+    pulso_hasta = models.FloatField(null=True, blank=True)
+    valor = models.CharField(
+        max_length=20,
+        help_text='Según tipo: bpm de llegada (accelerando/ritardando) o factor de duración (calderón, ej: "1.5").',
+    )
+
+    class Meta:
+        ordering = ['obra', 'compas_desde', 'pulso_desde']
+        verbose_name = 'Efecto de tempo'
+        verbose_name_plural = 'Efectos de tempo'
+
+    def __str__(self):
+        if self.tipo == 'calderon':
+            return f"{self.obra} — calderón en {self.desde_texto}"
+        return f"{self.obra} — {self.get_tipo_display().lower()} {self.desde_texto}–{self.hasta_texto} → {self.valor}"
 
 
 class Partitura(models.Model):

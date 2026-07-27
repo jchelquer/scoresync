@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
-    Barra, Ciclo, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, PreferenciaObra,
-    PreferenciaParte, Repertorio, Segmento, Sistema, Partitura,
+    Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
+    PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema, Partitura,
 )
 
 
@@ -27,14 +27,20 @@ class ObraAdmin(admin.ModelAdmin):
 
 @admin.register(Segmento)
 class SegmentoAdmin(admin.ModelAdmin):
-    list_display = ('obra', 'orden', 'compas_desde', 'compas_hasta', 'bpm_llegada', 'descripcion')
-    list_filter = ('variacion_tempo',)
+    list_display = ('obra', 'orden', 'compas_desde', 'compas_hasta', 'descripcion')
     search_fields = ('obra__titulo', 'descripcion')
 
 
 @admin.register(MarcaNotacion)
 class MarcaNotacionAdmin(admin.ModelAdmin):
     list_display = ('obra', 'tipo', 'compas', 'pasada', 'valor')
+    list_filter = ('tipo',)
+    search_fields = ('obra__titulo',)
+
+
+@admin.register(EfectoTempo)
+class EfectoTempoAdmin(admin.ModelAdmin):
+    list_display = ('obra', 'tipo', 'desde_texto', 'hasta_texto', 'valor')
     list_filter = ('tipo',)
     search_fields = ('obra__titulo',)
 
@@ -55,6 +61,13 @@ class PartituraAdmin(admin.ModelAdmin):
 @admin.register(MarcaTiempoCompas)
 class MarcaTiempoCompasAdmin(admin.ModelAdmin):
     list_display = ('obra', 'compas', 'pasada', 'tiempo_inicio', 'explicita')
+    list_filter = ('explicita',)
+    search_fields = ('obra__titulo',)
+
+
+@admin.register(MarcaTiempoPulso)
+class MarcaTiempoPulsoAdmin(admin.ModelAdmin):
+    list_display = ('obra', 'compas', 'pasada', 'pulso', 'tiempo_inicio', 'explicita')
     list_filter = ('explicita',)
     search_fields = ('obra__titulo',)
 
