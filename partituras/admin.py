@@ -1,10 +1,14 @@
 from django.contrib import admin
-from .models import Barra, Compas, MarcaNotacion, Obra, Pagina, PreferenciaObra, PreferenciaParte, Segmento, Sistema, Partitura
+from .models import (
+    Barra, Compas, MarcaNotacion, MarcaTiempoCompas, Obra, Pagina, PreferenciaObra,
+    PreferenciaParte, Segmento, Sistema, Partitura,
+)
 
 
 @admin.register(Obra)
 class ObraAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'compositor', 'arreglista', 'owner', 'creado')
+    list_display = ('titulo', 'compositor', 'arreglista', 'owner', 'publicada', 'creado')
+    list_filter = ('publicada',)
     search_fields = ('titulo', 'compositor', 'arreglista', 'owner__username')
 
 
@@ -30,20 +34,27 @@ class BarraAdmin(admin.ModelAdmin):
 
 @admin.register(Partitura)
 class PartituraAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'instrumento', 'parte', 'owner', 'estado_normalizacion', 'estado_analisis', 'creado')
-    list_filter = ('estado_normalizacion', 'estado_analisis', 'instrumento')
+    list_display = ('titulo', 'instrumento', 'parte', 'owner', 'estado_normalizacion', 'estado_analisis', 'publicada', 'creado')
+    list_filter = ('estado_normalizacion', 'estado_analisis', 'publicada', 'instrumento')
     search_fields = ('titulo', 'owner__username')
+
+
+@admin.register(MarcaTiempoCompas)
+class MarcaTiempoCompasAdmin(admin.ModelAdmin):
+    list_display = ('obra', 'compas', 'pasada', 'tiempo_inicio', 'explicita')
+    list_filter = ('explicita',)
+    search_fields = ('obra__titulo',)
 
 
 @admin.register(Pagina)
 class PaginaAdmin(admin.ModelAdmin):
-    list_display = ('partitura', 'numero', 'rotacion_detectada', 'angulo_deskew_detectado', 'confirmada')
+    list_display = ('partitura', 'numero', 'rotacion_detectada', 'angulo_deskew_detectado', 'confirmada', 'umbral_contenido_sistema')
     list_filter = ('confirmada',)
 
 
 @admin.register(Sistema)
 class SistemaAdmin(admin.ModelAdmin):
-    list_display = ('pagina', 'orden', 'origen')
+    list_display = ('pagina', 'orden', 'origen', 'confirmado', 'contenido_x0', 'contenido_x1')
 
 
 @admin.register(Compas)
