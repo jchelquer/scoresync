@@ -254,11 +254,11 @@
               {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
               <span class="bpm-resultante"></span>
               {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} <span class="tiempo-calc" data-segundos="{{ entrada.tiempo_inicio_calculado|unlocalize }}"></span><span class="tiempo-calc-local"></span>{% endif %}
-              {% if not entrada.es_cierre and entrada.pulsos_por_compas %}
+              {% if entrada.ajustable_pulsos %}
               <button type="button" class="btn btn-outline-light btn-sm btn-ajustar-pulsos ms-auto" title="{% translate "Ajustar pulsos dentro de este compás" %}">⋯ {% translate "pulsos" %}</button>
               {% endif %}
             </div>
-            {% if not entrada.es_cierre and entrada.pulsos_por_compas %}
+            {% if entrada.ajustable_pulsos %}
             <div class="panel-pulsos" style="display:none;"></div>
             {% endif %}
           </div>

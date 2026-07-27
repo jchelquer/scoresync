@@ -559,9 +559,27 @@ def sincronizar_compases(request, pk):
         primera["tiempo_inicio"] = timedelta(0)
         primera["explicita"] = True
 
+    # El ajuste de pulsos (arrastre en sincronizar_compases.html) sólo tiene
+    # sentido donde el cálculo automático puede desviarse de lo que se
+    # escucha: un calderón (punto exacto) o un compás dentro de un
+    # accelerando/ritardando (rango) — en el resto, el reparto lineal ya es
+    # correcto y el botón sólo ensucia la lista (pedido del usuario,
+    # 2026-07-27).
+    compases_con_efecto_tempo = set()
+    for efecto in obra.efectos_tempo.all():
+        if efecto.tipo == "calderon":
+            compases_con_efecto_tempo.add(efecto.compas_desde)
+        elif efecto.compas_hasta is not None:
+            compases_con_efecto_tempo.update(range(efecto.compas_desde, efecto.compas_hasta + 1))
+
     for entrada in entradas:
         tiempo_inicio = entrada["tiempo_inicio"]
         entrada["tiempo_inicio_segundos"] = tiempo_inicio.total_seconds() if tiempo_inicio is not None else None
+        entrada["ajustable_pulsos"] = (
+            not entrada["es_cierre"]
+            and bool(entrada.get("pulsos_por_compas"))
+            and entrada["compas"] in compases_con_efecto_tempo
+        )
 
     pref = PreferenciaObra.objects.filter(usuario=request.user, obra=obra).first()
     partes_disponibles = _partes_disponibles(obra, request.user)

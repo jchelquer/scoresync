@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.4"
+  date: "2026-07-27"
+  changes:
+    - type: mejorado
+      text: "En \"Sincronizar compases\", el botón para ajustar pulsos ya no aparece en todos los compases — sólo en los que tienen un calderón o son parte de un accelerando/ritardando, que es donde el cálculo automático puede desviarse de lo real. Limpia la lista en obras sin esos efectos."
+
 - version: "1.15.3"
   date: "2026-07-27"
   changes:
