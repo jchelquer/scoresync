@@ -64,14 +64,17 @@ si tiene audio) para poder chequear a ojo que exportó lo esperado.
 
 ## 2. Copiar el .zip al otro entorno
 
-Con `scp` (mismo criterio que ya se usa para media en `deploy_vps.md`):
+Con `scp`, usando el alias `infedu` ya configurado en `~/.ssh/config`
+(`Host infedu` → `infedu.com.ar`). **Siempre corriendo el `scp` desde tu
+máquina local** (no desde adentro de la sesión SSH) — la VPS no te puede
+"empujar" el archivo, lo bajás/subís vos:
 
 ```bash
-# local -> VPS
-scp obra.zip jchelquer@IP_VPS:/var/www/scoresync/obra.zip
+# local -> VPS (después de exportar en local)
+scp obra.zip infedu:/var/www/scoresync/obra.zip
 
-# VPS -> local
-scp jchelquer@IP_VPS:/var/www/scoresync/obra.zip .
+# VPS -> local (después de exportar en la VPS)
+scp infedu:/var/www/scoresync/obra.zip .
 ```
 
 ---
