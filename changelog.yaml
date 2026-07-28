@@ -2,6 +2,22 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.9"
+  date: "2026-07-28"
+  changes:
+    - type: mejorado
+      text: "\"Sincronizar compases\" bastante más compacta: se sacó el texto \"Marcando el compás X\" (ya hay guías visuales en la lista y en la partitura); la info de indicación/armadura/bpm de cada compás pasó a la misma fila que su número (antes ocupaba una fila aparte); se sacaron \"calc.\" y sus dos valores calculados (quedó el bpm real medido, que es el útil); \"N compases seleccionados\" se sacó de al lado de Ajuste fino."
+    - type: mejorado
+      text: "Los botones Marcado/Reproducción se movieron a la fila del Play (antes de él), abreviados \"Marc.\"/\"Repr.\"; el botón Marcar quedó del mismo alto que Saltear/Deshacer, destacado por fondo en vez de por tamaño; Interpolar y Borrar temporización se unieron a la fila de Ajuste fino, y Borrar temporización pasó a ícono (🕒✕) para ocupar menos lugar."
+    - type: mejorado
+      text: "El selector de Rango se movió arriba, a la fila del switch \"Mostrar números de compás\" y los botones ▲/▼ de ventana (alineados entre sí); ya no tiene flechitas de subir/bajar ni botón Aplicar aparte — cualquier cambio en sus campos aplica el rango solo. El campo \"vez\" quedó bien angosto (siempre es 1 dígito)."
+    - type: nuevo
+      text: "En \"Sincronizar compases\", además de los botones ▲/▼ ahora se puede arrastrar (mouse, touch o lápiz) directamente sobre la partitura para mover la ventana de sistemas un paso por cada tanto de arrastre — sin tener que ir a buscar los botones."
+    - type: mejorado
+      text: "El pie de página del sitio (logo, versión, Novedades) se sacó de \"Sincronizar compases\" — quedaba muy lejos y obligaba a scrollear de más — y su contenido se reubicó al pie de la columna de la partitura, arriba de todo. El resto de las pantallas no cambia."
+    - type: mejorado
+      text: "La lista de compases de \"Sincronizar compases\" es un poco más baja (de 60vh a 56vh) para que la pantalla entre mejor sin scroll en pantallas más chicas."
+
 - version: "1.15.8"
   date: "2026-07-28"
   changes:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n l10n %}
+{% load i18n l10n static %}
 {% block title %}Sincronizar por compás — {{ obra.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -30,7 +30,17 @@
   .fila-sync.sonando { border-right: 4px solid #2dc96f; }
   .fila-sync.seleccionada { box-shadow: inset 0 0 0 2px rgba(90, 170, 255, 0.8); }
   #sync-scrubber { width: 100%; }
-  #sync-btn-marcar { min-width: 8rem; }
+  /* Misma altura que Saltear/Deshacer (btn-sm) — se destaca por fondo, no
+     por tamaño, para no desalinear la fila. */
+  #sync-btn-marcar { min-width: 8rem; background: rgba(255, 255, 255, 0.16); }
+  #sync-btn-marcar:hover { background: rgba(255, 255, 255, 0.26); }
+  /* Campos de rango: sin flechas de subir/bajar (viven en la fila del
+     switch de números, arriba de la partitura, alineados con los botones
+     ↑/↓ de esa misma fila — misma escala "sm" que .form-control-sm ya
+     comparte con .btn-sm en Bootstrap, no hace falta forzar alto). */
+  .input-rango { -moz-appearance: textfield; }
+  .input-rango::-webkit-outer-spin-button,
+  .input-rango::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .tiempo-real { cursor: text; border-bottom: 1px dotted var(--ss-text-muted); color: var(--ss-text-bright); }
   .tiempo-real:hover { border-bottom-color: var(--ss-accent); }
   .tiempo-real input { width: 5rem; padding: 0 0.3rem; }
@@ -117,6 +127,7 @@
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{% translate 'Cerrar' %}"></button>
       </div>
       <div class="modal-body small">
+        <p>{% translate "Marcado: tap compás a compás. Reproducción: escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo." %}</p>
         <p>{% translate "Sincronización fina: un tap por CADA compás de la obra (repeticiones incluidas, cada pasada la suya) — convive con la sincronización por fila del itinerario, no la reemplaza; donde marques acá, se usa esto; donde no, cae en lo de la otra pantalla o en el tiempo calculado." %}</p>
         <p class="mb-0">{% translate "Barra espaciadora marca y avanza (el tap), Enter pausa/continúa el audio, Tab salta el compás actual SIN marcarlo (si te lo perdiste), Backspace deshace la última marca, flechas ajustan el audio de a 0,1s (Shift, 1s), y podés hacer click en cualquier compás para marcarlo o corregirlo directamente (Shift+click para seleccionar un rango, Ctrl/Cmd+click para sumar uno suelto — para el ajuste fino). También podés escribir el tiempo a mano haciendo click sobre el valor." %}</p>
       </div>
@@ -124,27 +135,25 @@
   </div>
 </div>
 
-<div class="d-flex align-items-center gap-2 mb-3">
-  <span class="small" style="color: var(--ss-text-muted);">{% translate "Modo" %}:</span>
-  <div class="btn-group btn-group-sm" role="group">
-    <button id="modo-btn-marcado" type="button" class="btn btn-ss">{% translate "Marcado" %}</button>
-    <button id="modo-btn-reproduccion" type="button" class="btn btn-outline-light">{% translate "Reproducción" %}</button>
-  </div>
-  <span class="small" style="color: var(--ss-text-muted);">
-    {% translate "Marcado: tap compás a compás. Reproducción: escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo." %}
-  </span>
-</div>
-
 <div class="row g-3">
   <div class="col-lg-7">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body">
-        <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+        <div class="d-flex align-items-center mb-2 flex-wrap gap-2">
           <div class="form-check form-switch d-flex align-items-center mb-0">
             <input class="form-check-input" type="checkbox" id="sync-toggle-numeros" checked>
             <label class="form-check-label small ms-1" for="sync-toggle-numeros" style="color: var(--ss-text-muted);">{% translate "Mostrar números de compás" %}</label>
           </div>
-          <div class="btn-group btn-group-sm" role="group" title="{% translate 'Buscar visualmente subiendo/bajando la ventana, sin cambiar la selección' %}">
+          <span class="small ms-2" style="color: var(--ss-text-muted);">{% translate "Rango" %}:</span>
+          <label for="sync-rango-desde-compas" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "desde c." %}</label>
+          <input type="number" id="sync-rango-desde-compas" class="form-control form-control-sm input-rango" style="width: 4rem;">
+          <label for="sync-rango-desde-vez" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+          <input type="number" id="sync-rango-desde-vez" min="1" max="9" class="form-control form-control-sm input-rango" style="width: 1.8rem;">
+          <label for="sync-rango-hasta-compas" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "hasta c." %}</label>
+          <input type="number" id="sync-rango-hasta-compas" class="form-control form-control-sm input-rango" style="width: 4rem;">
+          <label for="sync-rango-hasta-vez" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
+          <input type="number" id="sync-rango-hasta-vez" min="1" max="9" class="form-control form-control-sm input-rango" style="width: 1.8rem;">
+          <div class="btn-group btn-group-sm ms-auto" role="group" title="{% translate 'Buscar visualmente subiendo/bajando la ventana, sin cambiar la selección' %}">
             <button id="sync-btn-sistema-anterior" type="button" class="btn btn-outline-light">↑</button>
             <button id="sync-btn-sistema-siguiente" type="button" class="btn btn-outline-light">↓</button>
           </div>
@@ -154,6 +163,28 @@
           <p id="sync-score-msg" class="small text-center p-4 mb-0" style="color: var(--ss-text-muted); display:none;"></p>
         </div>
       </div>
+    </div>
+    <!-- El footer del sitio se saca de esta pantalla (mucho scroll para
+         llegar) y se reubica acá, al pie de la columna de la partitura —
+         mismo contenido, ver el {% templatetag openblock %} block footer
+         {% templatetag closeblock %} vacío más abajo. -->
+    <div class="text-center mt-3" style="color: var(--ss-text-muted); font-size: 0.95rem;">
+      <a href="https://infedu.com.ar" target="_blank" rel="noopener" style="display:inline-block; background:#fff; padding:6px 12px; border-radius:8px; line-height:0;">
+        <img src="{% static 'images/logoie.png' %}" alt="JCH Informática Educativa" style="height: 45px;">
+      </a>
+      {% if user.is_authenticated %}
+      <div class="mt-2 small">
+        v{{ VERSION_ACTUAL }}
+        &nbsp;·&nbsp;
+        <a href="#" data-bs-toggle="modal" data-bs-target="#modal-novedades" style="color:var(--ss-text-muted);">{% translate "Novedades" %}</a>
+        {% if PUEDE_COMENTAR %}
+        &nbsp;·&nbsp;
+        <a href="#" data-bs-toggle="modal" data-bs-target="#modal-comentario" style="color:var(--ss-text-muted);">{% translate "Enviar comentario" %}</a>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="mt-2 small">Django · PostgreSQL</div>
+      {% endif %}
     </div>
   </div>
 
@@ -165,6 +196,10 @@
       <div class="card-body">
         <audio id="sync-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
         <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+          <div class="btn-group btn-group-sm" role="group">
+            <button id="modo-btn-marcado" type="button" class="btn btn-ss" title="{% translate "Marcado" %}">{% translate "Marc." %}</button>
+            <button id="modo-btn-reproduccion" type="button" class="btn btn-outline-light" title="{% translate "Reproducción" %}">{% translate "Repr." %}</button>
+          </div>
           <button id="sync-btn-playpause" type="button" class="btn btn-ss" title="{% translate "Pausar/continuar (Enter)" %}">▶</button>
           <button id="sync-btn-reiniciar" type="button" class="btn btn-outline-light d-none" title="{% translate "Reiniciar — 2 compases antes del primero seleccionado" %}">↺</button>
           <label for="sync-velocidad" class="small mb-0 ms-2" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
@@ -184,30 +219,9 @@
         <!-- Acá y no junto al reproductor: lo que ajustan es las marcas de
              la lista, no la reproducción del audio en sí. -->
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <button id="sync-btn-marcar" type="button" class="btn btn-outline-light">{% translate "Marcar (Espacio)" %}</button>
+          <button id="sync-btn-marcar" type="button" class="btn btn-outline-light btn-sm">{% translate "Marcar (Espacio)" %}</button>
           <button id="sync-btn-saltear" type="button" class="btn btn-outline-light btn-sm">⇥ {% translate "Saltear (Tab)" %}</button>
           <button id="sync-btn-deshacer" type="button" class="btn btn-outline-light btn-sm">↺ {% translate "Deshacer (Backspace)" %}</button>
-          <span id="sync-armada-label" class="small ms-2" style="color: var(--ss-text-muted);"></span>
-        </div>
-        <div class="d-flex align-items-end gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
-          <span class="small" style="color: var(--ss-text-muted);">{% translate "Rango" %}:</span>
-          <div>
-            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "desde c." %}</label>
-            <input type="number" id="sync-rango-desde-compas" class="form-control form-control-sm" style="width: 4.5rem;">
-          </div>
-          <div>
-            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
-            <input type="number" id="sync-rango-desde-vez" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
-          </div>
-          <div>
-            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "hasta c." %}</label>
-            <input type="number" id="sync-rango-hasta-compas" class="form-control form-control-sm" style="width: 4.5rem;">
-          </div>
-          <div>
-            <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
-            <input type="number" id="sync-rango-hasta-vez" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
-          </div>
-          <button id="sync-btn-rango-aplicar" type="button" class="btn btn-outline-light btn-sm">{% translate "Aplicar" %}</button>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
           <span class="small" style="color: var(--ss-text-muted);">{% translate "Ajuste fino" %}:</span>
@@ -215,16 +229,13 @@
           <button id="sync-btn-ajuste-m05" type="button" class="btn btn-sm btn-paso btn-ajuste-neg">−0,05s</button>
           <button id="sync-btn-ajuste-p05" type="button" class="btn btn-sm btn-paso btn-ajuste-pos">+0,05s</button>
           <button id="sync-btn-ajuste-p1" type="button" class="btn btn-sm btn-paso btn-ajuste-pos btn-ajuste-pos-fuerte">+0,1s</button>
-          <span id="sync-seleccion-label" class="small ms-1" style="color: var(--ss-text-muted);"></span>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap mt-2 pt-2" style="border-top: 1px solid #2a4a47;">
-          <button id="sync-btn-interpolar" type="button" class="btn btn-sm btn-outline-light d-none">{% translate "Interpolar" %}</button>
-          <button id="sync-btn-borrar-tiempos" type="button" class="btn btn-sm btn-outline-danger d-none">{% translate "Borrar temporización" %}</button>
+          <button id="sync-btn-interpolar" type="button" class="btn btn-sm btn-outline-light d-none ms-2">{% translate "Interpolar" %}</button>
+          <button id="sync-btn-borrar-tiempos" type="button" class="btn btn-sm btn-outline-danger d-none" title="{% translate "Borrar temporización" %}">🕒✕</button>
           <span id="sync-interpolar-aviso" class="small text-warning" style="display:none;"></span>
         </div>
       </div>
       <div class="card-body p-0">
-        <div id="sync-filas" style="max-height: 60vh; overflow-y: auto;">
+        <div id="sync-filas" style="max-height: 56vh; overflow-y: auto;">
           {% for entrada in entradas %}
           <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% else %} sin-marcar{% endif %}"
                data-index="{{ forloop.counter0 }}"
@@ -236,7 +247,7 @@
                data-pulsos="{{ entrada.pulsos_por_compas|default_if_none:''|unlocalize }}"
                data-pulso-inicial="{{ entrada.pulso_inicial|default_if_none:''|unlocalize }}"
                data-pulso-final="{{ entrada.pulso_final|default_if_none:''|unlocalize }}">
-            <div class="d-flex justify-content-between">
+            <div class="d-flex justify-content-between align-items-center flex-wrap">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
                   {% translate "— fin de la obra —" %}
@@ -249,19 +260,22 @@
                     {% if entrada.pulso_final < entrada.pulsos_por_compas %}{% translate "hasta pulso" %} {{ entrada.pulso_final }}{% endif %}
                   </small>
                   {% endif %}
+                  {% if entrada.indicacion_compas or entrada.armadura or entrada.bpm %}
+                  <small class="ms-2" style="color: var(--ss-text-muted);">
+                    {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
+                    {% if entrada.armadura %} · {{ entrada.armadura }}{% endif %}
+                    {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
+                    <span class="bpm-resultante"></span>
+                  </small>
+                  {% endif %}
                 {% endif %}
               </span>
-              <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:''|unlocalize }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
-            </div>
-            <div class="small d-flex align-items-center gap-2" style="color: var(--ss-text-muted);">
-              {% if entrada.indicacion_compas %}{{ entrada.indicacion_compas }}{% endif %}
-              {% if entrada.armadura %} · {{ entrada.armadura }}{% endif %}
-              {% if entrada.bpm %} · {{ entrada.bpm }} bpm{% endif %}
-              <span class="bpm-resultante"></span>
-              {% if entrada.tiempo_inicio_calculado is not None %} · {% translate "calc." %} <span class="tiempo-calc" data-segundos="{{ entrada.tiempo_inicio_calculado|unlocalize }}"></span><span class="tiempo-calc-local"></span>{% endif %}
-              {% if entrada.ajustable_pulsos %}
-              <button type="button" class="btn btn-outline-light btn-sm btn-ajustar-pulsos ms-auto" title="{% translate "Ajustar pulsos dentro de este compás" %}">⋯ {% translate "pulsos" %}</button>
-              {% endif %}
+              <span class="d-flex align-items-center gap-2">
+                <span class="tiempo-real small" data-segundos="{{ entrada.tiempo_inicio_segundos|default_if_none:''|unlocalize }}" title="{% translate "Click para escribir el tiempo a mano" %}">{% if entrada.tiempo_inicio_segundos is not None %}{{ entrada.tiempo_inicio_segundos }}{% else %}—{% endif %}</span>
+                {% if entrada.ajustable_pulsos %}
+                <button type="button" class="btn btn-outline-light btn-sm btn-ajustar-pulsos" title="{% translate "Ajustar pulsos dentro de este compás" %}">⋯ {% translate "pulsos" %}</button>
+                {% endif %}
+              </span>
             </div>
             {% if entrada.ajustable_pulsos %}
             <div class="panel-pulsos" style="display:none;"></div>
@@ -290,7 +304,6 @@
   const btnMarcar = document.getElementById('sync-btn-marcar');
   const btnSaltear = document.getElementById('sync-btn-saltear');
   const btnDeshacer = document.getElementById('sync-btn-deshacer');
-  const armadaLabel = document.getElementById('sync-armada-label');
   const filas = Array.from(document.querySelectorAll('.fila-sync'));
   const scoreCanvas = document.getElementById('sync-score-canvas');
   const scoreMsg = document.getElementById('sync-score-msg');
@@ -305,13 +318,11 @@
   const btnAjusteM05 = document.getElementById('sync-btn-ajuste-m05');
   const btnAjusteP05 = document.getElementById('sync-btn-ajuste-p05');
   const btnAjusteP1 = document.getElementById('sync-btn-ajuste-p1');
-  const labelSeleccion = document.getElementById('sync-seleccion-label');
   const toggleNumeros = document.getElementById('sync-toggle-numeros');
   const rangoDesdeCompas = document.getElementById('sync-rango-desde-compas');
   const rangoDesdeVez = document.getElementById('sync-rango-desde-vez');
   const rangoHastaCompas = document.getElementById('sync-rango-hasta-compas');
   const rangoHastaVez = document.getElementById('sync-rango-hasta-vez');
-  const btnRangoAplicar = document.getElementById('sync-btn-rango-aplicar');
 
   function getCookie(nombre) {
     const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
@@ -336,7 +347,7 @@
     return NaN;
   }
 
-  document.querySelectorAll('.tiempo-real, .tiempo-calc').forEach((el) => {
+  document.querySelectorAll('.tiempo-real').forEach((el) => {
     const segundos = el.dataset.segundos;
     if (segundos !== '') el.textContent = formatearTiempo(parseFloat(segundos));
   });
@@ -498,56 +509,27 @@
     return seg === '' ? null : parseFloat(seg);
   }
 
-  // Tiempo CALCULADO (acumulado desde el compás 1 por fórmula de bpm) de la
-  // fila i — mismo dataset que ya reformatea el bucle inicial de arriba.
-  function calcDeFila(i) {
-    if (i < 0 || i >= filas.length) return null;
-    const el = filas[i].querySelector('.tiempo-calc');
-    if (!el) return null;
-    const seg = el.dataset.segundos;
-    return seg === '' ? null : parseFloat(seg);
-  }
-
-  // Dos datos derivados por fila, recalculados cada vez que cambia algún
-  // tiempo real (tapear, deshacer, interpolar, borrar, editar a mano):
-  // - Bpm REAL medido entre esta fila y la siguiente (a diferencia del bpm
-  //   nominal del itinerario, que sólo dice lo que el itinerario cree que
-  //   debería sonar) — sirve para comparar a ojo si una interpolación
-  //   siguió bien la curva de acelerando/ritardando o quedó pareja. Sólo se
-  //   muestra si las DOS puntas tienen tiempo real (explícito o
-  //   interpolado, no importa cuál).
-  // - Junto al tiempo calculado (que acumula desde el compás 1 por fórmula
-  //   y puede irse alejando de la realidad en piezas largas), un segundo
-  //   valor "anclado local": el tiempo real del compás ANTERIOR más la
-  //   duración calculada de este compás — compara el tempo esperado contra
-  //   el último punto real conocido, en vez de arrastrar el error
-  //   acumulado desde el principio de la obra.
-  // Ninguno de los dos inventa nada: si falta algún dato, queda vacío.
+  // Bpm REAL medido entre esta fila y la siguiente (a diferencia del bpm
+  // nominal del itinerario, que sólo dice lo que el itinerario cree que
+  // debería sonar) — sirve para comparar a ojo si una interpolación siguió
+  // bien la curva de acelerando/ritardando o quedó pareja. Sólo se muestra
+  // si las DOS puntas tienen tiempo real (explícito o interpolado, no
+  // importa cuál). Recalculado cada vez que cambia algún tiempo real
+  // (tapear, deshacer, interpolar, borrar, editar a mano).
   function actualizarDerivados() {
     filas.forEach((f, i) => {
       const spanBpm = f.querySelector('.bpm-resultante');
-      if (spanBpm) {
-        if (f.dataset.esCierre === '1') {
-          spanBpm.textContent = '';
-        } else {
-          const pulsos = parseFloat(f.dataset.pulsos);
-          const tActual = tiempoDeFila(i);
-          const tSiguiente = tiempoDeFila(i + 1);
-          spanBpm.textContent = (!pulsos || tActual == null || tSiguiente == null || tSiguiente <= tActual)
-            ? ''
-            : ` | ${Math.round(60 * pulsos / (tSiguiente - tActual))} {% translate "real" %}`;
-        }
+      if (!spanBpm) return;
+      if (f.dataset.esCierre === '1') {
+        spanBpm.textContent = '';
+        return;
       }
-
-      const spanCalcLocal = f.querySelector('.tiempo-calc-local');
-      if (spanCalcLocal) {
-        const tAnterior = tiempoDeFila(i - 1);
-        const calcAnterior = calcDeFila(i - 1);
-        const calcActual = calcDeFila(i);
-        spanCalcLocal.textContent = (tAnterior == null || calcAnterior == null || calcActual == null)
-          ? ''
-          : ` / ${formatearTiempo(tAnterior + (calcActual - calcAnterior))}`;
-      }
+      const pulsos = parseFloat(f.dataset.pulsos);
+      const tActual = tiempoDeFila(i);
+      const tSiguiente = tiempoDeFila(i + 1);
+      spanBpm.textContent = (!pulsos || tActual == null || tSiguiente == null || tSiguiente <= tActual)
+        ? ''
+        : ` | ${Math.round(60 * pulsos / (tSiguiente - tActual))} {% translate "real" %}`;
     });
   }
   actualizarDerivados();
@@ -770,28 +752,11 @@
     if (!visible) el.scrollIntoView({ block: 'start' });
   }
 
-  // "Marcando el compás X" sólo tiene sentido en modo marcado (es lo que
-  // van a tocar Marcar/Saltear/Deshacer, deshabilitados en reproducción) —
-  // en reproducción se limpia, no queda pegado un texto de una marca vieja.
-  function actualizarArmadaLabel() {
-    if (modo !== 'marcado' || idxArmada < 0) {
-      armadaLabel.textContent = '';
-      return;
-    }
-    const fila = filas[idxArmada];
-    const compas = fila.dataset.compas;
-    const pasada = fila.dataset.pasada;
-    armadaLabel.textContent = fila.dataset.esCierre === '1'
-      ? '{% translate "Marcando el fin de la obra" %}'
-      : '{% translate "Marcando el compás" %} ' + compas + (pasada > 1 ? ` (${pasada}ª)` : '');
-  }
-
   function armar(idx, opciones) {
     if (idx < 0 || idx >= filas.length) return;
     idxArmada = idx;
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idx));
     scrollSiHaceFalta(filas[idx]);
-    actualizarArmadaLabel();
     refrescarPanelScore();
 
     // Reposicionar el audio SÓLO cuando se arma por click explícito (ir a
@@ -1110,9 +1075,6 @@
   // el audio (evita el mismo salto que ya se evitó para marcar/saltear).
   function actualizarClasesSeleccion() {
     filas.forEach((f, i) => f.classList.toggle('seleccionada', seleccion.has(i)));
-    labelSeleccion.textContent = seleccion.size > 1
-      ? seleccion.size + ' {% translate "compases seleccionados" %}'
-      : '';
     actualizarBotonesSeleccion();
     actualizarInputsRango();
     refrescarPanelScore();
@@ -1157,9 +1119,9 @@
     actualizarClasesSeleccion();
     armar(iniOrden, { reposicionar: false }); // mismo criterio que Shift+click
   }
-  if (btnRangoAplicar) btnRangoAplicar.addEventListener('click', aplicarRango);
   [rangoDesdeCompas, rangoDesdeVez, rangoHastaCompas, rangoHastaVez].forEach((el) => {
     if (!el) return;
+    el.addEventListener('change', aplicarRango);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); aplicarRango(); } });
   });
 
@@ -1338,7 +1300,6 @@
     btnSaltear.disabled = modo !== 'marcado';
     btnDeshacer.disabled = modo !== 'marcado';
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idxArmada));
-    actualizarArmadaLabel();
     // Al entrar a reproducción, el estado del esquema Play/Continuar/
     // Reiniciar arranca de cero salvo que el audio ya estuviera sonando
     // (p.ej. veías/escuchabas en marcado y cambiaste de modo sin pausar) —
@@ -1605,7 +1566,41 @@
 
   if (scoreCanvas) {
     scoreCanvas.style.cursor = 'pointer';
+
+    // Arrastrar (mouse/touch/pen, vía Pointer Events) para avanzar/retroceder
+    // la ventana de sistemas, además de los botones ▲/▼ — mismo paso que
+    // esos botones (avanzarVerticalSync), un sistema por cada UMBRAL_PX de
+    // arrastre. Convención "scroll natural": arrastrar hacia ABAJO revela
+    // lo de ARRIBA (retrocede); arrastrar hacia ARRIBA avanza.
+    const UMBRAL_ARRASTRE_SYNC_PX = 40;
+    let arrastrandoSync = false;
+    let ultimaYArrastreSync = 0;
+    let huboArrastreSync = false;
+
+    scoreCanvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      arrastrandoSync = true;
+      huboArrastreSync = false;
+      ultimaYArrastreSync = e.clientY;
+      scoreCanvas.setPointerCapture(e.pointerId);
+    });
+    scoreCanvas.addEventListener('pointermove', (e) => {
+      if (!arrastrandoSync) return;
+      const delta = e.clientY - ultimaYArrastreSync;
+      if (Math.abs(delta) >= UMBRAL_ARRASTRE_SYNC_PX) {
+        avanzarVerticalSync(delta > 0 ? -1 : 1);
+        ultimaYArrastreSync = e.clientY;
+        huboArrastreSync = true;
+      }
+    });
+    scoreCanvas.addEventListener('pointerup', (e) => {
+      arrastrandoSync = false;
+      if (scoreCanvas.hasPointerCapture(e.pointerId)) scoreCanvas.releasePointerCapture(e.pointerId);
+    });
+    scoreCanvas.addEventListener('pointercancel', () => { arrastrandoSync = false; });
+
     scoreCanvas.addEventListener('click', (e) => {
+      if (huboArrastreSync) { huboArrastreSync = false; return; } // fue un arrastre, no un click de selección
       const numero = compasEnClickSync(e);
       if (numero == null) return;
       const i = filaMasCercana(numero, idxArmada >= 0 ? idxArmada : 0);
@@ -1778,3 +1773,8 @@
 })();
 </script>
 {% endblock %}
+
+{# Footer del sitio reubicado al pie de la partitura (columna izquierda,
+   más arriba) — se lo saca de acá para no tener que scrollear más de lo
+   necesario en esta pantalla. #}
+{% block footer %}{% endblock %}
