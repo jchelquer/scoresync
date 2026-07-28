@@ -439,18 +439,24 @@ function render() {
       const fracX = (e.clientX - r.left) / r.width;
       // Clic en la zona MUERTA (antes de la primera barra aceptada, o
       // después de la última) reubica el borde de sistema ahí en vez de
-      // agregar una barra — una barra sólo puede marcar el CIERRE de un
-      // compás, nunca el arranque del primero de un sistema; agregarla ahí
+      // agregar una barra — PERO SÓLO si ese borde no existe ya (contenido_x0/
+      // x1 en null, o sea, ya se descartó con un clic en la línea, o nunca se
+      // detectó). Si ya hay una marca azul vigente, cualquier otro clic en
+      // esa misma zona SIEMPRE agrega una barra real — si no, un clic entre
+      // la última barra aceptada y una marca azul ya puesta (para agregar una
+      // barra faltante ahí) se interpretaba como "mover la marca azul", y
+      // nunca se podía agregar esa barra (reporte real del usuario). Una
+      // barra sólo puede marcar el CIERRE de un compás, nunca el arranque del
+      // primero de un sistema; agregarla en la zona muerta SIN ningún borde
       // creaba un compás fantasma entre el borde de la imagen y el clic (ver
-      // conCierreDeSistema/xInicioPorSistema). Si no hay ninguna barra
-      // aceptada todavía en el sistema, no hay zona muerta que distinguir —
-      // se comporta como siempre (agrega una barra cualquiera).
+      // conCierreDeSistema/xInicioPorSistema) — de ahí que ese caso puntual sí
+      // reubique en vez de agregar.
       const propias = barras.filter(b => b.sistema_id === s.id && b.estado === 'aceptada').sort((a, b) => a.x - b.x);
       const primera = propias[0];
       const ultima = propias[propias.length - 1];
-      if (primera && fracX < primera.x) {
+      if (s.contenido_x0 == null && primera && fracX < primera.x) {
         s.contenido_x0 = fracX;
-      } else if (ultima && fracX > ultima.x) {
+      } else if (s.contenido_x1 == null && ultima && fracX > ultima.x) {
         s.contenido_x1 = fracX;
       } else {
         barras.push({ id: null, sistema_id: s.id, x: fracX, estado: 'aceptada', origen: 'manual', _key: 'nuevo-' + Math.random() });

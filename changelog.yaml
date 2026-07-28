@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.6"
+  date: "2026-07-27"
+  changes:
+    - type: corregido
+      text: "En \"Ajuste de barras\", un clic entre la última barra aceptada y una marca azul de cierre ya puesta se interpretaba siempre como \"mover esa marca ahí\" — impedía agregar una barra faltante en esa zona. Ahora reubicar sólo pasa si no hay ya una marca azul puesta (recién descartada, o nunca detectada); si ya hay una, cualquier otro clic agrega una barra real, como en cualquier otro lugar del sistema."
+
 - version: "1.15.5"
   date: "2026-07-27"
   changes:
