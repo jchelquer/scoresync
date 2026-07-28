@@ -2,6 +2,12 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.5"
+  date: "2026-07-27"
+  changes:
+    - type: corregido
+      text: "En \"Sincronizar compases\", el botón Reiniciar (modo marcado) armaba el primer compás de la selección en vez del último, al revés de lo que ya hace Shift+click al seleccionar un rango — quedaba inconsistente."
+
 - version: "1.15.4"
   date: "2026-07-27"
   changes:

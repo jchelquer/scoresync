@@ -402,10 +402,14 @@
       if (modo === 'reproduccion') {
         iniciarReproduccionDesde(primerIndiceSeleccion());
       } else {
-        // Mismo destino que Play en reproducción (primer seleccionado, o
-        // el compás 1 si no hay selección) — reposiciona el audio 2
-        // compases antes, mismo contexto que armar un compás por click.
-        armar(primerIndiceSeleccion(), { reposicionar: true });
+        // A diferencia de Play en reproducción (que arranca desde el
+        // PRIMER seleccionado, tiene sentido escuchar la selección desde el
+        // principio), acá arma el ÚLTIMO — misma convención que Shift+click
+        // (ver seleccionarFila/ultimoIndiceSeleccion): el compás armado es
+        // el que se marca al tapear, y Shift+click siempre arma el extremo
+        // más alto del rango. Reposiciona el audio 2 compases antes, mismo
+        // contexto que armar un compás por click.
+        armar(ultimoIndiceSeleccion(), { reposicionar: true });
       }
     });
   }
@@ -581,6 +585,15 @@
   function primerIndiceSeleccion() {
     const candidatos = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
     return candidatos.length ? Math.min(...candidatos) : 0;
+  }
+
+  // Simétrica a la de arriba — para armar en modo marcado, que arma el
+  // ÚLTIMO compás de una selección hecha con Shift+click (ver
+  // seleccionarFila), no el primero: Reiniciar tiene que respetar la misma
+  // convención en vez de saltar al otro extremo (ver btnReiniciar).
+  function ultimoIndiceSeleccion() {
+    const candidatos = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
+    return candidatos.length ? Math.max(...candidatos) : 0;
   }
 
   // Selección múltiple (para el ajuste fino, ver más abajo) — declarada acá
