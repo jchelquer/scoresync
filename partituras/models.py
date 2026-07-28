@@ -503,6 +503,19 @@ class Pagina(models.Model):
     # que la detección de bordes de sistema falla y sospecha de esto.
     umbral_contenido_sistema = models.FloatField(null=True, blank=True)
 
+    # % (0-1) de tinta (respecto del pico de la página) por debajo del cual
+    # una FILA cuenta como "vacía" al separar sistemas verticalmente (ver
+    # vision.detectar_sistemas) — None usa el default global
+    # (vision.UMBRAL_SEPARACION_SISTEMAS_DEFAULT). Mismo criterio que
+    # umbral_contenido_sistema, pero para el corte vertical: en una página
+    # con mucho texto de expresión/adornos entre pentagramas, un umbral bajo
+    # exige demasiada blancura y un hueco real pero "sucio" (una ligadura
+    # que se cuela) nunca llega a contar como separación — dos sistemas
+    # reales terminan fusionados en uno, o un sistema entero se descarta
+    # como si fuera ruido (caso real: "A Little Concert Suite", encontrado
+    # 2026-07-28).
+    umbral_separacion_sistemas = models.FloatField(null=True, blank=True)
+
     class Meta:
         unique_together = [('partitura', 'numero')]
         ordering = ['numero']

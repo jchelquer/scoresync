@@ -2,6 +2,14 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.7"
+  date: "2026-07-28"
+  changes:
+    - type: corregido
+      text: "La detección de sistemas perdía o fusionaba sistemas reales en partituras con mucho texto de expresión/adornos entre pentagramas (el umbral para considerar una franja \"vacía\" era demasiado estricto) — en un caso real llegaba a detectar 4 de 11 sistemas por página. Nuevo valor por defecto, mucho más tolerante."
+    - type: nuevo
+      text: "Umbral de separación entre sistemas ajustable por página, con un control deslizante (junto a \"Volver a detectar de cero\" en Ajuste de sistemas) — mismo criterio que el umbral de contenido de sistema, que también pasó a ser deslizante."
+
 - version: "1.15.6"
   date: "2026-07-27"
   changes:

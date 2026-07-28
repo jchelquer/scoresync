@@ -202,13 +202,24 @@
         <p class="small mb-2" style="color: var(--ss-text-muted)">
           {% translate "Usado para detectar dónde empieza/termina realmente un sistema (bordes de compás extremos). Si la detección falla en esta página — se ve un borde muy corrido o nunca aparece — probá cambiar este valor: más alto para páginas escaneadas con ruido de fondo, más bajo si un contenido real muy tenue (una nota suelta) queda cortado." %}
         </p>
-        <input type="number" name="umbral_contenido_pct" id="input-umbral-contenido"
-               class="form-control form-control-sm mb-2" min="0.05" max="50" step="0.05"
-               value="{{ umbral_contenido_pct|unlocalize }}">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <input type="range" name="umbral_contenido_pct" id="input-umbral-contenido" class="form-range"
+                 min="0.05" max="50" step="0.05" value="{{ umbral_contenido_pct|unlocalize }}">
+          <span id="valor-umbral-contenido" class="small" style="color: var(--ss-text-muted); min-width: 3rem;">{{ umbral_contenido_pct|unlocalize }}%</span>
+        </div>
         <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
           <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
         </button>
       </form>
+      <script>
+        (function () {
+          const slider = document.getElementById('input-umbral-contenido');
+          const valor = document.getElementById('valor-umbral-contenido');
+          if (slider && valor) {
+            slider.addEventListener('input', () => { valor.textContent = slider.value + '%'; });
+          }
+        })();
+      </script>
       <form method="post">
         {% csrf_token %}
         <button type="submit" name="accion" value="ignorar" class="btn btn-outline-light w-100">

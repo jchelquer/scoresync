@@ -35,9 +35,9 @@ from .services import (
     segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
-    UMBRAL_CONTENIDO_SISTEMA_DEFAULT, UMBRAL_RELATIVO_BARRA_DOBLE, buscar_barra_en_rectangulo,
-    detectar_barras_candidatas, detectar_borde_contenido_sistema, detectar_borde_fin_sistema, detectar_margenes,
-    detectar_sistemas, encontrar_ancla,
+    UMBRAL_CONTENIDO_SISTEMA_DEFAULT, UMBRAL_RELATIVO_BARRA_DOBLE, UMBRAL_SEPARACION_SISTEMAS_DEFAULT,
+    buscar_barra_en_rectangulo, detectar_barras_candidatas, detectar_borde_contenido_sistema,
+    detectar_borde_fin_sistema, detectar_margenes, detectar_sistemas, encontrar_ancla,
 )
 
 DPI = 300
@@ -1640,7 +1640,10 @@ def _detectar_sistemas_pagina(partitura, pagina):
     # esto hacía que detectar_sistemas no encontrara NINGÚN sistema).
     normalizada, recortada, (offset_x, offset_y) = _pagina_normalizada_recortada(partitura, pagina)
     h, w = normalizada.shape[:2]
-    sistemas = detectar_sistemas(recortada)
+    umbral_separacion = pagina.umbral_separacion_sistemas
+    if umbral_separacion is None:
+        umbral_separacion = UMBRAL_SEPARACION_SISTEMAS_DEFAULT
+    sistemas = detectar_sistemas(recortada, umbral_frac=umbral_separacion)
 
     pagina.sistemas.all().delete()
     Sistema.objects.bulk_create([
@@ -1666,6 +1669,13 @@ def ajuste_sistemas(request, pk, numero):
         ya_estaba_confirmada = pagina.sistemas_confirmados  # antes de tocar nada
 
         if accion == "redetectar":
+            umbral_pct_raw = request.POST.get("umbral_separacion_pct")
+            if umbral_pct_raw:
+                try:
+                    pagina.umbral_separacion_sistemas = max(0.0005, min(0.5, float(umbral_pct_raw) / 100))
+                    pagina.save(update_fields=["umbral_separacion_sistemas"])
+                except ValueError:
+                    pass
             # Ignora lo que haya (confirmado o no) y vuelve a correr
             # detectar_sistemas de cero.
             _detectar_sistemas_pagina(partitura, pagina)
@@ -1711,11 +1721,15 @@ def ajuste_sistemas(request, pk, numero):
         _detectar_sistemas_pagina(partitura, pagina)
 
     sistemas = list(pagina.sistemas.order_by("orden").values("id", "y", "height"))
+    umbral_separacion_actual = pagina.umbral_separacion_sistemas
+    if umbral_separacion_actual is None:
+        umbral_separacion_actual = UMBRAL_SEPARACION_SISTEMAS_DEFAULT
     return render(request, "partituras/ajuste_sistemas.html", {
         "partitura": partitura,
         "pagina": pagina,
         "total": total,
         "sistemas_json": json.dumps(sistemas),
+        "umbral_separacion_pct": round(umbral_separacion_actual * 100, 2),
     })
 
 

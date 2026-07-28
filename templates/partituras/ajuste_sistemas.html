@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}Ajustar sistemas — {{ partitura.titulo }}{% endblock %}
 
 {% block extra_head %}
@@ -129,6 +129,17 @@
       <hr style="border-color: #2a4a47;">
       <form method="post">
         {% csrf_token %}
+        <label for="input-umbral-separacion" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
+          {% translate "Umbral de separación entre sistemas (%)" %}
+        </label>
+        <p class="small mb-2" style="color: var(--ss-text-muted)">
+          {% translate "Qué tan blanca tiene que ser una franja horizontal para contar como el hueco entre dos sistemas. Si una página con mucho texto de expresión/adornos entre pentagramas termina con sistemas reales fusionados en uno o directamente perdidos, subilo; si un sistema se corta de más, bajalo." %}
+        </p>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <input type="range" name="umbral_separacion_pct" id="input-umbral-separacion" class="form-range"
+                 min="0.05" max="50" step="0.05" value="{{ umbral_separacion_pct|unlocalize }}">
+          <span id="valor-umbral-separacion" class="small" style="color: var(--ss-text-muted); min-width: 3rem;">{{ umbral_separacion_pct|unlocalize }}%</span>
+        </div>
         <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
           <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
         </button>
@@ -136,6 +147,15 @@
           {% translate "Por si entraste acá sin haber corrido 'Detectar sistemas' antes, o para descartar los cambios manuales y probar la detección automática de nuevo." %}
         </p>
       </form>
+      <script>
+        (function () {
+          const slider = document.getElementById('input-umbral-separacion');
+          const valor = document.getElementById('valor-umbral-separacion');
+          if (slider && valor) {
+            slider.addEventListener('input', () => { valor.textContent = slider.value + '%'; });
+          }
+        })();
+      </script>
     </div>
   </div>
 </div>

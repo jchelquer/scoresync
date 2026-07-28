@@ -58,7 +58,10 @@ def _tiene_lineas_largas(binaria, y0, y1, margen_x):
     return bool((lh.sum(axis=1) / 255).max() > 0)
 
 
-def detectar_sistemas(img_bgr):
+UMBRAL_SEPARACION_SISTEMAS_DEFAULT = 0.05
+
+
+def detectar_sistemas(img_bgr, umbral_frac=UMBRAL_SEPARACION_SISTEMAS_DEFAULT):
     """
     Segmenta la página en bandas de contenido separadas por filas casi en
     blanco (huecos entre sistemas, encabezados, texto suelto). Se queda con
@@ -73,6 +76,19 @@ def detectar_sistemas(img_bgr):
     extremo real del pentagrama (misma función que usa detectar_barras),
     porque es lo geométricamente correcto para un "sistema" y porque una
     barra de compás solo cruza esa altura, no toda la banda de contenido.
+
+    umbral_frac (0-1, del pico de tinta de la página) decide qué tan blanca
+    tiene que ser una fila para contar como "hueco" entre sistemas — no hay
+    un valor universal (mismo criterio que UMBRAL_CONTENIDO_SISTEMA_DEFAULT):
+    en una página con mucho texto de expresión/adornos entre pentagramas, un
+    umbral bajo exige demasiada blancura y un hueco real pero "sucio" (una
+    ligadura que se cuela un poco) nunca llega a los píxeles seguidos
+    necesarios para contar como separación — dos sistemas reales quedan
+    fusionados en uno, o uno entero se descarta por tener menos altura que el
+    corte de _mayor_salto (caso real: "A Little Concert Suite", 2026-07-28,
+    con 0.01 sólo se detectaban 4-5 de los ~11-12 sistemas reales por
+    página; con 0.05 salió el número exacto en las 3 páginas). Ajustable por
+    página (`Pagina.umbral_separacion_sistemas`), no una constante fija.
     Devuelve una lista de {'y0', 'y1'} en píxeles.
     """
     binaria = _binarizar(img_bgr)
@@ -81,7 +97,7 @@ def detectar_sistemas(img_bgr):
     contenido = binaria[:, margen_x:w - margen_x] > 0
 
     perfil = contenido.sum(axis=1)
-    umbral_vacio = max(perfil.max() * 0.01, 3)
+    umbral_vacio = max(perfil.max() * umbral_frac, 3)
     salto_min = max(int(h * 0.005), 10)
 
     bandas = []
