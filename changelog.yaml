@@ -2,6 +2,14 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.8"
+  date: "2026-07-28"
+  changes:
+    - type: mejorado
+      text: "En \"Sincronizar compases\": el texto de ayuda inicial (largo) pasó a un pop-up con botón \"?\" junto a \"Volver a la obra\", liberando espacio. Se sacaron los botones de avance/retroceso de audio en 1s y 0,1s (seguían disponibles por teclado con las flechas); el slider de velocidad se movió a la fila de Play/Reiniciar."
+    - type: mejorado
+      text: "En \"Sincronizar compases\", tocar Marcado o Reproducción también arranca el audio si estaba pausado — marcar es también \"empezar (o seguir) a marcar\", sin tener que tocar Play aparte."
+
 - version: "1.15.7"
   date: "2026-07-28"
   changes:

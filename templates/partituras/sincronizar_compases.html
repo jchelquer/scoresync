@@ -104,14 +104,25 @@
       </select>
     </form>
     {% endif %}
+    <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#modal-ayuda-sync" title="{% translate "Ayuda" %}">?</button>
     <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
   </div>
 </div>
 
-<p class="small mb-2" style="color: var(--ss-text-muted)">
-  {% translate "Sincronización fina: un tap por CADA compás de la obra (repeticiones incluidas, cada pasada la suya) — convive con la sincronización por fila del itinerario, no la reemplaza; donde marques acá, se usa esto; donde no, cae en lo de la otra pantalla o en el tiempo calculado." %}
-  {% translate "Barra espaciadora marca y avanza (el tap), Enter pausa/continúa el audio, Tab salta el compás actual SIN marcarlo (si te lo perdiste), Backspace deshace la última marca, flechas ajustan el audio de a 0,1s (Shift, 1s), y podés hacer click en cualquier compás para marcarlo o corregirlo directamente (Shift+click para seleccionar un rango, Ctrl/Cmd+click para sumar uno suelto — para el ajuste fino). También podés escribir el tiempo a mano haciendo click sobre el valor." %}
-</p>
+<div class="modal fade" id="modal-ayuda-sync" tabindex="-1" aria-labelledby="modal-ayuda-sync-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content" style="background: var(--ss-surface); color: var(--ss-text-muted); border: 1px solid #2a4a47;">
+      <div class="modal-header" style="border-color: #2a4a47;">
+        <h5 class="modal-title" id="modal-ayuda-sync-titulo" style="color: var(--ss-text-bright)">{% translate "Cómo sincronizar por compás" %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{% translate 'Cerrar' %}"></button>
+      </div>
+      <div class="modal-body small">
+        <p>{% translate "Sincronización fina: un tap por CADA compás de la obra (repeticiones incluidas, cada pasada la suya) — convive con la sincronización por fila del itinerario, no la reemplaza; donde marques acá, se usa esto; donde no, cae en lo de la otra pantalla o en el tiempo calculado." %}</p>
+        <p class="mb-0">{% translate "Barra espaciadora marca y avanza (el tap), Enter pausa/continúa el audio, Tab salta el compás actual SIN marcarlo (si te lo perdiste), Backspace deshace la última marca, flechas ajustan el audio de a 0,1s (Shift, 1s), y podés hacer click en cualquier compás para marcarlo o corregirlo directamente (Shift+click para seleccionar un rango, Ctrl/Cmd+click para sumar uno suelto — para el ajuste fino). También podés escribir el tiempo a mano haciendo click sobre el valor." %}</p>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="d-flex align-items-center gap-2 mb-3">
   <span class="small" style="color: var(--ss-text-muted);">{% translate "Modo" %}:</span>
@@ -153,16 +164,10 @@
     <div class="card border-0 mb-3" style="background: var(--ss-surface)">
       <div class="card-body">
         <audio id="sync-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <button id="sync-btn-back1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 1 segundo" %}">−1s</button>
-          <button id="sync-btn-back-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Retroceder 0,1 segundo" %}">−0,1s</button>
+        <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
           <button id="sync-btn-playpause" type="button" class="btn btn-ss" title="{% translate "Pausar/continuar (Enter)" %}">▶</button>
           <button id="sync-btn-reiniciar" type="button" class="btn btn-outline-light d-none" title="{% translate "Reiniciar — 2 compases antes del primero seleccionado" %}">↺</button>
-          <button id="sync-btn-fwd-fino" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 0,1 segundo" %}">+0,1s</button>
-          <button id="sync-btn-fwd1" type="button" class="btn btn-outline-light btn-sm btn-paso" title="{% translate "Avanzar 1 segundo" %}">+1s</button>
-        </div>
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <label for="sync-velocidad" class="small mb-0" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
+          <label for="sync-velocidad" class="small mb-0 ms-2" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
           <input type="range" id="sync-velocidad" min="25" max="100" step="5" value="100" style="width: 6.5rem;"
                  title="{% translate 'Bajar la velocidad no cambia el tiempo real que se guarda al marcar — sólo hace más cómodo tapear con precisión.' %}">
           <span id="sync-velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">100%</span>
@@ -277,10 +282,6 @@
   const btnInterpolar = document.getElementById('sync-btn-interpolar');
   const btnBorrarTiempos = document.getElementById('sync-btn-borrar-tiempos');
   const avisoInterpolar = document.getElementById('sync-interpolar-aviso');
-  const btnBack1 = document.getElementById('sync-btn-back1');
-  const btnBackFino = document.getElementById('sync-btn-back-fino');
-  const btnFwdFino = document.getElementById('sync-btn-fwd-fino');
-  const btnFwd1 = document.getElementById('sync-btn-fwd1');
   const velocidadSlider = document.getElementById('sync-velocidad');
   const velocidadValorEl = document.getElementById('sync-velocidad-valor');
   const scrubber = document.getElementById('sync-scrubber');
@@ -413,10 +414,6 @@
       }
     });
   }
-  btnBack1.addEventListener('click', () => saltar(-1));
-  btnBackFino.addEventListener('click', () => saltar(-0.1));
-  btnFwdFino.addEventListener('click', () => saltar(0.1));
-  btnFwd1.addEventListener('click', () => saltar(1));
   audio.addEventListener('play', () => {
     btnPlayPause.textContent = '⏸';
     if (modo === 'reproduccion') estadoReproduccion = 'reproduciendo';
@@ -1351,6 +1348,7 @@
     }
     actualizarBotonesReproduccion();
     refrescarPanelScore();
+    if (audio.paused) btnPlayPause.click();
   }
   btnModoMarcado.addEventListener('click', () => cambiarModo('marcado'));
   btnModoReproduccion.addEventListener('click', () => cambiarModo('reproduccion'));
