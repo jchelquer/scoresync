@@ -2,6 +2,18 @@
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
 
+- version: "1.15.10"
+  date: "2026-07-28"
+  changes:
+    - type: corregido
+      text: "En \"Ajuste de barras\", un sistema sin ninguna barra real en el medio (un compás único con multirest completo) no numeraba nada, aunque sus dos bordes de sistema estuvieran bien detectados — y agregarle una barra a mano de golpe renumeraba toda la página. La causa: el cierre virtual contra el borde de sistema no se contaba cuando no había ninguna barra aceptada. Corregido — ese sistema ahora siempre tiene su compás de cierre."
+    - type: corregido
+      text: "En \"Ajuste de barras\", borrar varias barras seleccionadas de una (rectángulo de selección + Borrar) resecuenciaba toda la página en vez de sólo lo que sigue del borrado — podía pisar en silencio una renumeración manual anterior (p.ej. el arranque de un movimiento). Ahora un borrado en bloque, sea de la cantidad que sea, sólo recalcula desde el primer punto de cambio en adelante."
+    - type: corregido
+      text: "En \"Ajuste de barras\", simplemente volver a entrar a una página YA CONFIRMADA (sin editar nada) podía perder en silencio un multirest puesto justo en el último compás de un sistema, y pisar con numeración plana cualquier renumeración manual posterior — un problema de vinculación al cargar la página, no de edición. Corregido."
+    - type: corregido
+      text: "En \"Sincronizar compases\", elegir un rango (Shift+click o los campos de Rango) en modo marcado armaba a veces el primer compás del bloque en vez del último — inconsistente con Reiniciar, que ya armaba el último. Ahora las tres vías arman siempre el último en marcado (seguís tapeando desde ahí) y el primero en reproducción (se escucha desde el principio)."
+
 - version: "1.15.9"
   date: "2026-07-28"
   changes:

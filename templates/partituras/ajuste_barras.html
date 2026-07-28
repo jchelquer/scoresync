@@ -294,15 +294,29 @@ function sistemaDe(sistemaId) {
 }
 
 // Vincula cada compás cargado con la barra que lo termina, por posición: al
-// cargar la página, los compases ya vienen en el mismo orden que sus barras
-// aceptadas, sistema por sistema (así se construyeron). Con esa referencia
-// estable, recalcularCompases() sabe qué compás reusar (y qué número
-// conservar) cuando esa barra sigue estando aceptada, en vez de tener que
+// cargar la página, los compases ya vienen en el mismo orden que sus
+// cierres (barras aceptadas + el cierre virtual de contenido_x1 cuando
+// corresponde), sistema por sistema (así se construyeron). Con esa
+// referencia estable, recalcularCompases() sabe qué compás reusar (y qué
+// número conservar) cuando ese cierre sigue vigente, en vez de tener que
 // resecuenciar todo de cero cada vez que una barra cambia.
+// OJO: tiene que usar conCierreDeSistema() acá, NO comparar contra
+// `aceptadas` directo — un sistema que cierra contra el borde virtual
+// (el caso normal, sin barra real en el último compás) tiene SIEMPRE un
+// compás más que barras aceptadas. Bug real (2026-07-28): comparar
+// directo contra `aceptadas` desalineaba el ÚLTIMO compás de casi todos
+// los sistemas de la página con `null` en vez de 'fin-sistema-X' — y como
+// eso pasa en la carguísima misma (antes de tocar nada), CUALQUIER
+// recarga de una página ya confirmada disparaba una "reconstrucción"
+// espúrea desde ese punto: perdía el multirest que hubiera puesto justo
+// en ese compás (la clave no coincidía, caía al peso por defecto 1) y
+// pisaba con numeración secuencial plana cualquier salto manual (p.ej.
+// de movimiento) que viniera después.
 sistemas.forEach(s => {
   const propios = compases.filter(c => c.sistema_id === s.id).sort((a, b) => a.x - b.x);
   const aceptadas = barras.filter(b => b.sistema_id === s.id && b.estado === 'aceptada').sort((a, b) => a.x - b.x);
-  propios.forEach((c, i) => { c._finBarra = aceptadas[i] ? aceptadas[i]._key : null; });
+  const cierres = conCierreDeSistema(aceptadas, s.id);
+  propios.forEach((c, i) => { c._finBarra = cierres[i] ? cierres[i]._key : null; });
 });
 
 // Dado el número que tenía cada compás antes del cambio (numerosViejos,
@@ -310,19 +324,17 @@ sistemas.forEach(s => {
 // cada uno (repeticionesViejos — 1 en el caso normal, más de 1 si el
 // usuario marcó a mano un silencio de varios compases) y la nueva lista de
 // barras aceptadas (clavesNuevas, mismo orden canónico: sistema, luego x),
-// calcula los números nuevos. Un solo clic sólo puede agregar o sacar UNA
-// barra de la lista, así que alcanza con encontrar el único punto donde
-// ambas listas divergen:
-// - si la lista nueva tiene una más: se insertó una barra ahí — el compás
-//   nuevo (vale 1, recién aparece) hereda el número que tenía el que estaba
-//   en esa posición, y ese y todos los que siguen suben uno.
-// - si tiene una menos: se sacó una barra — ese número desaparece y todos
-//   los que siguen bajan lo que valía ese compás (repeticionesViejos[i]),
-//   no siempre uno.
-// Nunca resecuenciamos desde cero salvo que no haya nada previo (página
-// recién llegada a esta pantalla) o pase algo inesperado (más de un cambio
-// a la vez) — así una renumeración o un silencio de varios compases marcado
-// a mano no se pisan.
+// calcula los números nuevos. Encuentra el PRIMER punto donde ambas listas
+// divergen (i) — todo lo anterior a ese punto queda IGUAL (ni se toca, ni
+// se recalcula: preserva cualquier renumeración manual que haya ahí, como
+// la convención del usuario de arrancar cada movimiento en 201/301/...).
+// De ahí en más se reconstruye compás por compás: cada clave que ya existía
+// conserva su peso (repeticionesViejos, vía repeticionesPorClave); una
+// clave nueva (recién agregada) vale 1. Esto funciona igual sea cual sea la
+// cantidad de barras que cambiaron de una sola vez (una, o el borrado en
+// bloque de varias con el rectángulo de selección) — nunca hace falta
+// resecuenciar desde numeroInicial salvo que no haya nada previo (página
+// recién llegada a esta pantalla).
 function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, clavesNuevas) {
   if (clavesViejas.length === 0) {
     let n = numeroInicial;
@@ -331,39 +343,18 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
   let i = 0;
   while (i < clavesViejas.length && i < clavesNuevas.length && clavesViejas[i] === clavesNuevas[i]) i++;
 
-  if (clavesNuevas.length === clavesViejas.length) {
-    return numerosViejos;  // el conjunto de barras aceptadas no cambió en los hechos
-  }
-  if (clavesNuevas.length === clavesViejas.length + 1) {
-    const numeroNuevo = (i < numerosViejos.length)
-      ? numerosViejos[i]
-      : numerosViejos[numerosViejos.length - 1] + (repeticionesViejos[repeticionesViejos.length - 1] ?? 1);
-    const resultado = numerosViejos.slice(0, i);
-    resultado.push(numeroNuevo);
-    for (let k = i; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] + 1);
-    return resultado;
-  }
-  if (clavesNuevas.length === clavesViejas.length - 1) {
-    const pesoBorrado = repeticionesViejos[i] ?? 1;
-    const resultado = numerosViejos.slice(0, i);
-    for (let k = i + 1; k < numerosViejos.length; k++) resultado.push(numerosViejos[k] - pesoBorrado);
-    return resultado;
-  }
-  // Más de un cambio a la vez (p.ej. "Volver a detectar de cero"): no hay
-  // un único punto de divergencia para insertar/borrar puntualmente, así
-  // que se resecuencia desde numeroInicial — pero cada compás que ya
-  // existía antes (identificado por su barra, no por posición) tiene que
-  // seguir valiendo lo que valía (repeticionesViejos), si no un silencio de
-  // varios compases marcado a mano se pisa con +1 en vez de +repeticiones
-  // apenas pasa cualquier cambio grande.
   const repeticionesPorClave = new Map();
   clavesViejas.forEach((k, idx) => repeticionesPorClave.set(k, repeticionesViejos[idx]));
-  let n = numeroInicial;
-  return clavesNuevas.map((k) => {
-    const numero = n;
-    n += repeticionesPorClave.get(k) ?? 1;
-    return numero;
-  });
+
+  const resultado = numerosViejos.slice(0, i);
+  let n = (i < numerosViejos.length)
+    ? numerosViejos[i]
+    : numerosViejos[numerosViejos.length - 1] + (repeticionesViejos[repeticionesViejos.length - 1] ?? 1);
+  for (let k = i; k < clavesNuevas.length; k++) {
+    resultado.push(n);
+    n += repeticionesPorClave.get(clavesNuevas[k]) ?? 1;
+  }
+  return resultado;
 }
 
 // Muchas partituras no tienen una barra de compás pegada al borde derecho
@@ -377,8 +368,15 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
 // por "el hueco final es comparable al ancho típico de compás", lo que
 // creaba un compás fantasma cuando esa barra de cierre real quedaba
 // seguida de blanco).
+// OJO: tiene que agregar el cierre virtual incluso con `propias` VACÍO —
+// un sistema que es un solo multirest (silencio de varios compases, sin
+// ninguna barra real en el medio) también necesita su compás de cierre,
+// si no queda sin numerar. Bug real (2026-07-28): cortar temprano acá
+// dejaba sistemas así con CERO compases, y agregar una barra a mano de
+// golpe sumaba dos (la agregada + el cierre) — un salto que
+// difundirNumeros() no sabe diferenciar de "más de un cambio a la vez",
+// así que resecuenciaba TODA la página en vez de sólo lo que sigue.
 function conCierreDeSistema(propias, sistemaId) {
-  if (propias.length === 0) return propias;
   const s = sistemaDe(sistemaId);
   if (!s || s.contenido_x1 == null) return propias;
   return [...propias, { x: s.contenido_x1, sistema_id: sistemaId, _key: 'fin-sistema-' + sistemaId }];

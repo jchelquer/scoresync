@@ -1117,7 +1117,9 @@
     for (let k = iniOrden; k <= finOrden; k++) seleccion.add(k);
     anclaSeleccion = ini;
     actualizarClasesSeleccion();
-    armar(iniOrden, { reposicionar: false }); // mismo criterio que Shift+click
+    // Mismo criterio que Shift+click: en marcado arma el ÚLTIMO del rango,
+    // en reproducción el PRIMERO.
+    armar(modo === 'marcado' ? finOrden : iniOrden, { reposicionar: false });
   }
   [rangoDesdeCompas, rangoDesdeVez, rangoHastaCompas, rangoHastaVez].forEach((el) => {
     if (!el) return;
@@ -1150,7 +1152,11 @@
       seleccion = new Set();
       for (let k = ini; k <= fin; k++) seleccion.add(k);
       actualizarClasesSeleccion();
-      armar(i, { reposicionar: false });
+      // En marcado se arma el ÚLTIMO del bloque (seguís tapeando desde ahí
+      // hacia adelante); en reproducción, el PRIMERO (se escucha desde el
+      // principio de la selección) — mismo criterio que aplicarRango()
+      // y Reiniciar (ver ultimoIndiceSeleccion).
+      armar(modo === 'marcado' ? fin : ini, { reposicionar: false });
     } else if (ctrlOrMeta) {
       if (seleccion.has(i)) seleccion.delete(i); else seleccion.add(i);
       anclaSeleccion = i;
