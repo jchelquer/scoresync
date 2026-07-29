@@ -31,7 +31,7 @@ from .services import (
     interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
     parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
-    resolver_efecto_tempo_en_compas, resolver_notacion_en_compas, resolver_segmentos, retroceder_compas,
+    resolver_efecto_tempo_en_compas, resolver_notacion_en_compas, retroceder_compas,
     segmentos_navegables, tiempo_real_ancla,
 )
 from .vision import (
@@ -358,8 +358,8 @@ def obras(request):
 def obra_detalle(request, pk):
     """Ficha de una obra: sus datos y las partes (partituras) que tiene
     adjuntas, más un formulario para adjuntar otra partitura propia todavía
-    sin obra. También el alta/reemplazo del audio de referencia (para
-    sincronizar tiempo_inicio — ver sincronizar_itinerario).
+    sin obra. También el alta/reemplazo del audio de referencia (para poder
+    sincronizar itinerario/compases con el tiempo real).
 
     No hace falta ser dueño de la OBRA para entrar — cualquiera logueado
     puede ver la ficha, elegir qué parte seguir y navegar/ejecutar, SIEMPRE
@@ -464,48 +464,12 @@ def borrar_obra(request, pk):
 
 
 @login_required
-def sincronizar_itinerario(request, pk):
-    """Pantalla para completar Segmento.tiempo_inicio (el tiempo REAL, no el
-    calculado) escuchando el audio de referencia y marcando con el teclado
-    dónde arranca cada fila del itinerario — en vez de tener que escribir
-    segundos a mano. Incluye la fila de cierre (compas_desde vacío): marcar
-    su tiempo_inicio es marcar dónde termina la obra de verdad."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
-    if not obra.audio:
-        messages.warning(request, 'Esta obra todavía no tiene un audio de referencia cargado.')
-        return redirect("partituras:obra_detalle", pk=pk)
-
-    segmentos = list(Segmento.objects.filter(obra=obra).order_by("orden"))
-    resueltos_por_id = {info["segmento"].id: info for info in resolver_segmentos(obra)}
-
-    filas = []
-    for seg in segmentos:
-        info = resueltos_por_id.get(seg.id, {})
-        filas.append({
-            "segmento": seg,
-            "indicacion_compas": info.get("indicacion_compas"),
-            "tiempo_inicio_calculado": seg.tiempo_inicio_calculado,
-            "tiempo_inicio_segundos": seg.tiempo_inicio.total_seconds() if seg.tiempo_inicio is not None else None,
-        })
-
-    partes_disponibles = _partes_disponibles(obra, request.user)
-    partitura_seguida = _partitura_seguida(obra, request) if partes_disponibles else None
-
-    return render(request, "partituras/sincronizar_itinerario.html", {
-        "obra": obra,
-        "filas": filas,
-        "tiene_score": partitura_seguida is not None,
-        "partitura_seguida": partitura_seguida,
-        "partes_disponibles": partes_disponibles,
-    })
-
-
-@login_required
 @require_POST
 def marcar_tiempo_segmento(request, pk):
-    """Guarda (o borra) el tiempo_inicio REAL de una fila puntual — se llama
-    por fetch() desde sincronizar_itinerario.html en cada marca/deshacer, no hay
-    pantalla ni redirect asociado."""
+    """Guarda (o borra) el tiempo_inicio REAL de una fila puntual — hoy sólo
+    se usa para la fila de cierre (marca el fin real de la obra), tocando su
+    tiempo en la lista de sincronizar_compases.html (fetch() en cada marca/
+    deshacer, no hay pantalla ni redirect asociado)."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
     segmento = get_object_or_404(Segmento, pk=request.POST.get("segmento_id"), obra=obra)
 
@@ -530,11 +494,8 @@ def marcar_tiempo_segmento(request, pk):
 @login_required
 def sincronizar_compases(request, pk):
     """Pantalla de sincronización FINA: tap compás a compás (cada ocurrencia,
-    repeticiones incluidas — ver MarcaTiempoCompas) en vez de una marca por
-    fila del itinerario (ver sincronizar_itinerario). Convive con esa
-    pantalla sin reemplazarla: en la ejecución, cada fuente se usa por
-    separado según el switch de Temporización — nunca se mezclan (ver
-    construir_plan)."""
+    repeticiones incluidas — ver MarcaTiempoCompas), más la fila de cierre
+    (Segmento.tiempo_inicio) para marcar dónde termina la obra de verdad."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
     if not obra.audio:
         messages.warning(request, 'Esta obra todavía no tiene un audio de referencia cargado.')
@@ -1179,7 +1140,6 @@ def navegador_obra(request, pk):
         "compases_al_aire_guardado": pref.compases_al_aire if pref else 1,
         "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
         "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else bool(obra.audio),
-        "fuente_temporizacion_guardada": pref.fuente_temporizacion if pref else "compases",
         "modo_guardado": pref.modo_score if pref else "",
     })
 
@@ -1205,10 +1165,6 @@ def guardar_preferencias_obra(request, pk):
         "velocidad": max(20, min(150, _leer_entero(request.POST.get("velocidad"), 100))),
         "compases_al_aire": max(0, min(4, _leer_entero(request.POST.get("compases_al_aire"), 1))),
         "ejecutar_con_audio": request.POST.get("ejecutar_con_audio") == "on",
-        "fuente_temporizacion": (
-            request.POST.get("fuente_temporizacion")
-            if request.POST.get("fuente_temporizacion") in ("itinerario", "compases") else "compases"
-        ),
         "modo_score": (
             request.POST.get("modo_score")
             if request.POST.get("modo_score") in ("compas", "partitura") else ""
@@ -1264,10 +1220,6 @@ def plan_obra(request, pk):
         hasta_compas, hasta_pulso = None, None
     hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
 
-    fuente_temporizacion = request.GET.get("fuente_temporizacion")
-    if fuente_temporizacion not in ("itinerario", "compases"):
-        fuente_temporizacion = "compases"
-
     pulsos, completo, cambios = construir_plan(
         obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
@@ -1286,26 +1238,23 @@ def plan_obra(request, pk):
         if cambio["tipo"] == "armadura":
             cambio["valor"] = armadura_transportada(cambio["valor"], transposicion)
     # Ancla real para "Ejecutar con audio": el tiempo real del primer pulso
-    # del plan, en la fuente elegida (ver tiempo_real_ancla — ya no hay
-    # prioridad automática entre itinerario/compases, la fija este switch).
-    # Si el pulso venía con fracción (ej. "5,2.5"), pulso_fraccion ubica el
-    # punto exacto dentro del pulso — de ahí en más, el cliente suma
-    # duracion_itinerario/duracion_compases (ya vienen en cada pulso, y el
-    # primero ya sale acortado a lo que resta) para saber a qué segundo del
-    # audio corresponde cualquier otro pulso del plan.
+    # del plan (ver tiempo_real_ancla). Si el pulso venía con fracción (ej.
+    # "5,2.5"), pulso_fraccion ubica el punto exacto dentro del pulso — de
+    # ahí en más, el cliente suma duracion_compases (ya viene en cada pulso,
+    # y el primero ya sale acortado a lo que resta) para saber a qué segundo
+    # del audio corresponde cualquier otro pulso del plan.
     primer_pulso_tiempo_real = None
     if pulsos:
         pulso_fraccion = (desde_pulso - int(desde_pulso)) if desde_pulso is not None else 0.0
         primer_pulso_tiempo_real = tiempo_real_ancla(
             obra, pulsos[0]["segmento_id"], pulsos[0]["compas"], pulsos[0].get("pulso", 1),
-            fuente_temporizacion, pulso_fraccion,
+            pulso_fraccion,
         )
     return JsonResponse({
         "pulsos": pulsos,
         "completo": completo,
         "cambios": cambios,
         "primer_pulso_tiempo_real": primer_pulso_tiempo_real,
-        "fuente_temporizacion": fuente_temporizacion,
     })
 
 

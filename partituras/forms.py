@@ -78,14 +78,13 @@ class SegmentoForm(forms.ModelForm):
         model = Segmento
         fields = [
             'orden', 'desde_texto', 'hasta_texto',
-            'descripcion', 'tiempo_inicio',
+            'descripcion',
         ]
         widgets = {
             'orden': forms.NumberInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 4.5rem;'}),
             'desde_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
             'hasta_texto': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 6rem;', 'placeholder': 'compás[,pulso]'}),
             'descripcion': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'min-width: 10rem;'}),
-            'tiempo_inicio': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'style': 'width: 8rem;', 'placeholder': 'hh:mm:ss'}),
         }
 
     def clean(self):

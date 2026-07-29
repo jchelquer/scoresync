@@ -63,9 +63,24 @@
         {% if es_dueño %}
         <form method="post" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-3">
           {% csrf_token %}
-          <input type="file" name="audio" accept="audio/*" class="form-control form-control-sm" style="width: auto;">
-          <button type="submit" class="btn btn-outline-light btn-sm">{% if obra.audio %}{% translate "Reemplazar" %}{% else %}{% translate "Subir" %}{% endif %}</button>
+          <label for="input-audio" class="btn btn-outline-light btn-sm mb-0">
+            <i class="bi bi-upload me-1"></i>{% if obra.audio %}{% translate "Elegir otro archivo" %}{% else %}{% translate "Elegir archivo" %}{% endif %}
+          </label>
+          <input type="file" id="input-audio" name="audio" accept="audio/*" class="visually-hidden">
+          <span id="audio-nombre-elegido" class="small" style="color: var(--ss-text-muted)"></span>
+          <button type="submit" class="btn btn-ss btn-sm">{% if obra.audio %}{% translate "Reemplazar" %}{% else %}{% translate "Subir" %}{% endif %}</button>
         </form>
+        <script>
+          (function () {
+            var input = document.getElementById('input-audio');
+            var nombre = document.getElementById('audio-nombre-elegido');
+            if (input && nombre) {
+              input.addEventListener('change', function () {
+                nombre.textContent = input.files.length ? input.files[0].name : '';
+              });
+            }
+          })();
+        </script>
         {% endif %}
 
         <div class="d-flex gap-2 flex-wrap">
@@ -78,9 +93,6 @@
           </a>
           {% endif %}
           {% if es_dueño and obra.audio and obra.segmentos.exists %}
-          <a href="{% url 'partituras:sincronizar_itinerario' obra.pk %}" class="btn btn-outline-light">
-            <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar itinerario" %}
-          </a>
           <a href="{% url 'partituras:sincronizar_compases' obra.pk %}" class="btn btn-outline-light">
             <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar compases" %}
           </a>

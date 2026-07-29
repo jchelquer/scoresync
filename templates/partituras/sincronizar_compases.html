@@ -778,9 +778,8 @@
     const params = new URLSearchParams();
     let url;
     if (fila.dataset.esCierre === '1') {
-      // La fila de cierre no es un compás puntual — comparte el mismo
-      // tiempo_inicio que usa sincronizar_itinerario.html (por fila), no una
-      // MarcaTiempoCompas nueva.
+      // La fila de cierre no es un compás puntual — usa Segmento.tiempo_inicio
+      // (marcar_tiempo_segmento), no una MarcaTiempoCompas nueva.
       url = '{% url "partituras:marcar_tiempo_segmento" obra.pk %}';
       params.set('segmento_id', fila.dataset.segmentoId);
     } else {
@@ -1377,8 +1376,8 @@
 
   if (filas.length) armar(idxArmada, { reposicionar: true });
 
-  // ── Panel de partitura (mismo criterio que sincronizar_itinerario.html: un
-  // recorte de unos pocos sistemas con el compás armado resaltado). ──────
+  // ── Panel de partitura: un recorte de unos pocos sistemas con el compás
+  // armado resaltado. ──────────────────────────────────────────────────
   {% if tiene_score %}
   // Tapeando rápido, un mostrarCompas() puede seguir esperando la imagen
   // cuando ya se armó un compás más nuevo — sin esto, si esa llamada vieja

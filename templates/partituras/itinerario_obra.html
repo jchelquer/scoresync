@@ -33,7 +33,6 @@
           <th>{% translate "Desde" %}</th>
           <th>{% translate "Hasta" %}</th>
           <th>{% translate "Descripción" %}</th>
-          <th>{% translate "Tiempo inicio" %}</th>
           <th>{% translate "Tiempo calculado" %}</th>
           <th>{% translate "Borrar" %}</th>
         </tr>
@@ -46,12 +45,11 @@
           <td>{{ form.desde_texto }}</td>
           <td>{{ form.hasta_texto }}</td>
           <td>{{ form.descripcion }}</td>
-          <td>{{ form.tiempo_inicio }}</td>
           <td class="small">{{ form.instance.tiempo_inicio_calculado|default_if_none:"—" }}</td>
           <td class="text-center">{{ form.DELETE }}</td>
         </tr>
         {% if form.errors %}
-        <tr><td colspan="7" class="text-danger small">{{ form.errors }}</td></tr>
+        <tr><td colspan="6" class="text-danger small">{{ form.errors }}</td></tr>
         {% endif %}
         {% endfor %}
       </tbody>

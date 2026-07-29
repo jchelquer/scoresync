@@ -161,7 +161,9 @@ class Segmento(models.Model):
     descripcion = models.CharField(max_length=200, blank=True, help_text="Rótulo libre (ej: 'Exposición', 'Coda') — sin efecto en la secuencia.")
     tiempo_inicio = models.DurationField(
         null=True, blank=True,
-        help_text="Tiempo transcurrido desde el inicio de la grabación hasta acá — vacío hasta sincronizar con audio/video real.",
+        help_text="Tiempo real transcurrido desde el inicio de la grabación hasta acá — hoy sólo se usa "
+                   "en la fila de cierre (marca el fin real de la obra, ver 'Sincronizar compases'); "
+                   "vacío en el resto de las filas.",
     )
     tiempo_inicio_calculado = models.DurationField(
         null=True, blank=True,
@@ -183,16 +185,15 @@ class Segmento(models.Model):
 
 class MarcaTiempoCompas(models.Model):
     """Tiempo real de una ocurrencia PUNTUAL de compás (no de una fila entera
-    del itinerario, ver Segmento.tiempo_inicio) — sincronización fina,
-    compás a compás, marcada escuchando el audio (ver sincronizar_compases).
-    compas+pasada identifica la ocurrencia exacta (si el compás se repite —
-    2da vez, D.C., etc. — cada pasada tiene su propia marca), mismo criterio
-    de "pasada" que usa buscar_posicion.
+    del itinerario) — sincronización fina, compás a compás, marcada
+    escuchando el audio (ver sincronizar_compases). compas+pasada identifica
+    la ocurrencia exacta (si el compás se repite — 2da vez, D.C., etc. —
+    cada pasada tiene su propia marca), mismo criterio de "pasada" que usa
+    buscar_posicion.
 
-    Convive con Segmento.tiempo_inicio en vez de reemplazarlo: en la
-    ejecución, cada fuente ("por itinerario" o "por compases") se usa por
-    separado según elija el usuario — nunca se mezclan entre sí (ver
-    construir_plan en services.py)."""
+    Convive con Segmento.tiempo_inicio (usado sólo por la fila de cierre,
+    para marcar el fin real de la obra) sin reemplazarlo — ver
+    construir_plan en services.py."""
     obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_tiempo_compas')
     compas = models.PositiveIntegerField()
     pasada = models.PositiveIntegerField(default=1)
@@ -224,10 +225,10 @@ class MarcaTiempoPulso(models.Model):
     resto de los pulsos de ese mismo compás sigue saliendo de la
     interpolación de siempre.
 
-    Es una ancla MÁS de la misma fuente "por compases" (nunca "por
-    itinerario", mismo criterio que MarcaTiempoCompas) — no una fuente
-    nueva: _anclas_globales la agrega al mismo anclas_compases, sólo más
-    precisa que una marca de compás entero (ver services.py)."""
+    Es una ancla MÁS de la misma fuente "por compases" (mismo criterio que
+    MarcaTiempoCompas) — no una fuente nueva: _anclas_globales la agrega al
+    mismo anclas_compases, sólo más precisa que una marca de compás entero
+    (ver services.py)."""
     obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='marcas_tiempo_pulso')
     compas = models.PositiveIntegerField()
     pasada = models.PositiveIntegerField(default=1)
@@ -660,20 +661,7 @@ class PreferenciaObra(models.Model):
     ejecutar_con_audio = models.BooleanField(
         default=False,
         help_text="Si la ejecución sigue el audio de referencia (tiempos reales, velocidad fija) en vez "
-                   "del reloj calculado — ver sincronizar_itinerario. Se recuerda igual que el resto de estas preferencias.",
-    )
-    FUENTES_TEMPORIZACION = [
-        ('itinerario', 'Itinerario'),
-        ('compases', 'Compases'),
-    ]
-    fuente_temporizacion = models.CharField(
-        max_length=12, choices=FUENTES_TEMPORIZACION, default='compases',
-        help_text="Qué fuente de tiempos reales gobierna el cursor/sombreado durante la ejecución: "
-                   "'itinerario' usa sólo Segmento.tiempo_inicio (con tiempo_inicio_calculado como base "
-                   "siempre disponible, ver sincronizar_itinerario); 'compases' usa sólo MarcaTiempoCompas "
-                   "(sin caer al cálculo puro fuera del tramo cubierto, ver sincronizar_compases). Es "
-                   "independiente de ejecutar_con_audio (ese controla si SUENA el audio de referencia, "
-                   "esto controla de qué reloj sale la posición del cursor).",
+                   "del reloj calculado. Se recuerda igual que el resto de estas preferencias.",
     )
     parte_seguida = models.ForeignKey(
         Partitura, null=True, blank=True, on_delete=models.SET_NULL, related_name='+',

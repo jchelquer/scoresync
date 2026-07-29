@@ -1,6 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.17.0"
+  date: "2026-07-29"
+  changes:
+    - type: mejorado
+      text: "Se eliminó la sincronización \"por itinerario\" (la pantalla \"Sincronizar itinerario\" y el selector de Temporización en el navegador) — había quedado sin uso desde que existe la sincronización fina por compases, y sólo generaba confusión. La fila \"fin de la obra\" de \"Sincronizar compases\" sigue funcionando igual que antes."
+    - type: corregido
+      text: "En la ficha de la obra, el selector de audio ya no muestra el confuso texto nativo del navegador (\"ningún archivo seleccionado\") — ahora es un botón claro que dice \"Elegir archivo\" o \"Elegir otro archivo\" según corresponda."
 - version: "1.16.0"
   date: "2026-07-28"
   changes:

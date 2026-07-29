@@ -56,10 +56,6 @@
   #score-header-rango #control-compases-aire input { width: 3rem !important; }
   #barra-compacta #control-ejecutar-audio { font-size: 0.8rem; }
   #barra-compacta #control-numeros-compas { font-size: 0.8rem; }
-  #barra-compacta #control-temporizacion,
-  #score-header-extra #control-temporizacion { font-size: 0.8rem; }
-  #barra-compacta #control-temporizacion select,
-  #score-header-extra #control-temporizacion select { padding: 0.1rem 1.4rem 0.1rem 0.4rem; font-size: 0.8rem; }
 
   /* "Modo normal"/"Modo partitura" y "Volver a la obra" quedan pegados al
      final de la fila compacta, empujados a la derecha (todo lo demás
@@ -292,13 +288,6 @@
     <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
     <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
   </div>
-  <div id="control-temporizacion">
-    <label for="select-temporizacion" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">⏱ {% translate "Temporización" %}</label>
-    <select id="select-temporizacion" class="form-select form-select-sm" style="width: 8rem;">
-      <option value="compases" {% if fuente_temporizacion_guardada == "compases" %}selected{% endif %}>{% translate "Compases" %}</option>
-      <option value="itinerario" {% if fuente_temporizacion_guardada == "itinerario" %}selected{% endif %}>{% translate "Itinerario" %}</option>
-    </select>
-  </div>
   {% if tiene_score %}
   <div class="form-check form-switch d-flex align-items-center" id="control-numeros-compas">
     <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
@@ -410,8 +399,6 @@
   const toggleEjecutarAudio = document.getElementById('toggle-ejecutar-audio');
   const controlMuteAudio = document.getElementById('control-mute-audio');
   const toggleMuteAudio = document.getElementById('toggle-mute-audio');
-  const controlTemporizacion = document.getElementById('control-temporizacion');
-  const selectTemporizacion = document.getElementById('select-temporizacion');
   const controlNumerosCompas = document.getElementById('control-numeros-compas');
   const controlAvisosCambio = document.getElementById('control-avisos-cambio');
   const audioNav = document.getElementById('nav-audio');
@@ -450,10 +437,9 @@
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
     // "Ejecutar con audio" (con "Silenciar" anidado adentro, se mueve con
-    // él) y Temporización van a continuación del metrónomo — mismo grupo
-    // temático ("qué gobierna la ejecución"), en la misma fila compacta.
+    // él) va a continuación del metrónomo — mismo grupo temático ("qué
+    // gobierna la ejecución"), en la misma fila compacta.
     { el: controlEjecutarAudio, destino: barraCompacta },
-    { el: controlTemporizacion, destino: barraCompacta },
     { el: controlNumerosCompas, destino: barraCompacta },
     { el: controlAvisosCambio, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
@@ -526,11 +512,8 @@
       aplicarVelocidadAudio();
       reconstruirTiempos();
       if (idxMostrado >= 0 && idxMostrado < acumulados.length) {
-        // Sólo re-ancla si el reloj activo es el calculado con velocidad
-        // (acumulados) — si es el real (acumuladosReales, ver
-        // usaAcumuladosReales), la velocidad no lo afecta en absoluto, no
-        // hay nada que remapear.
-        if (!usaAcumuladosReales()) elapsedAlPausar = acumulados[idxMostrado];
+        // El reloj activo es siempre el real (acumuladosReales) — la
+        // velocidad no lo afecta en absoluto, no hay nada que remapear acá.
         mostrarPulso(pulsos[idxMostrado]); // refresca el bpm mostrado a la nueva velocidad
       }
       programarGuardadoPreferencias();
@@ -572,7 +555,6 @@
     params.set('velocidad', velocidadSlider ? velocidadSlider.value : '100');
     params.set('compases_al_aire', compasesAireInput ? compasesAireInput.value : '1');
     params.set('ejecutar_con_audio', ejecutarConAudio ? 'on' : '');
-    params.set('fuente_temporizacion', fuenteTemporizacion());
     params.set('zoom', String(nivelZoom));
     params.set('modo_score', document.body.classList.contains('modo-partitura') ? 'partitura' : 'compas');
     fetch('{% url "partituras:guardar_preferencias_obra" obra.pk %}', {
@@ -613,41 +595,14 @@
       audioNav.muted = toggleMuteAudio.checked;
     });
   }
-  // ── Temporización (itinerario/compases) ─────────────────────────────
-  // Se recuerda como el resto de las preferencias. Sólo afecta de dónde
-  // sale la duración usada por el reloj/cursor (ver campoDuracion) —
-  // independiente de "Ejecutar con audio", ver audioDebeSonar/
-  // fuenteTemporizacion.
-  if (selectTemporizacion) {
-    selectTemporizacion.addEventListener('change', programarGuardadoPreferencias);
-  }
-  // Sólo tiene sentido elegir esto ANTES de arrancar — cambiarlo a mitad
-  // de una ejecución (corriendo o en pausa) dejaría el reloj usando un
-  // ancla/array que ya no corresponde a lo que se está mostrando.
-  //
-  // Desacoplado en dos preguntas independientes (antes eran una sola,
-  // "usarAudioModo"): audioDebeSonar() sólo decide si el <audio> HTML
-  // suena/se reposiciona; fuenteTemporizacion()/campoDuracion() deciden,
-  // totalmente aparte, de qué dato sale la posición del cursor/sombreado.
-  // Las 4 combinaciones son válidas (con/sin audio × itinerario/compases).
+  // audioDebeSonar() decide si el <audio> HTML suena/se reposiciona; la
+  // posición del cursor/sombreado sale siempre de acumuladosReales (ver
+  // avanzar), independiente de si el audio suena o no.
   function audioDebeSonar() {
     return ejecutarConAudio && !!audioNav && primerPulsoTiempoReal != null;
   }
-  function fuenteTemporizacion() {
-    return (selectTemporizacion && selectTemporizacion.value === 'itinerario') ? 'itinerario' : 'compases';
-  }
-  function campoDuracion() {
-    return fuenteTemporizacion() === 'itinerario' ? 'duracion_itinerario' : 'duracion_compases';
-  }
-  // Mismo criterio que usa avanzar() para elegir entre acumulados (con
-  // velocidad) y acumuladosReales (sin ella) — se reusa en los lugares que
-  // necesitan re-anclar elapsedAlPausar a la posición real de un pulso
-  // (cambio de velocidad a mitad de pausa, remapeo al continuar).
-  function usaAcumuladosReales() {
-    return fuenteTemporizacion() === 'compases' || audioDebeSonar();
-  }
   function elapsedEnPulso(idx) {
-    return usaAcumuladosReales() ? acumuladosReales[idx] : acumulados[idx];
+    return acumuladosReales[idx];
   }
 
   // Los navegadores ignoran (o resetean más tarde) un currentTime asignado
@@ -679,10 +634,10 @@
   // en la ventana visible — la ventana ya muestra sistemas por delante del
   // actual, así que el aviso aparece solo con antelación real.
   let cambiosPorCompas = new Map();
-  // Contraparte de acumulados/totalDuracion pero con duracion_itinerario o
-  // duracion_compases (según campoDuracion, ver construir_plan) en vez de
-  // la calculada pura — nunca se le aplica velocidad (un tiempo real
-  // capturado no es algo que se pueda acelerar/frenar sin distorsión) y
+  // Contraparte de acumulados/totalDuracion pero con duracion_compases (ver
+  // construir_plan) en vez de la calculada pura — nunca se le aplica
+  // velocidad (un tiempo real capturado no es algo que se pueda
+  // acelerar/frenar sin distorsión) y
   // por eso NO depende de velocidadActual como sí depende
   // reconstruirTiempos() de acumulados.
   let acumuladosReales = [];
@@ -722,26 +677,24 @@
 
   // Reconstruye acumulados/totalDuracion desde pulsos[] (ya cargado) con la
   // velocidadActual vigente — no toca compasInicios (eso no depende de la
-  // velocidad, sólo se arma una vez al cargar el plan). acumuladosReales
-  // usa el campo de la fuente de temporización activa (ver campoDuracion) —
-  // nunca se le aplica velocidad (ver comentario de acumuladosReales más
-  // arriba). En modo "por compases", un pulso puede no tener dato real
-  // (campo null — fuera del tramo cubierto por marcas, ver construir_plan):
-  // se le suma 0, así el pulso siguiente "hereda" el mismo acumulado en vez
-  // de robarle tiempo real a nadie — es lo que permite el freeze/snap en
-  // avanzar() (el índice no avanza más allá de un pulso null hasta que el
-  // reloj alcanza el acumulado del próximo pulso con dato real).
+  // velocidad, sólo se arma una vez al cargar el plan). acumuladosReales usa
+  // duracion_compases — nunca se le aplica velocidad (ver comentario de
+  // acumuladosReales más arriba). Un pulso puede no tener dato real (null —
+  // fuera del tramo cubierto por marcas, ver construir_plan): se le suma 0,
+  // así el pulso siguiente "hereda" el mismo acumulado en vez de robarle
+  // tiempo real a nadie — es lo que permite el freeze/snap en avanzar() (el
+  // índice no avanza más allá de un pulso null hasta que el reloj alcanza
+  // el acumulado del próximo pulso con dato real).
   function reconstruirTiempos() {
     acumulados = [];
     totalDuracion = 0;
     acumuladosReales = [];
     totalDuracionReal = 0;
-    const campo = campoDuracion();
     pulsos.forEach(p => {
       acumulados.push(totalDuracion);
       totalDuracion += duracionEscalada(p);
       acumuladosReales.push(totalDuracionReal);
-      totalDuracionReal += p[campo] != null ? p[campo] : 0;
+      totalDuracionReal += p.duracion_compases != null ? p.duracion_compases : 0;
     });
   }
 
@@ -2047,10 +2000,6 @@
     // ancla/array que ya no corresponde a lo que se está mostrando — sólo
     // se puede elegir antes de arrancar.
     if (toggleEjecutarAudio) toggleEjecutarAudio.disabled = estado !== 'inicial';
-    // Mismo criterio que "Ejecutar con audio": elegir la fuente de
-    // temporización a mitad de una ejecución dejaría el reloj usando un
-    // acumulado que ya no corresponde a lo que se está mostrando.
-    if (selectTemporizacion) selectTemporizacion.disabled = estado !== 'inicial';
     // El slider de velocidad se deja SIEMPRE habilitado (nunca con el
     // atributo disabled) — si estuviera deshabilitado durante 'reproduciendo'
     // no recibiría ni el primer evento de interacción, y el listener de
@@ -2151,21 +2100,18 @@
   // solo, sin ningún caso especial acá.
   function avanzar(now) {
     const conAudio = audioDebeSonar();
-    const campo = campoDuracion();
     // Contra qué acumulados se compara es independiente de si el audio
-    // suena: "por compases" siempre usa los reales (no tiene sentido
-    // aplicarle velocidad a tiempos de compás tapeados); "por itinerario"
-    // sin audio sigue con los calculados+velocidad de siempre.
-    const usarReal = fuenteTemporizacion() === 'compases' || conAudio;
+    // suena: siempre los reales (no tiene sentido aplicarle velocidad a
+    // tiempos de compás tapeados).
     let elapsed = conAudio ? (audioNav.currentTime - primerPulsoTiempoReal) : (now - startTs) / 1000;
-    const total = usarReal ? totalDuracionReal : totalDuracion;
-    const acumuladosUsados = usarReal ? acumuladosReales : acumulados;
+    const total = totalDuracionReal;
+    const acumuladosUsados = acumuladosReales;
     if (elapsed >= total) {
       if (loopEl && loopEl.checked) {
         if (conAudio) {
           audioNav.currentTime = primerPulsoTiempoReal;
         } else {
-          startTs += (usarReal ? totalDuracionReal : totalDuracion) * 1000;
+          startTs += totalDuracionReal * 1000;
         }
         elapsed -= total;
         idxMostrado = -1;
@@ -2181,14 +2127,14 @@
       }
     }
     // Busca el último índice cuyo acumulado ya pasó, PERO nunca avanza más
-    // allá de un pulso cuya propia duración (en la fuente activa) sea
-    // desconocida (null, ver reconstruirTiempos/construir_plan) — ese
+    // allá de un pulso cuya propia duración real sea desconocida (null, ver
+    // reconstruirTiempos/construir_plan) — ese
     // pulso "no sabe cuánto dura", así que el cursor se congela ahí hasta
     // que el reloj alcanza el acumulado del PRÓXIMO pulso con dato
     // conocido (que ya arrastra el mismo acumulado): en ese instante salta
     // directo, sin pasar visualmente por los intermedios sin marca.
     let i = 0;
-    while (i + 1 < acumuladosUsados.length && elapsed >= acumuladosUsados[i + 1] && pulsos[i][campo] != null) i++;
+    while (i + 1 < acumuladosUsados.length && elapsed >= acumuladosUsados[i + 1] && pulsos[i].duracion_compases != null) i++;
     if (i !== idxMostrado) {
       // Cada entrada saltada (si el navegador se atrasó un instante) igual
       // tiene que sonar/parpadear — sólo el número en pantalla se pisa con
@@ -2210,15 +2156,14 @@
 
   // Arma los parámetros del plan a partir del formulario de rango vigente
   // (no de la URL, que puede estar desactualizada si el usuario tipeó algo
-  // nuevo sin recargar) más la fuente de temporización elegida. Se llama
-  // tanto al Empezar/Reiniciar como al Continuar — nunca durante la
-  // ejecución en curso (ver construir_plan/plan_obra).
+  // nuevo sin recargar). Se llama tanto al Empezar/Reiniciar como al
+  // Continuar — nunca durante la ejecución en curso (ver
+  // construir_plan/plan_obra).
   async function pedirPlan() {
     errorEl.style.display = 'none';
     const params = formRango ? new URLSearchParams(new FormData(formRango)) : new URLSearchParams(window.location.search);
     params.delete('segmento');
     params.delete('compas');
-    params.set('fuente_temporizacion', fuenteTemporizacion());
     const queryStr = params.toString();
     let data;
     try {
@@ -2239,23 +2184,21 @@
       errorEl.style.display = '';
       return null;
     }
-    // "Por compases" depende de que TODO el rango tenga temporización real
-    // (explícita o interpolada, da igual — ver duracion_compases en
-    // construir_plan) — un hueco sin marcar deja pulsos con duración 0 y
-    // rompe el seguimiento en silencio. Mejor bloquear con la causa (siempre
-    // se puede completar interpolando en "Sincronizar compases") que dejar
-    // que la ejecución avance mal sin avisar.
-    if (fuenteTemporizacion() === 'compases') {
-      const sinCobertura = [...new Set(
-        data.pulsos.filter((p) => p.duracion_compases == null).map((p) => p.compas)
-      )];
-      if (sinCobertura.length) {
-        errorEl.textContent = '{% translate "Faltan compases sin temporización real (ni marcada ni interpolada) para ejecutar por compases: " %}'
-          + sinCobertura.join(', ')
-          + '. {% translate "Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes de ejecutar." %}';
-        errorEl.style.display = '';
-        return null;
-      }
+    // Depende de que TODO el rango tenga temporización real (explícita o
+    // interpolada, da igual — ver duracion_compases en construir_plan) — un
+    // hueco sin marcar deja pulsos con duración 0 y rompe el seguimiento en
+    // silencio. Mejor bloquear con la causa (siempre se puede completar
+    // interpolando en "Sincronizar compases") que dejar que la ejecución
+    // avance mal sin avisar.
+    const sinCobertura = [...new Set(
+      data.pulsos.filter((p) => p.duracion_compases == null).map((p) => p.compas)
+    )];
+    if (sinCobertura.length) {
+      errorEl.textContent = '{% translate "Faltan compases sin temporización real (ni marcada ni interpolada) para ejecutar por compases: " %}'
+        + sinCobertura.join(', ')
+        + '. {% translate "Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes de ejecutar." %}';
+      errorEl.style.display = '';
+      return null;
     }
     const rangoCambio = queryStr !== ultimosParametrosPlan;
     ultimosParametrosPlan = queryStr;

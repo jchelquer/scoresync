@@ -471,40 +471,30 @@ def _posiciones_calculadas_fila(seg, notacion_por_compas, bpm_por_pulso, factor_
 
 def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
                       bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre=None):
-    """Anclas reales de las DOS fuentes de temporización, para la obra
-    ENTERA de una sola vez, en la MISMA posición calculada por bpm (ver
-    _posiciones_calculadas_fila) — acumulada globalmente, cruzando filas del
-    itinerario sin resetear (mismo criterio que tiempo_inicio_calculado de
-    compases_desenrollados). Nunca se combinan entre sí (cada lista es de
-    una sola fuente), ver _escala_en_posicion/_tiempo_real_en_posicion:
+    """Anclas reales "por compases", para la obra ENTERA de una sola vez, en
+    la MISMA posición calculada por bpm (ver _posiciones_calculadas_fila) —
+    acumulada globalmente, cruzando filas del itinerario sin resetear (mismo
+    criterio que tiempo_inicio_calculado de compases_desenrollados). Ver
+    _tiempo_real_en_posicion:
 
     - anclas_compases: (posición, tiempo real) de cada MarcaTiempoCompas
       puntual, MÁS cada MarcaTiempoPulso puntual (ver
       marcas_pulso_por_compas_pasada) — un pulso corregido a mano es sólo
-      un punto más PRECISO de la misma lista/fuente, nunca una fuente
-      aparte: dos compases vecinos en la reproducción real pueden
-      interpolar entre sí siguiendo la curva de bpm, aunque el itinerario
-      los haya partido en filas distintas (p.ej. un compás de anacrusis
-      solo en su propia fila, o un acelerando que cruza un borde de fila).
-    - anclas_itinerario: (posición, tiempo real) del ARRANQUE de cada fila
-      que tenga Segmento.tiempo_inicio propio — antes se miraba sólo el
-      borde entre dos filas VECINAS; ahora, igual que "compases", busca la
-      marca más cercana en cualquier fila, cruzando huecos de filas sin
-      marcar en el medio (p.ej. marcar sólo el arranque y el final reales
-      de la obra ya estira proporcionalmente todo lo que queda en el medio,
-      en vez de no servir para nada si las filas intermedias no tienen su
-      propio borde marcado).
+      un punto más PRECISO de la misma lista, nunca una fuente aparte: dos
+      compases vecinos en la reproducción real pueden interpolar entre sí
+      siguiendo la curva de bpm, aunque el itinerario los haya partido en
+      filas distintas (p.ej. un compás de anacrusis solo en su propia fila,
+      o un acelerando que cruza un borde de fila).
 
     tiempo_cierre (segundos, opcional): Segmento.tiempo_inicio de la fila de
-    cierre — si está, cuenta como ancla del extremo derecho para LAS DOS
-    fuentes (fin real de la obra).
+    cierre — si está, cuenta como ancla del extremo derecho (fin real de la
+    obra).
 
-    Devuelve (anclas_compases, anclas_itinerario, posicion_inicio:
-    {(segmento_id, compas): posición calculada del primer pulso de esa
-    ocurrencia}) — filas sin bpm/indicación resuelta (plan incompleto, ver
-    construir_plan) se saltean: no se puede calcular sus posiciones."""
+    Devuelve (anclas_compases, posicion_inicio: {(segmento_id, compas):
+    posición calculada del primer pulso de esa ocurrencia}) — filas sin bpm/
+    indicación resuelta (plan incompleto, ver construir_plan) se saltean: no
+    se puede calcular sus posiciones."""
     anclas_compases = []
-    anclas_itinerario = []
     posicion_inicio = {}
     pasadas_ya_ancladas = set()  # (compas, pasada) — ver nota abajo
     offset_global = 0.0
@@ -512,8 +502,6 @@ def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas
         posiciones_fila = _posiciones_calculadas_fila(seg, notacion_por_compas, bpm_por_pulso, factor_por_pulso)
         if posiciones_fila is None:
             continue
-        if seg.tiempo_inicio is not None:
-            anclas_itinerario.append((offset_global, seg.tiempo_inicio.total_seconds()))
         pulsos_por_compas_fila = _pulsos_por_compas_de_fila(seg, notacion_por_compas)
         for compas in range(seg.compas_desde, seg.compas_hasta + 1):
             idx_compas = _pulsos_antes_del_compas(seg, compas, pulsos_por_compas_fila)
@@ -549,40 +537,15 @@ def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas
         offset_global += posiciones_fila[-1]
     if tiempo_cierre is not None:
         anclas_compases.append((offset_global, tiempo_cierre))
-        anclas_itinerario.append((offset_global, tiempo_cierre))
     anclas_compases.sort(key=lambda a: a[0])
-    anclas_itinerario.sort(key=lambda a: a[0])
-    return anclas_compases, anclas_itinerario, posicion_inicio
-
-
-def _escala_en_posicion(anclas, posicion, fuera_de_rango=1.0):
-    """Factor para escalar la duración calculada de un pulso a duración
-    real, según en qué tramo (entre qué par de anclas consecutivas) cae su
-    posición — ver _anclas_globales. Fuera del tramo cubierto por las
-    anclas (antes de la primera, después de la última, o con menos de dos
-    anclas en total) devuelve `fuera_de_rango` tal cual, sin interpolar ni
-    extrapolar nada ahí: 1.0 para itinerario (sin dato real, se usa el
-    tiempo calculado tal cual — el itinerario siempre tiene una base de
-    fórmula, calibrada o no); None para compases (no hay tap real que valga
-    como sustituto — "no sé", no "asumo 1.0")."""
-    if len(anclas) < 2 or posicion < anclas[0][0] or posicion > anclas[-1][0]:
-        return fuera_de_rango
-    # Cada tramo es [pos_a, pos_b) — semiabierto — salvo el último, cerrado
-    # de los dos lados: una posición que cae justo EN una ancla intermedia
-    # pertenece al tramo que ARRANCA ahí, no al que termina ahí (un pulso
-    # que empieza justo en una marca ya corre al ritmo nuevo).
-    ultimo_tramo = len(anclas) - 2
-    for i, ((pos_a, t_a), (pos_b, t_b)) in enumerate(zip(anclas, anclas[1:])):
-        if pos_a <= posicion < pos_b or (i == ultimo_tramo and posicion == pos_b):
-            return (t_b - t_a) / (pos_b - pos_a) if pos_b != pos_a else fuera_de_rango
-    return fuera_de_rango
+    return anclas_compases, posicion_inicio
 
 
 def _tiempo_real_en_posicion(anclas, posicion):
     """Tiempo real interpolado linealmente en una posición calculada
     arbitraria (no necesariamente el arranque de un pulso, puede caer a
-    mitad de uno) — misma mecánica de tramos que _escala_en_posicion, pero
-    devuelve el tiempo real absoluto en vez de sólo el factor de escala.
+    mitad de uno) — busca en qué tramo (entre qué par de anclas
+    consecutivas, ver _anclas_globales) cae la posición e interpola.
     None si la posición cae fuera del tramo cubierto (o hay menos de dos
     anclas) — sin inventar una extrapolación. Excepción: si la posición
     coincide EXACTO con una ancla, se devuelve directo su tiempo real, aunque
@@ -1154,16 +1117,13 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     por pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
     es_primer_pulso_compas/acento/indicacion_compas/bpm/
     variacion_tempo_display/bpm_llegada/descripcion/duracion/
-    duracion_itinerario/duracion_compases (duracion en segundos, None si no
-    se pudo resolver bpm o indicación para ese compás — plan incompleto,
-    ver "completo" más abajo; duracion_itinerario es la duración escalada
-    SÓLO contra anclas de Segmento.tiempo_inicio, con 1.0 de fallback fuera
-    de cobertura — siempre tiene un valor; duracion_compases es la duración
-    escalada SÓLO contra MarcaTiempoCompas, None fuera del tramo cubierto
-    por al menos dos marcas reales — "no sé", el cliente no debe inventar
-    una posición ahí, ver navegador_obra.html. Las dos NUNCA se mezclan
-    entre sí, ver _anclas_globales/_escala_en_posicion; pulso/
-    pulsos_por_compas ubican al pulso DENTRO del compás — p.ej. para mover
+    duracion_compases (duracion en segundos, None si no se pudo resolver
+    bpm o indicación para ese compás — plan incompleto, ver "completo" más
+    abajo; duracion_compases es la duración escalada SÓLO contra
+    MarcaTiempoCompas, None fuera del tramo cubierto por al menos dos
+    marcas reales — "no sé", el cliente no debe inventar una posición ahí,
+    ver navegador_obra.html; ver _anclas_globales/_tiempo_real_en_posicion.
+    pulso/pulsos_por_compas ubican al pulso DENTRO del compás — p.ej. para mover
     el punto del metrónomo dentro de un recuadro en vez de sólo flashear en
     el lugar; es_primer_pulso_compas marca cuándo corresponde refrescar el
     número de compás en pantalla; acento es el pulso 1 musical real, ver
@@ -1187,8 +1147,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     # compás (ver MarcaTiempoCompas), más la fila de cierre — se arma una
     # sola vez acá (no adentro del loop de abajo) porque _anclas_globales
     # necesita ver TODAS las filas/marcas en orden para ubicar la posición
-    # calculada global de cada una. Las dos fuentes (itinerario/compases)
-    # nunca se combinan entre sí (ver _escala_en_posicion/_tiempo_real_en_posicion).
+    # calculada global de cada una.
     todos_los_segmentos = list(obra.segmentos.order_by('orden'))
     indice = _indice_notacion(obra)
     pasadas_por_compas = _pasadas_por_compas(obra)
@@ -1204,7 +1163,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     bpm_por_pulso, factor_por_pulso, variacion_por_pulso = _resolver_bpm_por_pulso(
         obra, navegables, notacion_por_compas, pasadas_por_compas, indice, rampas, calderones,
     )
-    anclas_compases_globales, anclas_itinerario_globales, posicion_inicio_por_seg_compas = _anclas_globales(
+    anclas_compases_globales, posicion_inicio_por_seg_compas = _anclas_globales(
         navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
         bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre,
     )
@@ -1213,7 +1172,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
 
     # Parte fraccionaria de desde_pulso (ej. 2.5 -> 0.5) — cuánto del primer
     # pulso EMITIDO ya "pasó" antes del punto de arranque pedido; se le
-    # resta a su duración más abajo, en las tres fuentes, para que el
+    # resta a su duración más abajo, en las dos fuentes, para que el
     # reloj visual y el audio (posicionado aparte, ver tiempo_real_ancla)
     # queden de acuerdo en cuánto falta de ese pulso.
     fraccion_inicial = (desde_pulso - int(desde_pulso)) if desde_pulso is not None else 0.0
@@ -1296,7 +1255,6 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                     'bpm_llegada': None,
                     'descripcion': seg.descripcion,
                     'duracion': None,
-                    'duracion_itinerario': None,
                     'duracion_compases': None,
                 })
         else:
@@ -1326,21 +1284,10 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
 
                 # Posición calculada GLOBAL de este pulso puntual (cruza
                 # filas del itinerario, ver _anclas_globales) — sirve de eje
-                # para las DOS fuentes, cada una contra su propia lista de
-                # anclas reales, sin combinarse entre sí.
+                # para ubicarlo contra las anclas reales.
                 posicion_pulso = None
                 if posicion_compas is not None:
                     posicion_pulso = posicion_compas + (posiciones_fila[idx_en_fila] - posiciones_fila[offset_compas])
-
-                # "itinerario": ya no se escala sólo contra el borde de ESTA
-                # fila y el de la vecina — busca la marca de arranque de fila
-                # más cercana en cualquier dirección, cruzando huecos de
-                # filas sin marcar (mismo criterio que "compases" — ver
-                # _anclas_globales).
-                escala_itin = 1.0
-                if posicion_pulso is not None:
-                    escala_itin = _escala_en_posicion(anclas_itinerario_globales, posicion_pulso, fuera_de_rango=1.0)
-                duracion_itinerario_pulso = duracion_pulso * escala_itin
 
                 # "compases": duración real = diferencia entre el tiempo real
                 # interpolado en la posición calculada de ESTE pulso y la del
@@ -1357,13 +1304,12 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                 # no sólo de este compás): si desde_pulso venía con fracción
                 # (ej. "5,2.5"), a este pulso sólo le queda por correr la
                 # parte final — se le resta la fracción ya "consumida" a su
-                # duración en las tres fuentes, para que el reloj visual
+                # duración en las dos fuentes, para que el reloj visual
                 # quede de acuerdo con dónde se posiciona el audio (ver
                 # tiempo_real_ancla). No aplica a los pulsos siguientes.
                 if primera_iteracion and p == pulso_ini_emitir and fraccion_inicial > 0:
                     resto = 1.0 - fraccion_inicial
                     duracion_pulso *= resto
-                    duracion_itinerario_pulso *= resto
                     if duracion_compases_pulso is not None:
                         duracion_compases_pulso *= resto
 
@@ -1392,15 +1338,10 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
                     'bpm_llegada': variacion_por_pulso.get((seg.id, compas, p), ('', None))[1],
                     'descripcion': seg.descripcion,
                     'duracion': duracion_pulso,
-                    # Duración a usar con Temporización "por itinerario": la
-                    # calculada, escalada SÓLO contra anclas de
-                    # Segmento.tiempo_inicio — 1.0 (sin escalar) donde no
-                    # hay ancla de fila cerca, nunca None.
-                    'duracion_itinerario': duracion_itinerario_pulso,
-                    # Duración a usar con Temporización "por compases": la
-                    # calculada, escalada SÓLO contra MarcaTiempoCompas
-                    # puntuales — None fuera del tramo cubierto por al
-                    # menos dos marcas reales (ver _escala_en_posicion).
+                    # Duración real: la calculada, escalada SÓLO contra
+                    # MarcaTiempoCompas puntuales — None fuera del tramo
+                    # cubierto por al menos dos marcas reales (ver
+                    # _tiempo_real_en_posicion).
                     'duracion_compases': duracion_compases_pulso,
                 })
 
@@ -1444,9 +1385,9 @@ def compases_desenrollados(obra):
     La ÚLTIMA entrada, si la obra tiene fila de cierre (ver Segmento —
     compas_desde null, marca dónde termina el último compás de verdad), es
     esa fila de cierre en vez de un compás puntual (compas/pasada quedan en
-    None, es_cierre en True) — mismo tiempo_inicio que usa
-    sincronizar_itinerario.html (por fila), no uno nuevo: tapear esta entrada
-    hay que guardarla con marcar_tiempo_segmento, no marcar_tiempo_compas."""
+    None, es_cierre en True) — su tiempo_inicio (Segmento.tiempo_inicio, no
+    una MarcaTiempoCompas) hay que guardarlo con marcar_tiempo_segmento, no
+    marcar_tiempo_compas."""
     navegables = segmentos_navegables(obra)
     if not navegables:
         return [], True
@@ -1505,18 +1446,16 @@ def compases_desenrollados(obra):
     return entradas, completo
 
 
-def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0.0):
-    """Tiempo real, de UNA sola fuente (`fuente`: 'itinerario' o
-    'compases' — ya no hay prioridad automática entre ambas, la elige quien
-    llama, ver construir_plan), en el punto que arranca el pulso pedido de
-    esta ocurrencia de compás puntual — pensado para posicionar el audio en
-    navegador_obra.html (ver plan_obra). pulso_fraccion (0.0-1.0) ubica un
-    punto intermedio DENTRO de ese pulso (p.ej. "5,2.5" = compás 5, pulso 2,
-    pulso_fraccion=0.5); 0.0 (default) es el arranque exacto del pulso.
-    None si no hay ningún ancla real de la fuente pedida que cubra ese
-    punto — no inventa un valor con el tiempo calculado ni con la otra
-    fuente. El cliente interpreta None como "no hay cómo posicionar el
-    audio acá" y avisa en vez de arrancarlo desde 0 (ver navegador_obra.html/
+def tiempo_real_ancla(obra, segmento_id, compas, pulso, pulso_fraccion=0.0):
+    """Tiempo real (por compases, ver MarcaTiempoCompas/MarcaTiempoPulso) en
+    el punto que arranca el pulso pedido de esta ocurrencia de compás
+    puntual — pensado para posicionar el audio en navegador_obra.html (ver
+    plan_obra). pulso_fraccion (0.0-1.0) ubica un punto intermedio DENTRO de
+    ese pulso (p.ej. "5,2.5" = compás 5, pulso 2, pulso_fraccion=0.5); 0.0
+    (default) es el arranque exacto del pulso. None si no hay ningún ancla
+    real que cubra ese punto — no inventa un valor con el tiempo calculado.
+    El cliente interpreta None como "no hay cómo posicionar el audio acá" y
+    avisa en vez de arrancarlo desde 0 (ver navegador_obra.html/
     audioDebeSonar)."""
     segmento = Segmento.objects.filter(pk=segmento_id).first()
     if segmento is None:
@@ -1532,9 +1471,6 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
         return None
     pulso_ini_compas, _ = _rango_pulsos_del_compas(segmento, compas, pulsos_compas)
 
-    # Misma posición calculada GLOBAL para las dos fuentes (ver
-    # _anclas_globales) — sólo cambia contra qué lista de anclas reales se
-    # busca, según `fuente`; nunca se combinan entre sí.
     navegables = segmentos_navegables(obra)
     marcas_por_compas_pasada = {
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
@@ -1547,11 +1483,10 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, fuente, pulso_fraccion=0
     bpm_por_pulso, factor_por_pulso, _ = _resolver_bpm_por_pulso(
         obra, navegables, notacion_por_compas, pasadas_por_compas, indice, rampas, calderones,
     )
-    anclas_compases, anclas_itinerario, posicion_inicio = _anclas_globales(
+    anclas, posicion_inicio = _anclas_globales(
         navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
         bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre,
     )
-    anclas = anclas_compases if fuente == 'compases' else anclas_itinerario
 
     posicion_compas = posicion_inicio.get((segmento.id, compas))
     if posicion_compas is None:

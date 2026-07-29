@@ -33,7 +33,6 @@ urlpatterns = [
     path('obras/<int:pk>/preferencias/', views.guardar_preferencias_obra, name='guardar_preferencias_obra'),
     path('obras/<int:pk>/plan/', views.plan_obra, name='plan_obra'),
     path('obras/<int:pk>/score-geometria/', views.score_geometria_obra, name='score_geometria_obra'),
-    path('obras/<int:pk>/sincronizar-itinerario/', views.sincronizar_itinerario, name='sincronizar_itinerario'),
     path('obras/<int:pk>/marcar-tiempo/', views.marcar_tiempo_segmento, name='marcar_tiempo_segmento'),
     path('obras/<int:pk>/sincronizar-compases/', views.sincronizar_compases, name='sincronizar_compases'),
     path('obras/<int:pk>/marcar-tiempo-compas/', views.marcar_tiempo_compas, name='marcar_tiempo_compas'),
