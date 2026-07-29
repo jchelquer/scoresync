@@ -47,11 +47,12 @@ class PartituraEditForm(forms.ModelForm):
 class ObraForm(forms.ModelForm):
     class Meta:
         model = Obra
-        fields = ['titulo', 'compositor', 'arreglista']
+        fields = ['titulo', 'compositor', 'arreglista', 'ciclo']
         widgets = {
             'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Título de la obra'}),
             'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Arreglista (opcional)'}),
+            'ciclo': forms.Select(attrs={'class': 'form-select'}),
         }
 
 

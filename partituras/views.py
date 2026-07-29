@@ -215,6 +215,7 @@ def _contexto_estado(request, partitura):
         "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
         "pagina_barras": _primera_pendiente(partitura, "barras_confirmadas"),
         "obras_propias": Obra.objects.filter(owner=request.user),
+        "ciclos": Ciclo.objects.select_related("repertorio").all(),
     }
 
 

@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.19.1"
+  date: "2026-07-29"
+  changes:
+    - type: mejorado
+      text: "Al crear una obra nueva ahora se puede elegir de una vez el repertorio-ciclo, sin tener que editarla después."
 - version: "1.19.0"
   date: "2026-07-29"
   changes:
