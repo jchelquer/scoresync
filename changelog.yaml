@@ -1,7 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
-
+- version: "1.16.0"
+  date: "2026-07-28"
+  changes:
+    - type: nuevo
+      text: "Durante la ejecución, ahora se puede prender avisos que muestren eventos importantes (cambios de compás, armadura de clave, tempo)"
+    - type: mejorado
+      text: "La armadura de clave mostrada se adapta adutomáticamente a la traspoción del instrumento para el que fue hecha la parte."
 - version: "1.15.10"
   date: "2026-07-28"
   changes:

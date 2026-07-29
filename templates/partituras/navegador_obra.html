@@ -32,6 +32,11 @@
     align-items: flex-end !important;
   }
 
+  #barra-titulo-partitura { display: none; }
+  body.modo-partitura #barra-titulo-partitura { display: block !important; }
+  /* El doble de lo que tenía antes (0.9rem) — fila propia, arriba de
+     #barra-compacta, no mezclado con el resto de los controles chicos. */
+  #barra-titulo-partitura #titulo-obra { font-size: 1.8rem; margin: 0; }
   #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
   #barra-compacta #nav-indicacion-wrap,
   #barra-compacta #nav-armadura-wrap,
@@ -147,7 +152,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3" id="header-normal">
   <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
-    {% translate "Navegador" %} — {{ obra.titulo }}
+    {{ obra.titulo }}
   </h5>
   <div class="d-flex gap-2">
     {% if tiene_score %}
@@ -157,6 +162,7 @@
   </div>
 </div>
 
+<div id="barra-titulo-partitura"></div>
 <div id="barra-compacta" class="d-none flex-wrap align-items-center gap-2 mb-2"></div>
 
 {% if sin_contenido %}
@@ -298,6 +304,10 @@
     <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
     <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
   </div>
+  <div class="form-check form-switch d-flex align-items-center" id="control-avisos-cambio">
+    <input class="form-check-input" type="checkbox" id="toggle-avisos-cambio" checked>
+    <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás superpuestos a la partitura' %}">{% translate "avisos" %}</label>
+  </div>
   {% endif %}
 </div>
 </div>
@@ -346,7 +356,7 @@
       </div>
     </div>
     <div id="score-ventana-contenedor" style="position: relative; width: 100%; background: #222; border-radius: 4px; overflow: auto;">
-      <canvas id="score-ventana-canvas" style="display: block;"></canvas>
+      <canvas id="score-ventana-canvas" style="display: block; touch-action: none;"></canvas>
       <!-- Aviso de "próximo compás" cuando la ventana activa tiene un solo
            sistema (no hay un segundo sistema adyacente para superponer el
            aviso encima, ver renderizarPreviewSync) — usa el espacio libre
@@ -370,8 +380,10 @@
   const btnSiguiente = document.getElementById('btn-siguiente');
   const btnModoScore = document.getElementById('btn-modo-score');
   const linkVolverObra = document.getElementById('link-volver-obra');
+  const tituloObra = document.getElementById('titulo-obra');
   const formRango = document.getElementById('form-rango');
   const barraCompacta = document.getElementById('barra-compacta');
+  const barraTituloPartitura = document.getElementById('barra-titulo-partitura');
   const scoreHeaderRango = document.getElementById('score-header-rango');
   const scoreHeaderExtra = document.getElementById('score-header-extra');
   const btnZoomMas = document.getElementById('btn-zoom-mas');
@@ -379,6 +391,7 @@
   const btnSistemaAnterior = document.getElementById('btn-sistema-anterior');
   const btnSistemaSiguiente = document.getElementById('btn-sistema-siguiente');
   const toggleNumerosCompas = document.getElementById('toggle-numeros-compas');
+  const toggleAvisosCambio = document.getElementById('toggle-avisos-cambio');
   const errorEl = document.getElementById('plan-error');
   const loopEl = document.getElementById('loop');
   const metronomoCaja = document.getElementById('nav-metronomo-caja');
@@ -400,6 +413,7 @@
   const controlTemporizacion = document.getElementById('control-temporizacion');
   const selectTemporizacion = document.getElementById('select-temporizacion');
   const controlNumerosCompas = document.getElementById('control-numeros-compas');
+  const controlAvisosCambio = document.getElementById('control-avisos-cambio');
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
@@ -424,6 +438,11 @@
   // comentario ancla ANTES de mover nada, así restaurar no depende de en
   // qué orden se muevan/restauren varios hermanos entre sí.
   const reubicables = [
+    // Sin esto el título de la obra desaparecía entero en modo partitura
+    // (vivía sólo en #header-normal, que se esconde ahí). Va a su propia
+    // fila (barra-titulo-partitura), arriba de barra-compacta, con letra
+    // grande — no mezclado con el resto de los controles chicos.
+    { el: tituloObra, destino: barraTituloPartitura },
     { el: navCompas, destino: barraCompacta },
     { el: navIndicacionWrap, destino: barraCompacta },
     { el: navArmaduraWrap, destino: barraCompacta },
@@ -436,6 +455,7 @@
     { el: controlEjecutarAudio, destino: barraCompacta },
     { el: controlTemporizacion, destino: barraCompacta },
     { el: controlNumerosCompas, destino: barraCompacta },
+    { el: controlAvisosCambio, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
     // Rango (con Loop) y Compases al aire van pegados al selector de parte,
@@ -650,6 +670,15 @@
   // para programar todo contra un único reloj absoluto.
   let pulsos = [];
   let acumulados = [];
+  // Compás -> lista de cambios que arrancan AHÍ (tempo/armadura/indicación
+  // de compás), comparando cada compás contra el anterior en la misma
+  // secuencia real de pulsos (pulsos[compasInicios[k]] vs. el de
+  // compasInicios[k-1]) — se arma junto con compasInicios en aplicarPlan.
+  // Sin mecanismo de anticipación aparte: se dibuja igual que los números
+  // de compás (dibujarNumerosCompas), sobre cualquier compás que ya esté
+  // en la ventana visible — la ventana ya muestra sistemas por delante del
+  // actual, así que el aviso aparece solo con antelación real.
+  let cambiosPorCompas = new Map();
   // Contraparte de acumulados/totalDuracion pero con duracion_itinerario o
   // duracion_compases (según campoDuracion, ver construir_plan) en vez de
   // la calculada pura — nunca se le aplica velocidad (un tiempo real
@@ -1101,6 +1130,36 @@
     }
   }
 
+  // Avisos de cambio (ver dibujarAvisosCambio/cambiosPorCompas): se cargan
+  // aparte de aplicarPlan() — ese sólo corre al arrancar la ejecución
+  // (Empezar/Continuar), pero el aviso tiene que verse también mientras se
+  // está simplemente MIRANDO la partitura sin haber tocado Play todavía
+  // (mismo criterio que scoreGeometria/dibujarNumerosCompas, que sí cargan
+  // solos al abrir la pantalla). Pide el plan de la OBRA ENTERA (sin
+  // desde/hasta) para no depender del rango que haya guardado en el form
+  // — un cambio fuera del rango elegido para ejecutar igual puede
+  // interesar verlo al navegar la partitura. Manda "parte" igual que
+  // cargarScoreGeometria — sin esto, plan_obra resuelve la parte seguida
+  // por SU propio criterio default (bug real: mostraba la armadura
+  // transportada de una parte cualquiera, no de la que se está mirando).
+  // Silencioso ante cualquier error: es un plus visual, no bloquea nada.
+  async function cargarAvisosCambioIniciales() {
+    try {
+      const parteVal = formRango ? new FormData(formRango).get('parte') : null;
+      const url = '{% url "partituras:plan_obra" obra.pk %}' + (parteVal ? '?parte=' + encodeURIComponent(parteVal) : '');
+      const resp = await fetch(url);
+      const data = await resp.json();
+      cambiosPorCompas = new Map();
+      (data.cambios || []).forEach((c) => {
+        if (!cambiosPorCompas.has(c.compas)) cambiosPorCompas.set(c.compas, []);
+        cambiosPorCompas.get(c.compas).push(c);
+      });
+      if (ventanaActiva) repintarScore();
+    } catch (e) {
+      // silencioso a propósito, ver comentario de arriba
+    }
+  }
+
   // Cuando no hay sistema anterior/siguiente en la página (el actual es el
   // primero/último), NO conviene caer en el margen de página como borde —
   // el margen detectado incluye cualquier título/pie de página real que
@@ -1335,6 +1394,7 @@
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
     ventana.escalaRender = escala; // px en pantalla por unidad de píxel natural de la imagen
     dibujarNumerosCompas(ventana);
+    dibujarAvisosCambio(ventana);
   }
 
   // Número de cada compás visible en la ventana (todos, no sólo el
@@ -1363,6 +1423,50 @@
       ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
       ctx.fillStyle = '#ffffff';
       ctx.fillText(etiqueta, px, py);
+    });
+  }
+
+  // Aviso de cambio de indicación de compás/armadura/tempo (ver
+  // construir_plan/cambiosPorCompas) — mismo mecanismo que
+  // dibujarNumerosCompas, toggleable aparte: se pinta sobre cualquier
+  // compás que YA esté en la ventana visible, sin ninguna lógica de
+  // anticipación propia — la ventana ya muestra sistemas por delante del
+  // actual, así que el aviso aparece con antelación real (desde que se
+  // está tocando el sistema anterior) sin tener que calcular nada de eso
+  // acá. Un color distinto por tipo, apilados debajo del número de compás.
+  const COLOR_AVISO_CAMBIO = { compas: '#c77d17', armadura: '#7c4dc4', tempo: '#2f6fb3' };
+  const PREFIJO_AVISO_CAMBIO = { tempo: '♩=' };
+
+  function dibujarAvisosCambio(ventana) {
+    if (!toggleAvisosCambio || !toggleAvisosCambio.checked || !cambiosPorCompas.size) return;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const ordenes = new Set(ventana.sistemas.map(s => s.orden));
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textBaseline = 'top';
+    pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
+      const cambios = cambiosPorCompas.get(compas.numero);
+      if (!cambios || !cambios.length) return;
+      const caja = calcularCaja({ numero: compas.numero }, pagina);
+      if (!caja) return;
+      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3;
+      let py = (caja.top - ventana.top) * img.naturalHeight * escala + 16; // debajo del número de compás
+      cambios.forEach((c) => {
+        // La armadura ya viene transportada para esta parte (ver plan_obra)
+        // — puede dar '' (sin alteraciones, Do M/La m) para un instrumento
+        // cuya transposición cancela justo la de concierto: sin esto el
+        // aviso quedaría una cajita de color vacía, sin nada legible.
+        const valor = (c.tipo === 'armadura' && c.valor === '') ? '♮' : c.valor;
+        const etiqueta = (PREFIJO_AVISO_CAMBIO[c.tipo] || '') + valor;
+        const anchoTexto = ctx.measureText(etiqueta).width;
+        ctx.fillStyle = COLOR_AVISO_CAMBIO[c.tipo] || '#666666';
+        ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(etiqueta, px, py);
+        py += 15;
+      });
     });
   }
 
@@ -1801,7 +1905,49 @@
   // (scoreGeometria, ver actualizarScore).
   if (scoreVentanaCanvas) {
     scoreVentanaCanvas.style.cursor = 'pointer';
+
+    // Arrastrar (mouse/touch/lápiz) para avanzar/retroceder la ventana de
+    // sistemas, además de los botones ▲/▼ — mismo mecanismo que ya tiene
+    // sincronizar_compases.html (avanzarVerticalSync/scoreCanvas ahí):
+    // reusa avanzarVertical(), un sistema por cada UMBRAL_PX de arrastre.
+    // Convención "scroll natural": arrastrar hacia abajo retrocede (revela
+    // lo de arriba), arrastrar hacia arriba avanza.
+    const UMBRAL_ARRASTRE_NAV_PX = 40;
+    let arrastrandoNav = false;
+    let ultimaYArrastreNav = 0;
+    let huboArrastreNav = false;
+
+    scoreVentanaCanvas.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      // El contenedor tiene overflow:auto (a diferencia del de
+      // sincronizar_compases.html, que es overflow:hidden) — en modo
+      // partitura el canvas es más alto y es más fácil que el contenedor
+      // tenga scroll real disponible; sin este preventDefault (más
+      // touch-action:none en el CSS del canvas) el scroll/arrastre nativo
+      // le ganaba al nuestro, sobre todo en touch.
+      e.preventDefault();
+      arrastrandoNav = true;
+      huboArrastreNav = false;
+      ultimaYArrastreNav = e.clientY;
+      scoreVentanaCanvas.setPointerCapture(e.pointerId);
+    });
+    scoreVentanaCanvas.addEventListener('pointermove', (e) => {
+      if (!arrastrandoNav) return;
+      const delta = e.clientY - ultimaYArrastreNav;
+      if (Math.abs(delta) >= UMBRAL_ARRASTRE_NAV_PX) {
+        avanzarVertical(delta > 0 ? -1 : 1);
+        ultimaYArrastreNav = e.clientY;
+        huboArrastreNav = true;
+      }
+    });
+    scoreVentanaCanvas.addEventListener('pointerup', (e) => {
+      arrastrandoNav = false;
+      if (scoreVentanaCanvas.hasPointerCapture(e.pointerId)) scoreVentanaCanvas.releasePointerCapture(e.pointerId);
+    });
+    scoreVentanaCanvas.addEventListener('pointercancel', () => { arrastrandoNav = false; });
+
     scoreVentanaCanvas.addEventListener('click', (e) => {
+      if (huboArrastreNav) { huboArrastreNav = false; return; } // fue un arrastre, no un click de selección
       if (!ventanaActiva) return;
       const numero = compasEnClick(ventanaActiva, e);
       if (numero == null) return;
@@ -1834,6 +1980,7 @@
     });
   }
   if (toggleNumerosCompas) toggleNumerosCompas.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
+  if (toggleAvisosCambio) toggleAvisosCambio.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
 
   // ── Editar el número de compás para saltar a otro (ver #nav-compas,
   // contenteditable) — mismo mecanismo que hacer clic en un compás del
@@ -1867,6 +2014,7 @@
   }
 
   cargarScoreGeometria();
+  cargarAvisosCambioIniciales();
   // Modo partitura es el default en pantallas normales; en pantallas
   // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
   // la app) arranca en modo compás — controles completos, más fáciles de
@@ -2122,6 +2270,11 @@
     compasInicios = [];
     pulsos.forEach((p, idx) => {
       if (p.es_primer_pulso_compas) compasInicios.push(idx);
+    });
+    cambiosPorCompas = new Map();
+    (data.cambios || []).forEach((c) => {
+      if (!cambiosPorCompas.has(c.compas)) cambiosPorCompas.set(c.compas, []);
+      cambiosPorCompas.get(c.compas).push(c);
     });
     reconstruirTiempos();
     // "Ejecutar con audio" pedido pero sin ningún ancla real (de la fuente

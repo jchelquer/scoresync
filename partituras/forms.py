@@ -1,6 +1,6 @@
 from django import forms
 from .models import EfectoTempo, MarcaNotacion, Obra, Partitura, Segmento
-from .services import parsear_compas_pulso, validar_indicacion_compas
+from .services import normalizar_armadura, parsear_compas_pulso, validar_indicacion_compas
 
 
 class PartituraForm(forms.ModelForm):
@@ -145,6 +145,11 @@ class MarcaNotacionForm(forms.ModelForm):
                     raise ValueError
             except (TypeError, ValueError):
                 raise forms.ValidationError('El tempo tiene que ser un número entero de bpm mayor que 0.')
+        elif tipo == 'armadura':
+            try:
+                valor = normalizar_armadura(valor)
+            except ValueError as e:
+                raise forms.ValidationError(str(e))
         return valor
 
 

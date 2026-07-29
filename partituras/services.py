@@ -15,6 +15,15 @@ from .models import Barra, Compas, MarcaTiempoCompas, Obra, Segmento
 
 _PATRON_INDICACION_COMPAS = re.compile(r'^[1-9]\d*/[1-9]\d*$')
 
+# Armadura de clave (MarcaNotacion tipo='armadura'): 'b'/'#' (bemoles/
+# sostenidos) + cantidad opcional 1-7 (bare 'b'/'#' = 1) — acepta el número
+# antes del símbolo también ('2b'), y los símbolos ♭/♯ como sinónimos de
+# b/#. Vacío = Do mayor/La menor (sin alteraciones).
+_PATRON_ARMADURA = re.compile(
+    r'^(?:(?P<simbolo1>[b#♭♯])(?P<n1>[1-7])?|(?P<n2>[1-7])(?P<simbolo2>[b#♭♯]))$'
+)
+_SINONIMOS_ARMADURA = {'♭': 'b', '♯': '#'}
+
 
 _CAMPOS_ANCLA = [
     "ancla_x0", "ancla_y0", "ancla_x1", "ancla_y1",
@@ -181,6 +190,84 @@ def validar_indicacion_compas(texto):
             'numerador/denominador (ej: 4/4, 3/4, 6/8).'
         )
     return texto
+
+
+def normalizar_armadura(texto):
+    """Valida y normaliza el texto de armadura de clave (MarcaNotacion
+    tipo='armadura', valor de CONCIERTO — ver armadura_transportada para la
+    de cada parte). Vacío = Do mayor/La menor (sin alteraciones). Si no,
+    'b'/'#' (bemoles/sostenidos) + cantidad 1-7 (bare 'b' o '#' = 1) — se
+    limpian espacios, se acepta el número antes del símbolo ('2b' -> 'b2')
+    y los símbolos ♭/♯ como sinónimos de b/#. Levanta ValueError si no
+    matchea ese formato."""
+    texto = (texto or '').strip()
+    if not texto:
+        return ''
+    compacto = texto.replace(' ', '')
+    m = _PATRON_ARMADURA.match(compacto)
+    if not m:
+        raise ValueError(
+            f'"{texto}" no es una armadura válida — usá "b" o "#" seguido opcionalmente '
+            'de la cantidad (ej: "b", "b2", "#3"), o dejalo vacío para Do mayor/La menor.'
+        )
+    simbolo = _SINONIMOS_ARMADURA.get(m.group('simbolo1') or m.group('simbolo2'), m.group('simbolo1') or m.group('simbolo2'))
+    cantidad = int(m.group('n1') or m.group('n2') or 1)
+    return simbolo if cantidad == 1 else f'{simbolo}{cantidad}'
+
+
+def _armadura_a_entero(texto):
+    """'' -> 0, 'b' -> -1, 'b2' -> -2, '#' -> 1, '#7' -> 7 — asume texto ya
+    normalizado (ver normalizar_armadura), no vuelve a validar el formato."""
+    texto = (texto or '').strip()
+    if not texto:
+        return 0
+    signo = -1 if texto[0] == 'b' else 1
+    resto = texto[1:]
+    return signo * (int(resto) if resto else 1)
+
+
+def _entero_a_armadura(n):
+    """Inverso de _armadura_a_entero."""
+    if n == 0:
+        return ''
+    simbolo = 'b' if n < 0 else '#'
+    n = abs(n)
+    return simbolo if n == 1 else f'{simbolo}{n}'
+
+
+def armadura_transportada(armadura_concierto, transposicion_semitonos):
+    """Arma la armadura ESCRITA (la que lee el instrumentista de esta
+    parte) a partir de la armadura de CONCIERTO guardada en la obra
+    (MarcaNotacion tipo='armadura') y la transposición del instrumento de
+    esa parte (Instrumento.transposicion_semitonos — convención ya usada en
+    ensayos/afinación: concierto = escrito + transposicion_semitonos).
+
+    No identifica notas (no hace falta, ver pedido del usuario): sólo corre
+    la cantidad de sostenidos/bemoles la cantidad de "quintas" que
+    corresponde a la transposición. Cada quinta justa (7 semitonos) hacia
+    arriba suma un sostenido (o resta un bemol) — como 7 y 12 son coprimos,
+    cada semitono de transposición tiene un desplazamiento equivalente
+    único en quintas (mod 12). Sin dato de transposición (instrumento sin
+    cargar, o instrumento en Do), devuelve la de concierto tal cual.
+
+    Ejemplo real (clarinete Bb, transposicion_semitonos=-2): armadura de
+    concierto "b2" (Sib mayor) → escrita "" (Do mayor) — 2 bemoles de
+    concierto no necesitan ninguna alteración para este instrumento."""
+    if not transposicion_semitonos:
+        return armadura_concierto
+    try:
+        n_concierto = _armadura_a_entero(armadura_concierto)
+    except (ValueError, IndexError):
+        # Texto libre de antes de normalizar_armadura (obras viejas, ver
+        # MarcaNotacion) — no se puede transportar sin saber cuántas
+        # alteraciones son, se muestra tal cual en vez de romper.
+        return armadura_concierto
+    pasos_quintas = (7 * -transposicion_semitonos) % 12
+    if pasos_quintas > 6:
+        pasos_quintas -= 12
+    n_escrito = n_concierto + pasos_quintas
+    n_escrito = ((n_escrito + 6) % 12) - 6
+    return _entero_a_armadura(n_escrito)
 
 
 def renumerar_segmentos(obra):
@@ -1063,8 +1150,8 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
       a nivel de pulso eso sale solo, en vez de tener que tratarlo como
       caso especial en la duración de "ese compás".
 
-    Devuelve (pulsos, completo): pulsos es la lista de dicts (uno por
-    pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
+    Devuelve (pulsos, completo, cambios): pulsos es la lista de dicts (uno
+    por pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
     es_primer_pulso_compas/acento/indicacion_compas/bpm/
     variacion_tempo_display/bpm_llegada/descripcion/duracion/
     duracion_itinerario/duracion_compases (duracion en segundos, None si no
@@ -1083,7 +1170,14 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     comentario más abajo); completo es False si algún pulso quedó sin
     duración — el cliente no debería reproducir en tiempo real un plan
     incompleto (esto es independiente de que duracion_compases sea None en
-    algún tramo, que es un estado válido, no un plan incompleto)."""
+    algún tramo, que es un estado válido, no un plan incompleto); cambios
+    es una lista de dicts {compas, tipo, valor} — tipo en
+    'compas'/'armadura'/'tempo', uno por cada compás (navegado, no de toda
+    la obra) donde ese valor difiere del compás anterior — pensado para el
+    aviso visual del navegador (ver dibujarAvisosCambio en
+    navegador_obra.html), no confundir con variacion_tempo_display/
+    bpm_llegada (que son de un accelerando/ritardando en curso, pulso a
+    pulso — acá 'tempo' sólo marca una MarcaNotacion nueva de verdad)."""
     navegables = segmentos_navegables(obra)
     if not navegables:
         return [], True
@@ -1130,6 +1224,18 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     else:
         pos_hasta = (navegables[-1], navegables[-1].compas_hasta)
 
+    # Cambios de indicación de compás/armadura/tempo respecto del compás
+    # NAVEGADO anterior (no del anterior en la partitura entera — si el
+    # rango pedido arranca a mitad de obra, el primer compás emitido nunca
+    # cuenta como "cambio", no hay nada previo con qué compararlo en este
+    # plan). Usa el 'bpm' NOMINAL de notacion_por_compas (la marca vigente),
+    # no el bpm ya interpolado pulso a pulso (bpm_por_pulso) — un
+    # accelerando/ritardando no dispara un aviso por cada compás de la
+    # rampa, sólo una marca de tempo nueva de verdad cambia esto. Pensado
+    # para el aviso visual en el navegador (ver navegador_obra.html).
+    cambios = []
+    info_anterior = None
+
     pulsos = []
     completo = True
     pos = pos_desde
@@ -1140,6 +1246,13 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         info_c = notacion_por_compas.get((seg.id, compas), {})
         bpm_inicio = info_c.get('bpm')
         pulsos_compas = info_c.get('pulsos_compas')
+
+        if info_anterior is not None:
+            for campo, tipo in (('indicacion_compas', 'compas'), ('armadura', 'armadura'), ('bpm', 'tempo')):
+                valor_nuevo = info_c.get(campo)
+                if valor_nuevo and valor_nuevo != info_anterior.get(campo):
+                    cambios.append({'compas': compas, 'tipo': tipo, 'valor': valor_nuevo})
+        info_anterior = info_c
 
         if seg.id not in posiciones_por_fila:
             posiciones_por_fila[seg.id] = _posiciones_calculadas_fila(seg, notacion_por_compas, bpm_por_pulso, factor_por_pulso)
@@ -1296,7 +1409,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
             break
         pos = avanzar_compas(obra, seg, compas)
 
-    return pulsos, completo
+    return pulsos, completo, cambios
 
 
 def compases_desenrollados(obra):
@@ -1338,7 +1451,7 @@ def compases_desenrollados(obra):
     if not navegables:
         return [], True
 
-    pulsos, completo = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     pasadas = _pasadas_por_compas(obra)
     marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
 

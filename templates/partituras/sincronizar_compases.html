@@ -374,15 +374,16 @@
   // En modo marcado, btnPlayPause sigue siendo un toggle simple (como
   // siempre) — el adelanto de 2 compases ahí lo maneja armar() aparte (ver
   // más abajo), no este botón. En modo reproducción, en cambio, el mismo
-  // botón pasa a un esquema de 3 estados: Play (desde detenido) arranca 2
-  // compases antes del primer compás seleccionado; Continuar (desde
-  // pausado) NO retoma en seco — ubica a qué compás corresponde donde se
-  // pausó y arranca 2 compases antes de ESE; Reiniciar (botón aparte,
-  // visible sólo en pausa) vuelve al punto de Play.
+  // botón pasa a un esquema de 3 estados: Play (desde detenido) arranca
+  // directo en el primer compás seleccionado (sin adelanto — a diferencia
+  // de modo marcado, acá se está ESCUCHANDO lo ya marcado, no preparando
+  // un tap); Continuar (desde pausado) ubica a qué compás corresponde
+  // donde se pausó y arranca ahí mismo; Reiniciar (botón aparte, visible
+  // sólo en pausa) vuelve al punto de Play.
   let estadoReproduccion = 'inicial'; // sólo relevante con modo === 'reproduccion'
 
   function iniciarReproduccionDesde(idx) {
-    audio.currentTime = tiempoNCompasesAntes(idx, 2);
+    audio.currentTime = tiempoDeFila(idx) ?? 0;
     audio.play().catch(() => {});
   }
 

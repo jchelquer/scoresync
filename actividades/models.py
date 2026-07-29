@@ -6,9 +6,12 @@ class Instrumento(models.Model):
     Espejo recortado de actividades_instrumento, tabla real y gestionada por
     el proyecto ensayos (misma BD Postgres compartida).
     managed = False: Django lee la tabla existente sin crearla ni modificarla.
-    Solo se incluyen los campos que scoresync necesita para mostrar un
-    desplegable de instrumentos — no los campos de rango MIDI/transposición,
-    que pertenecen al dominio de afinación/ensayos.
+    Sólo se incluyen los campos que scoresync necesita — no los de rango
+    MIDI, que pertenecen al dominio de afinación/ensayos. transposicion_semitonos
+    sí se trae (2026-07-28): la usa MarcaNotacion tipo='armadura' para calcular
+    la armadura ESCRITA de cada parte a partir de la de concierto (ver
+    services.armadura_transportada) — misma convención que ensayos/afinación:
+    concierto = escrito + transposicion_semitonos.
     """
 
     nombre = models.CharField(max_length=100)
@@ -18,6 +21,7 @@ class Instrumento(models.Model):
         db_constraint=False,
         related_name='hijos',
     )
+    transposicion_semitonos = models.SmallIntegerField(null=True, blank=True)
 
     class Meta:
         managed = False

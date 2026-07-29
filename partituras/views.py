@@ -26,7 +26,7 @@ from .models import (
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import contar_paginas, rasterizar_pagina
 from .services import (
-    avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
+    armadura_transportada, avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
     construir_plan, desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
     interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
@@ -290,7 +290,7 @@ def _obra_completa(obra):
     navegables = segmentos_navegables(obra)
     if not navegables:
         return False
-    pulsos, completo = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     if not completo or not pulsos:
         return False
     return not any(p['duracion_compases'] is None for p in pulsos)
@@ -1268,10 +1268,23 @@ def plan_obra(request, pk):
     if fuente_temporizacion not in ("itinerario", "compases"):
         fuente_temporizacion = "compases"
 
-    pulsos, completo = construir_plan(
+    pulsos, completo, cambios = construir_plan(
         obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
     )
+    # Los cambios de armadura vienen de construir_plan en CONCIERTO (lo que
+    # está cargado en Notación) — para el aviso visual del navegador tienen
+    # que verse como los lee el instrumentista de la parte que se está
+    # siguiendo, no como concierto. Misma parte que score_geometria_obra
+    # (_partitura_seguida sin pref: alcanza para este JSON liviano).
+    partitura_seguida = _partitura_seguida(obra, request)
+    transposicion = (
+        partitura_seguida.instrumento.transposicion_semitonos
+        if partitura_seguida and partitura_seguida.instrumento_id else None
+    )
+    for cambio in cambios:
+        if cambio["tipo"] == "armadura":
+            cambio["valor"] = armadura_transportada(cambio["valor"], transposicion)
     # Ancla real para "Ejecutar con audio": el tiempo real del primer pulso
     # del plan, en la fuente elegida (ver tiempo_real_ancla — ya no hay
     # prioridad automática entre itinerario/compases, la fija este switch).
@@ -1290,6 +1303,7 @@ def plan_obra(request, pk):
     return JsonResponse({
         "pulsos": pulsos,
         "completo": completo,
+        "cambios": cambios,
         "primer_pulso_tiempo_real": primer_pulso_tiempo_real,
         "fuente_temporizacion": fuente_temporizacion,
     })
