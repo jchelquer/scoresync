@@ -13,6 +13,7 @@ from django.db.models import Max, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .forms import (
@@ -871,7 +872,7 @@ def itinerario_obra(request, pk):
                         f"para {info['indicacion_compas']} (1 a {pulsos_compas:g}).",
                     )
 
-            messages.success(request, "Se guardó el itinerario.")
+            messages.success(request, _("Se guardó el itinerario."))
             return redirect("partituras:itinerario_obra", pk=pk)
     else:
         formset = SegmentoFormSet(queryset=queryset, prefix="segmentos")
@@ -915,7 +916,7 @@ def notacion_obra(request, pk):
                     eliminada.delete()
 
                 recalcular_tiempos_calculados(obra)
-            messages.success(request, "Se guardó la notación.")
+            messages.success(request, _("Se guardó la notación."))
             return redirect("partituras:notacion_obra", pk=pk)
     else:
         formset = MarcaNotacionFormSet(queryset=queryset_notacion, prefix="notacion")

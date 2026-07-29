@@ -1109,6 +1109,12 @@ msgstr ""
 "automáticamente adaptada a su propia transposición al practicar o en "
 "Sincronizar compases."
 
+msgid "Se guardó el itinerario."
+msgstr "Se guardó el itinerario."
+
+msgid "Se guardó la notación."
+msgstr "Se guardó la notación."
+
 msgid ""
 "Se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue "
 "toma el número que corresponde, las demás se corren). Clic sobre un número: "
