@@ -1,0 +1,12 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-crosshair me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo ajustar el ancla" %}</h6>
+<p>{% translate "Cuarto paso: encontrar una barra de compás real de referencia en la página, para calibrar la detección de barras de la etapa siguiente." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-bounding-box"></i>{% translate "El rectángulo" %}</h6>
+<p>{% translate "Debería rodear una barra de compás real. Si no es así, movelo o redimensionalo (no hace falta precisión) y tocá" %} <span class="ayuda-control">{% translate "Buscar en este rectángulo" %}</span> {% translate "para que busque adentro. La línea roja es la barra ya encontrada; mover el rectángulo entero la mueve con él, pero redimensionar un borde la deja donde está." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-check-circle"></i>{% translate "Confirmada" %}</h6>
+<p>{% translate "El tilde verde en la esquina indica que ya quedó confirmada — se puede seguir ajustando igual; cualquier movimiento la marca como pendiente de nuevo hasta volver a confirmar." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrow-repeat"></i>{% translate "Volver a detectar de cero" %}</h6>
+<p class="mb-0">{% translate "Ignora el rectángulo actual (confirmado o no) y prueba la detección automática desde el principio." %}</p>

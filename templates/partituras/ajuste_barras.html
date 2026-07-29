@@ -139,9 +139,11 @@
     {% if pagina.numero < total %}
     <a href="{% url 'partituras:ajuste_barras' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
     {% endif %}
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-barras" %}
     <a href="{% url 'partituras:estado' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
   </div>
 </div>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-barras" contenido="partituras/_ayuda/ajuste_barras.html" %}
 <div class="d-flex flex-wrap gap-1 mb-3">
   {% for p in partitura.paginas.all %}
   <a href="{% url 'partituras:ajuste_barras' partitura.pk p.numero %}"
@@ -171,15 +173,6 @@
         &nbsp;
         <span class="leyenda-punto" style="background: #e74c3c"></span>{% translate "Dudosa" %}
       </p>
-      <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Barras — clic sobre una línea: cambia entre aceptada/dudosa. Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí. Arrastrá para dibujar un rectángulo y seleccionar varias — Supr o el botón las borra juntas; Esc, clic derecho o clic afuera de la partitura deseleccionan." %}
-      </p>
-      <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Compases — se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número: aparecen dos cajitas, el número y cuántos compases vale (para un silencio de varios compases) — completá la que te resulte más cómoda, lo que sigue se acomoda solo. Nada se guarda hasta Confirmar." %}
-      </p>
-      <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Borde de sistema (línea azul) — marca dónde arranca/termina de verdad el contenido, más allá del margen de página. Clic sobre la línea: la descarta. Clic en la zona antes de ella (o después, si es la de cierre): la reubica ahí — así se corrige de un solo clic si la detección se equivocó." %}
-      </p>
       <form method="post" id="form-barras">
         {% csrf_token %}
         <input type="hidden" name="barras" id="input-barras">
@@ -199,9 +192,6 @@
         <label for="input-umbral-contenido" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
           {% translate "Umbral de contenido de sistema (%)" %}
         </label>
-        <p class="small mb-2" style="color: var(--ss-text-muted)">
-          {% translate "Usado para detectar dónde empieza/termina realmente un sistema (bordes de compás extremos). Si la detección falla en esta página — se ve un borde muy corrido o nunca aparece — probá cambiar este valor: más alto para páginas escaneadas con ruido de fondo, más bajo si un contenido real muy tenue (una nota suelta) queda cortado." %}
-        </p>
         <div class="d-flex align-items-center gap-2 mb-2">
           <input type="range" name="umbral_contenido_pct" id="input-umbral-contenido" class="form-range"
                  min="0.05" max="50" step="0.05" value="{{ umbral_contenido_pct|unlocalize }}">

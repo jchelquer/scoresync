@@ -7,15 +7,12 @@
   <h5 style="color: var(--ss-text-bright)">
     {% translate "Notación de la partitura" %} — {{ obra.titulo }}
   </h5>
-  <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  <div class="d-flex gap-2">
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-notacion" %}
+    <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+  </div>
 </div>
-
-<p class="small mb-1" style="color: var(--ss-text-muted)">
-  {% translate "Hechos de la partitura por compás — indicación de compás, armadura, tempo base — a diferencia del itinerario (que sólo describe el orden de ejecución). Cada marca rige a partir del compás indicado, hasta la próxima marca del mismo tipo, sin importar qué fila del itinerario la usa: el compás 47 tiene la misma indicación la primera vez que se toca y en cualquier repetición." %}
-</p>
-<p class="small mb-3" style="color: var(--ss-text-muted)">
-  {% translate "Pasada vacía = rige siempre que se pase por ese compás. Completá Pasada sólo para el caso raro de que una repetición puntual necesite un valor distinto (1ra vez, 2da vez, etc. — mismo criterio que las marcas de tiempo real por compás)." %}
-</p>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-notacion" contenido="partituras/_ayuda/notacion_obra.html" %}
 
 <form method="post">
   {% csrf_token %}
@@ -52,10 +49,7 @@
     </table>
   </div>
 
-  <h6 class="mt-4" style="color: var(--ss-text-bright)">{% translate "Efectos de tempo" %}</h6>
-  <p class="small mb-3" style="color: var(--ss-text-muted)">
-    {% translate "Accelerando/ritardando/calderón — a diferencia de lo de arriba (un valor vigente hasta la próxima marca), esto es un tramo o un punto ACOTADO. Desde/Hasta aceptan \"compás\" o \"compás,pulso\" (ej: 10 o 10,2.5). En un calderón dejá Hasta vacío — Valor es el bpm de llegada (accelerando/ritardando) o el factor de duración del calderón (ej: 1.5 = 50% más largo)." %}
-  </p>
+  <h6 class="mt-4 mb-3" style="color: var(--ss-text-bright)">{% translate "Efectos de tempo" %}</h6>
   {{ formset_efectos.management_form }}
   {% if formset_efectos.non_form_errors %}
   <div class="alert alert-danger small py-2">{{ formset_efectos.non_form_errors }}</div>

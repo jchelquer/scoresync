@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load i18n l10n %}
-{% block title %}Navegador — {{ obra.titulo }}{% endblock %}
+{% block title %}Ejecución — {{ obra.titulo }}{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -61,6 +61,14 @@
      final de la fila compacta, empujados a la derecha (todo lo demás
      sigue agrupado a la izquierda). */
   #barra-compacta #btn-modo-score { margin-left: auto; }
+
+  /* Modal de ayuda (ver _ayuda/navegador_obra.html): los dos modos no
+     comparten los mismos controles en pantalla, así que el modal muestra
+     sólo la sección que describe el modo activo — mismo criterio
+     body.modo-partitura que el resto de esta pantalla. */
+  .ayuda-modo-partitura { display: none; }
+  body.modo-partitura .ayuda-modo-compas { display: none; }
+  body.modo-partitura .ayuda-modo-partitura { display: block; }
 
   /* Alto real: se calcula en JS contra el espacio que efectivamente queda
      debajo del panel en el viewport (ajustarAltoContenedorScore) — el
@@ -154,9 +162,11 @@
     {% if tiene_score %}
     <button id="btn-modo-score" type="button" class="btn btn-outline-light btn-sm">🎼 {% translate "Modo partitura" %}</button>
     {% endif %}
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-navegador" boton_id="btn-ayuda-navegador" %}
     <a id="link-volver-obra" href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
   </div>
 </div>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-navegador" contenido="partituras/_ayuda/navegador_obra.html" %}
 
 <div id="barra-titulo-partitura"></div>
 <div id="barra-compacta" class="d-none flex-wrap align-items-center gap-2 mb-2"></div>
@@ -368,6 +378,7 @@
   const btnAnterior = document.getElementById('btn-anterior');
   const btnSiguiente = document.getElementById('btn-siguiente');
   const btnModoScore = document.getElementById('btn-modo-score');
+  const btnAyudaNavegador = document.getElementById('btn-ayuda-navegador');
   const linkVolverObra = document.getElementById('link-volver-obra');
   const tituloObra = document.getElementById('titulo-obra');
   const formRango = document.getElementById('form-rango');
@@ -443,6 +454,7 @@
     { el: controlNumerosCompas, destino: barraCompacta },
     { el: controlAvisosCambio, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
+    { el: btnAyudaNavegador, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
     // Rango (con Loop) y Compases al aire van pegados al selector de parte,
     // a la izquierda de la fila — no al grupo de la derecha.

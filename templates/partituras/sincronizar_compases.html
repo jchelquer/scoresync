@@ -123,13 +123,25 @@
   <div class="modal-dialog modal-dialog-scrollable">
     <div class="modal-content" style="background: var(--ss-surface); color: var(--ss-text-muted); border: 1px solid #2a4a47;">
       <div class="modal-header" style="border-color: #2a4a47;">
-        <h5 class="modal-title" id="modal-ayuda-sync-titulo" style="color: var(--ss-text-bright)">{% translate "Cómo sincronizar por compás" %}</h5>
+        <h5 class="modal-title" id="modal-ayuda-sync-titulo" style="color: var(--ss-text-bright)"><i class="bi bi-soundwave me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo sincronizar por compás" %}</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{% translate 'Cerrar' %}"></button>
       </div>
       <div class="modal-body small">
-        <p>{% translate "Marcado: tap compás a compás. Reproducción: escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo." %}</p>
-        <p>{% translate "Sincronización fina: un tap por CADA compás de la obra (repeticiones incluidas, cada pasada la suya) — convive con la sincronización por fila del itinerario, no la reemplaza; donde marques acá, se usa esto; donde no, cae en lo de la otra pantalla o en el tiempo calculado." %}</p>
-        <p class="mb-0">{% translate "Barra espaciadora marca y avanza (el tap), Enter pausa/continúa el audio, Tab salta el compás actual SIN marcarlo (si te lo perdiste), Backspace deshace la última marca, flechas ajustan el audio de a 0,1s (Shift, 1s), y podés hacer click en cualquier compás para marcarlo o corregirlo directamente (Shift+click para seleccionar un rango, Ctrl/Cmd+click para sumar uno suelto — para el ajuste fino). También podés escribir el tiempo a mano haciendo click sobre el valor." %}</p>
+        <p><span class="ayuda-control">{% translate "Marcado" %}</span>: {% translate "tap compás a compás para grabar el tiempo real de cada uno (repeticiones incluidas, cada pasada la suya)." %} <span class="ayuda-control">{% translate "Reproducción" %}</span>: {% translate "escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo." %}</p>
+
+        <h6 class="ayuda-subtitulo"><i class="bi bi-keyboard"></i>{% translate "Atajos de teclado" %}</h6>
+        <p><span class="ayuda-tecla">{% translate "Espacio" %}</span> {% translate "marca y avanza (el tap)," %} <span class="ayuda-tecla">Enter</span> {% translate "pausa/continúa el audio," %} <span class="ayuda-tecla">Tab</span> {% translate "salta el compás actual SIN marcarlo (si te lo perdiste)," %} <span class="ayuda-tecla">Backspace</span> {% translate "deshace la última marca." %} <span class="ayuda-control">{% translate "Velocidad" %}</span> {% translate "baja el audio para tapear con más precisión, sin cambiar el tiempo real que se graba." %}</p>
+
+        <h6 class="ayuda-subtitulo"><i class="bi bi-cursor"></i>{% translate "Elegir compases" %}</h6>
+        <p>{% translate "Un click en cualquier compás (de la lista o de la partitura) lo elige para marcar/escuchar desde ahí;" %} <span class="ayuda-tecla">Shift</span>+click {% translate "selecciona un rango," %} <span class="ayuda-tecla">Ctrl</span>/<span class="ayuda-tecla">Cmd</span>+click {% translate "suma uno suelto — para el Ajuste fino o para Interpolar/Borrar temporización de varios a la vez. También podés escribir un tiempo a mano haciendo click sobre su valor. El campo" %} <span class="ayuda-control">{% translate "Rango" %}</span> {% translate "hace lo mismo que Shift+click, escribiendo compás (y vez, si se repite)." %}</p>
+
+        <h6 class="ayuda-subtitulo"><i class="bi bi-clock-history"></i>{% translate "Ajustes en bloque" %}</h6>
+        <p><span class="ayuda-control">{% translate "Ajuste fino" %}</span> {% translate "corre el tiempo grabado de la selección (por si el tap quedó sistemáticamente adelantado o atrasado)." %} <span class="ayuda-control">{% translate "Interpolar" %}</span> {% translate "completa los compases sin marca real de la selección repartiendo el tiempo entre las marcas explícitas más cercanas;" %} <span class="ayuda-control">{% translate "Borrar temporización" %}</span> {% translate "saca cualquier marca (explícita o interpolada) de la selección." %}</p>
+
+        <h6 class="ayuda-subtitulo"><i class="bi bi-record-circle"></i>{% translate "Ajustar pulsos" %}</h6>
+        <p>{% translate "Disponible sólo en compases con un calderón o dentro de un accelerando/ritardando — abre un ajuste más fino: un punto arrastrable por pulso, con una barra de referencia a velocidad constante como ayuda visual." %}</p>
+
+        <p class="mb-0 text-warning">{% translate "Mientras no esté completa la temporización real de un compás (ni marcada ni interpolada), ese compás no se puede ejecutar \"por compases\" en Practicar — hay que completarlo acá primero." %}</p>
       </div>
     </div>
   </div>
@@ -201,7 +213,7 @@
             <button id="modo-btn-reproduccion" type="button" class="btn btn-outline-light" title="{% translate "Reproducción" %}">{% translate "Repr." %}</button>
           </div>
           <button id="sync-btn-playpause" type="button" class="btn btn-ss" title="{% translate "Pausar/continuar (Enter)" %}">▶</button>
-          <button id="sync-btn-reiniciar" type="button" class="btn btn-outline-light d-none" title="{% translate "Reiniciar — 2 compases antes del primero seleccionado" %}">↺</button>
+          <button id="sync-btn-reiniciar" type="button" class="btn btn-outline-light d-none" title="{% translate "Reiniciar — en Marcado arma el último de la selección (2 compases antes); en Reproducción arranca desde el primero" %}">↺</button>
           <label for="sync-velocidad" class="small mb-0 ms-2" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
           <input type="range" id="sync-velocidad" min="25" max="100" step="5" value="100" style="width: 6.5rem;"
                  title="{% translate 'Bajar la velocidad no cambia el tiempo real que se guarda al marcar — sólo hace más cómodo tapear con precisión.' %}">

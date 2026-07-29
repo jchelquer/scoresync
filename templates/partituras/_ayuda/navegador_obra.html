@@ -1,0 +1,31 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-play-fill me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo practicar" %}</h6>
+<p>{% translate "Con el botón de play va a ejecutarse la música en tiempo real, resaltando los compases correspondientes (siguiendo el tempo cargado en Notación, o el audio real si activás" %} <span class="ayuda-control">{% translate "Ejecutar con audio" %}</span>).</p>
+
+{% comment %}
+Esta ayuda muestra una de las dos secciones de abajo según el modo activo
+(ver body.modo-partitura en el <style> de navegador_obra.html) — los dos
+modos no comparten los mismos controles en pantalla, así que no tiene
+sentido describirlos juntos.
+{% endcomment %}
+
+<div class="ayuda-modo-compas">
+  <h6 class="ayuda-subtitulo"><i class="bi bi-sliders"></i>{% translate "Rango" %}</h6>
+  <p>{% translate "Se puede indicar un rango de compases (con pulso y fracción de pulso si hace falta, ej. \"20,1.5\") y una vez a repetir si ese compás se repite, activar o desactivar el" %} <span class="ayuda-control">{% translate "loop" %}</span>, {% translate "y agregar" %} <span class="ayuda-control">{% translate "compases al aire" %}</span> ({% translate "una cuenta de entrada antes de arrancar o al retomar de una pausa" %}). {% translate "El número grande de compás es editable con un click cuando está en pausa, para saltar a otro punto sin volver a elegir el rango." %}</p>
+
+  <h6 class="ayuda-subtitulo"><i class="bi bi-speedometer2"></i>{% translate "Velocidad" %}</h6>
+  <p>{% translate "El 100% corresponde al tempo real guardado. Puede reducirse o subirse con el deslizador (20%-150%) sin afectar ese tempo guardado." %}</p>
+
+  <h6 class="ayuda-subtitulo"><i class="bi bi-soundwave"></i>{% translate "Audio de referencia" %}</h6>
+  <p><span class="ayuda-control">{% translate "Ejecutar con audio" %}</span> {% translate "sincroniza el cursor con la grabación real en vez de con el tempo calculado — necesita que el rango elegido tenga temporización real completa (marcada o interpolada en \"Sincronizar compases\"); si falta algún compás, avisa antes de arrancar." %} <span class="ayuda-control">{% translate "Silenciar" %}</span> {% translate "deja sonar sólo el metrónomo/avisos, sin el audio." %}</p>
+
+  <h6 class="ayuda-subtitulo"><i class="bi bi-music-note-list"></i>{% translate "Con partitura" %}</h6>
+  <p class="mb-0">{% translate "Si la parte tiene una partitura procesada, aparece un panel con el score siguiendo al compás actual — un clic sobre cualquier compás de la partitura lo elige como punto de arranque." %} <span class="ayuda-control">{% translate "n° compás" %}</span> {% translate "y" %} <span class="ayuda-control">{% translate "avisos" %}</span> ({% translate "superpone los cambios de compás, armadura o tempo que vienen" %}) {% translate "son toggles aparte." %} <span class="ayuda-control">{% translate "Modo partitura" %}</span> {% translate "compacta todos los controles en una sola fila arriba, para aprovechar el máximo de pantalla al practicar con la parte." %}</p>
+</div>
+
+<div class="ayuda-modo-partitura">
+  <p>{% translate "Se puede indicar un rango de compases, activar o desactivar el" %} <span class="ayuda-control">{% translate "loop" %}</span> {% translate "y sacar o poner los números de compás y avisos de cambio de armadura de clave, compás, etc. Asimismo, un clic en un compás lo selecciona para reproducir." %}</p>
+  <p>{% translate "La velocidad del 100% corresponde a la versión grabada. Puede reducirse con el deslizador manteniendo la altura de las notas." %}</p>
+  <p>{% translate "Las ventanas pasan automáticamente, mostrando con un tiempo antes el avance del primer compás de la siguiente." %}</p>
+  <p class="mb-0">{% translate "La pantalla puede achicarse o agrandarse con los botones + y −, y se puede avanzar o retroceder en la partitura con las flechas hacia arriba y abajo o arrastrando la página. Con la ejecución detenida, un click sobre cualquier compás de la partitura lo elige como punto de arranque." %}</p>
+</div>

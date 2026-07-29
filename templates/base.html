@@ -30,6 +30,35 @@
     .nav-link:hover { color: var(--ss-text-bright) !important; }
     .btn-ss { background: var(--ss-accent); color: var(--ss-text-bright); border: none; }
     .btn-ss:hover { background: var(--ss-accent-hover); color: var(--ss-text-bright); }
+
+    /* Modales de ayuda por pantalla (ver templates/partituras/_ayuda/) —
+       reglas compartidas acá (no por pantalla) para que todas las ayudas
+       se vean consistentes sin duplicar CSS en cada template. */
+    .ayuda-subtitulo {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--ss-accent);
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 1rem 0 0.4rem;
+    }
+    .ayuda-subtitulo:first-child { margin-top: 0; }
+    .ayuda-control { color: var(--ss-accent); font-weight: 600; }
+    .ayuda-tecla {
+      display: inline-block;
+      padding: 0.05rem 0.4rem;
+      margin: 0 0.05rem;
+      border-radius: 4px;
+      border: 1px solid #142221;
+      border-bottom-width: 2px;
+      background: linear-gradient(180deg, #3d6f6b, #2c5350);
+      color: var(--ss-text-bright);
+      font-weight: 700;
+      font-size: 0.82rem;
+      line-height: 1.35;
+      white-space: nowrap;
+    }
   </style>
   {% block extra_head %}{% endblock %}
 </head>

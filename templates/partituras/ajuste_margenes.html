@@ -73,9 +73,11 @@
     {% if pagina.numero < total %}
     <a href="{% url 'partituras:ajuste_margenes' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
     {% endif %}
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-margenes" %}
     <a href="{% url 'partituras:estado' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
   </div>
 </div>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-margenes" contenido="partituras/_ayuda/ajuste_margenes.html" %}
 <div class="d-flex flex-wrap gap-1 mb-3">
   {% for p in partitura.paginas.all %}
   <a href="{% url 'partituras:ajuste_margenes' partitura.pk p.numero %}"

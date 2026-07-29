@@ -23,9 +23,11 @@
           <i class="bi bi-pencil"></i>
         </a>
         {% endif %}
+        {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-obra-detalle" %}
         <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a Obras" %}</a>
       </div>
     </div>
+    {% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-obra-detalle" contenido="partituras/_ayuda/obra_detalle.html" %}
     {% if es_dueño or es_admin %}
     <form method="post" action="{% url 'partituras:alternar_publicacion_obra' obra.pk %}" class="form-check form-switch mb-3">
       {% csrf_token %}

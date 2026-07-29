@@ -1,0 +1,17 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-music-note-list me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo ajustar barras y numerar compases" %}</h6>
+<p>{% translate "Último paso: marcar las barras de compás reales de la página — a partir de ahí, los compases se numeran solos." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-distribute-vertical"></i>{% translate "Barras" %}</h6>
+<p>{% translate "Clic sobre una línea: cambia entre" %} <span class="ayuda-control" style="color:#2ecc71">{% translate "aceptada" %}</span> {% translate "y" %} <span class="ayuda-control" style="color:#e74c3c">{% translate "dudosa" %}</span>. {% translate "Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una barra ahí. Arrastrá para dibujar un rectángulo y seleccionar varias —" %} <span class="ayuda-tecla">Supr</span> {% translate "o el botón las borra juntas;" %} <span class="ayuda-tecla">Esc</span>, {% translate "clic derecho o clic afuera de la partitura deseleccionan." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-123"></i>{% translate "Compases" %}</h6>
+<p>{% translate "Se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue toma el número que corresponde, las demás se corren). Clic sobre un número: aparecen dos cajitas, el número y cuántos compases vale (para un silencio de varios compases) — completá la que te resulte más cómoda, lo que sigue se acomoda solo." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-distribute-horizontal" style="color:#5aaaff"></i>{% translate "Borde de sistema (línea azul)" %}</h6>
+<p>{% translate "Marca dónde arranca/termina de verdad el contenido, más allá del margen de página. Clic sobre la línea: la descarta. Clic en la zona antes de ella (o después, si es la de cierre): la reubica ahí — así se corrige de un solo clic si la detección se equivocó." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-sliders"></i>{% translate "Umbral de contenido de sistema" %}</h6>
+<p>{% translate "Usado para detectar dónde empieza/termina realmente un sistema (bordes de compás extremos). Si la detección falla en esta página — se ve un borde muy corrido o nunca aparece — probá cambiar este valor: más alto para páginas escaneadas con ruido de fondo, más bajo si un contenido real muy tenue (una nota suelta) queda cortado." %}</p>
+
+<p class="mb-0 text-warning">{% translate "Nada se guarda hasta tocar Confirmar — el aviso naranja de arriba recuerda que hay cambios sin confirmar todavía." %}</p>

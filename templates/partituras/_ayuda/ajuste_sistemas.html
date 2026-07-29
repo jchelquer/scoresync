@@ -1,0 +1,12 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-layout-three-columns me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo ajustar los sistemas" %}</h6>
+<p>{% translate "Tercer paso: marcar la franja de cada sistema (línea de pentagramas) de la página, para que las etapas siguientes (ancla, barras) sepan dónde buscar." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrows-vertical"></i>{% translate "Las bandas" %}</h6>
+<p>{% translate "Arrastrá los bordes de una banda para redimensionarla, o el centro para moverla entera." %} <span class="ayuda-control">{% translate "Agregar sistema" %}</span> {% translate "deja marcar uno nuevo con un clic sobre la partitura. El ícono de copia duplica una banda (desplazada, para distinguirla del original) y después se mueve igual que las demás; el ✕ la borra." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-sliders"></i>{% translate "Umbral de separación entre sistemas" %}</h6>
+<p>{% translate "Qué tan blanca tiene que ser una franja horizontal para contar como el hueco entre dos sistemas. Si una página con mucho texto de expresión/adornos entre pentagramas termina con sistemas reales fusionados en uno o directamente perdidos, subilo; si un sistema se corta de más, bajalo." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrow-repeat"></i>{% translate "Volver a detectar de cero" %}</h6>
+<p class="mb-0">{% translate "Descarta los cambios manuales y vuelve a correr la detección automática con el umbral actual — también sirve si entraste acá sin haber corrido la detección todavía." %}</p>

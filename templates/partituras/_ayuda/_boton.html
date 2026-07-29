@@ -1,0 +1,6 @@
+{% load i18n %}
+{% comment %}
+boton_id es opcional — sólo hace falta si la pantalla necesita encontrar
+este botón desde JS (p.ej. para reubicarlo, ver navegador_obra.html).
+{% endcomment %}
+<button type="button" {% if boton_id %}id="{{ boton_id }}"{% endif %} class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#{{ modal_id }}" title="{% translate "Ayuda" %}">?</button>

@@ -1,0 +1,16 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-list-ol me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo armar el Itinerario" %}</h6>
+<p>{% translate "El itinerario se usa para saber en qué orden se debe ejecutar la obra. Cada fila es un tramo de compases que se toca de corrido, en el orden real de ejecución." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-sort-numeric-down"></i>{% translate "Numeración de filas" %}</h6>
+<p>{% translate "Es un método sencillo para insertar filas o reordenarlas. Cada fila recibe un número (preferentemente de 10 en 10) y cuando hace falta cambiar una de lugar basta con ponerle un número acorde y guardar. Las filas marcadas con la casilla" %} <span class="ayuda-control">{% translate "Borrar" %}</span> {% translate "se eliminan al guardar." %}</p>
+
+<p>{% translate "Cuando hay bloques repetidos o saltos (2da vez, D.C., al Segno, a Coda, etc.) simplemente se indica en una nueva fila por dónde debe seguir la ejecución secuencial." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrow-left-right"></i>{% translate "Desde / Hasta" %}</h6>
+<p>{% translate "Normalmente es un número de compás entero (p.ej. 20), pero puede indicarse un pulso dentro del compás (p.ej. 20,2 es el pulso 2), incluso una fracción de pulso (20,2.5 sería el pulso 2 y medio del compás 20)." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-clock-history"></i>{% translate "Tiempo calculado" %}</h6>
+<p>{% translate "Es una estimación a partir del tempo cargado en Notación — se recalcula solo al guardar, es sólo de referencia hasta que se sincronice con audio real (ver \"Sincronizar compases\")." %}</p>
+
+<p class="mb-0">{% translate "La indicación de compás, el tempo base y los efectos de tempo (accelerando/ritardando/calderón) no se cargan acá — son hechos de la partitura por posición, se cargan una sola vez en Notación." %}</p>

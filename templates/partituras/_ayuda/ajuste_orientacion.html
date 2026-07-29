@@ -1,0 +1,12 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-arrow-clockwise me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo ajustar la orientación" %}</h6>
+<p>{% translate "Primer paso de la preparación de una parte: dejar cada página derecha antes de detectar márgenes, sistemas, ancla y compases. Cada etapa se habilita recién cuando la anterior está confirmada en TODAS las páginas — la tira de números de arriba muestra cuáles ya están (✓ verde) y cuáles faltan (rojo)." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrow-repeat"></i>{% translate "Rotación" %}</h6>
+<p>{% translate "Los botones de 90° giran la página entera — para el caso de una página escaneada de costado o al revés." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-rulers"></i>{% translate "Desalineado fino" %}</h6>
+<p>{% translate "Para cuando la página está derecha pero un poco torcida (deskew). Las guías rojas se pueden arrastrar sobre la imagen para chequear a ojo si un pentagrama quedó horizontal." %} <span class="ayuda-control">{% translate "Trazar línea horizontal" %}</span> {% translate "deja marcar con el mouse algo que debería ser horizontal (una línea del pentagrama) — el ángulo se calcula solo; también se puede escribir directamente y tocar" %} <span class="ayuda-control">{% translate "Aplicar" %}</span>.</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-zoom-in"></i>{% translate "Zoom" %}</h6>
+<p class="mb-0">{% translate "El botón flotante de la esquina acerca la imagen para revisar el detalle; con el zoom activo, arrastrar la página la desplaza." %} <span class="ayuda-control">{% translate "Confirmar esta página" %}</span> {% translate "la da por buena y avanza — hace falta confirmar todas las páginas de la parte para pasar a la siguiente etapa." %}</p>

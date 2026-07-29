@@ -1,0 +1,12 @@
+{% load i18n %}
+<h6 style="color: var(--ss-text-bright)"><i class="bi bi-crop me-1" style="color: var(--ss-accent)"></i>{% translate "Cómo ajustar los márgenes" %}</h6>
+<p>{% translate "Segundo paso: marcar dónde empieza y termina el contenido REAL de la página, para que los márgenes de escaneo (bordes, sombra de encuadernación) no se confundan con música." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-bounding-box"></i>{% translate "El rectángulo" %}</h6>
+<p>{% translate "Debería rodear el contenido real de la página. Se arrastra desde adentro para moverlo entero, o desde cualquier borde para redimensionarlo." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-arrow-repeat"></i>{% translate "Volver a detectar de cero" %}</h6>
+<p>{% translate "Descarta el rectángulo actual y vuelve a correr la detección automática — útil si quedó mal después de tocar algo." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-eye-slash"></i>{% translate "Ignorar esta página" %}</h6>
+<p class="mb-0">{% translate "Para páginas que no tienen música (portada, en blanco, texto) — quedan excluidas del resto del proceso, sin necesidad de ajustarles nada." %} <span class="ayuda-control">{% translate "Confirmar" %}</span> {% translate "avanza a la siguiente — hace falta confirmar todas las páginas para pasar a la etapa siguiente." %}</p>

@@ -1,0 +1,21 @@
+{% load i18n %}
+{% comment %}
+Modal de ayuda genérico — cada pantalla lo instancia con:
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-xxx" contenido="partituras/_ayuda/xxx.html" %}
+El título específico de la pantalla va DENTRO de `contenido` (primer <h6>),
+no acá — así todo el texto de una pantalla (título incluido) queda en un
+solo archivo, fácil de encontrar y editar.
+{% endcomment %}
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-labelledby="{{ modal_id }}-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content" style="background: var(--ss-surface); color: var(--ss-text-muted); border: 1px solid #2a4a47;">
+      <div class="modal-header" style="border-color: #2a4a47;">
+        <h5 class="modal-title" id="{{ modal_id }}-titulo" style="color: var(--ss-text-bright)">{% translate "Ayuda" %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{% translate 'Cerrar' %}"></button>
+      </div>
+      <div class="modal-body small">
+        {% include contenido %}
+      </div>
+    </div>
+  </div>
+</div>

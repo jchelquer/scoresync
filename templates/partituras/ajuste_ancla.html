@@ -92,9 +92,11 @@
     {% if pagina.numero < total %}
     <a href="{% url 'partituras:ajuste_ancla' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
     {% endif %}
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-ancla" %}
     <a href="{% url 'partituras:estado' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
   </div>
 </div>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-ancla" contenido="partituras/_ayuda/ajuste_ancla.html" %}
 <div class="d-flex flex-wrap gap-1 mb-3">
   {% for p in partitura.paginas.all %}
   <a href="{% url 'partituras:ajuste_ancla' partitura.pk p.numero %}"
@@ -116,9 +118,6 @@
 
   <div class="col-lg-3" id="col-panel">
     <div class="panel-control">
-      <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "El rectángulo debería rodear una barra de compás. Si no es así, movelo o redimensionalo y pedí que busque adentro — no hace falta precisión." %}
-      </p>
       <form method="post" id="form-ancla">
         {% csrf_token %}
         <input type="hidden" name="x0" id="input-x0">
@@ -142,9 +141,6 @@
         <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
           <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
         </button>
-        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">
-          {% translate "Ignora el rectángulo actual (confirmado o no) y prueba la detección automática desde el principio." %}
-        </p>
       </form>
       <form method="post">
         {% csrf_token %}

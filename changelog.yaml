@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.18.0"
+  date: "2026-07-29"
+  changes:
+    - type: nuevo
+      text: "Ayuda contextual (botón \"?\") en todas las pantallas: Practicar, Itinerario, Notación, Sincronizar compases, las cinco de preparación de partitura (orientación, márgenes, sistemas, ancla, barras), Biblioteca y la ficha de la obra."
+    - type: mejorado
+      text: "En varias pantallas de preparación (barras, sistemas, ancla) se sacaron los párrafos de ayuda que quedaban siempre visibles en el panel — ahora viven en el botón \"?\", dejando el panel más despejado."
+    - type: corregido
+      text: "La ayuda de \"Sincronizar por compás\" estaba desactualizada — todavía mencionaba la sincronización por itinerario (ya eliminada) y no describía Ajuste fino, Interpolar, Borrar temporización ni Ajustar pulsos. Actualizada, junto con un tooltip de \"Reiniciar\" que decía lo contrario de lo que hace en modo Marcado."
 - version: "1.17.0"
   date: "2026-07-29"
   changes:
@@ -14,7 +23,7 @@
     - type: nuevo
       text: "Durante la ejecución, ahora se puede prender avisos que muestren eventos importantes (cambios de compás, armadura de clave, tempo)"
     - type: mejorado
-      text: "La armadura de clave mostrada se adapta adutomáticamente a la traspoción del instrumento para el que fue hecha la parte."
+      text: "La armadura de clave mostrada se adapta automáticamente a la traspoción del instrumento para el que fue hecha la parte."
 - version: "1.15.10"
   date: "2026-07-28"
   changes:

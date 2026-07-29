@@ -84,9 +84,11 @@
     {% if pagina.numero < total %}
     <a href="{% url 'partituras:ajuste_sistemas' partitura.pk pagina.numero|add:'1' %}" class="btn btn-outline-light btn-sm">{% translate "Siguiente" %} →</a>
     {% endif %}
+    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-sistemas" %}
     <a href="{% url 'partituras:estado' partitura.pk %}" class="btn btn-outline-light btn-sm">{% translate "Salir" %}</a>
   </div>
 </div>
+{% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-sistemas" contenido="partituras/_ayuda/ajuste_sistemas.html" %}
 <div class="d-flex flex-wrap gap-1 mb-3">
   {% for p in partitura.paginas.all %}
   <a href="{% url 'partituras:ajuste_sistemas' partitura.pk p.numero %}"
@@ -108,9 +110,6 @@
 
   <div class="col-lg-3">
     <div class="panel-control">
-      <p class="small" style="color: var(--ss-text-muted)">
-        {% translate "Arrastrá los bordes de un sistema para redimensionarlo, o el centro para moverlo. El botón de copia duplica un sistema (desplazado, para distinguirlo del original) y después se puede mover igual que los demás." %}
-      </p>
       <button type="button" id="btn-agregar" class="btn btn-outline-light w-100 mb-3">
         <i class="bi bi-plus-lg"></i> {% translate "Agregar sistema" %}
       </button>
@@ -132,9 +131,6 @@
         <label for="input-umbral-separacion" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
           {% translate "Umbral de separación entre sistemas (%)" %}
         </label>
-        <p class="small mb-2" style="color: var(--ss-text-muted)">
-          {% translate "Qué tan blanca tiene que ser una franja horizontal para contar como el hueco entre dos sistemas. Si una página con mucho texto de expresión/adornos entre pentagramas termina con sistemas reales fusionados en uno o directamente perdidos, subilo; si un sistema se corta de más, bajalo." %}
-        </p>
         <div class="d-flex align-items-center gap-2 mb-2">
           <input type="range" name="umbral_separacion_pct" id="input-umbral-separacion" class="form-range"
                  min="0.05" max="50" step="0.05" value="{{ umbral_separacion_pct|unlocalize }}">
@@ -143,9 +139,6 @@
         <button type="submit" name="accion" value="redetectar" class="btn btn-outline-light w-100">
           <i class="bi bi-arrow-repeat"></i> {% translate "Volver a detectar de cero" %}
         </button>
-        <p class="small mt-1 mb-0" style="color: var(--ss-text-muted)">
-          {% translate "Por si entraste acá sin haber corrido 'Detectar sistemas' antes, o para descartar los cambios manuales y probar la detección automática de nuevo." %}
-        </p>
       </form>
       <script>
         (function () {
