@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.19.2"
+  date: "2026-07-29"
+  changes:
+    - type: mejorado
+      text: "Al guardar en Itinerario o en Notación ahora aparece un mensaje de confirmación, en vez de volver a la pantalla sin ningún aviso."
 - version: "1.19.1"
   date: "2026-07-29"
   changes:

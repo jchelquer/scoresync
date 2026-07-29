@@ -871,6 +871,7 @@ def itinerario_obra(request, pk):
                         f"para {info['indicacion_compas']} (1 a {pulsos_compas:g}).",
                     )
 
+            messages.success(request, "Se guardó el itinerario.")
             return redirect("partituras:itinerario_obra", pk=pk)
     else:
         formset = SegmentoFormSet(queryset=queryset, prefix="segmentos")
@@ -914,6 +915,7 @@ def notacion_obra(request, pk):
                     eliminada.delete()
 
                 recalcular_tiempos_calculados(obra)
+            messages.success(request, "Se guardó la notación.")
             return redirect("partituras:notacion_obra", pk=pk)
     else:
         formset = MarcaNotacionFormSet(queryset=queryset_notacion, prefix="notacion")

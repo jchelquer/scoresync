@@ -1,4 +1,3 @@
-R
 # Pendientes en Scoresync
 #
 #marcado:
@@ -14,15 +13,16 @@ R
 #    - quedó confuso qué pasa cuando uno cambia una barra o multirest. Probarlo bien.
 #    - Hay barras dobles que si no están muy pegadas las detecta como dos.
 #    - Ver si implementó el tema de seleccionar varias barras para borrarlas todas.
-Sistemas:
-    - En Romance para flauta, me parece que los detecta mal. Analizar cómo lo hace para mejorar el algoritmo.
+#Sistemas:
+#    - En Romance para flauta, me parece que los detecta mal. Analizar cómo lo hace para mejorar el algoritmo.
 
 #Layout: en marcado, ver si no es más práctico que el play etc esté también arriba de la lista de compases.
 #Armadura: agregar en el itinerario y mostrar claramente los cambios.
 #Reproducción: (al menos en marcado) aparte de continuar, recomenzar (desde el compás marcado). Al hacer clic, rearmar el plan sin hacer stop y play.
-Marcado: agregar un recomenzar desde el campo de compás marcado. Disponible incluso mientras ejecuta.
-Selección de compases en sincro compases: poder hacer una selección simple en el pentagrama. Agregar controles de
-Accel. y rall.: en el itinerario, marcar dónde empieza o termina (pulso). En el desenrrollado, filas que terminan en un lugar y siguen a continuación en el mismo compás) se desenrrollan como un único compás
+#Marcado: agregar un recomenzar desde el campo de compás marcado. Disponible incluso mientras ejecuta.
+#Selección de compases en sincro compases: poder hacer una selección simple en el pentagrama. Agregar controles de
+#Accel. y rall.: en el itinerario, marcar dónde empieza o termina (pulso). En el desenrrollado, filas que terminan en un lugar y siguen a continuación en el mismo compás) se desenrrollan como un único compás
 
 Anotaciones globales y por parte: el owner de la obra puede hacer anotaciones globales. El owner de la parte puede hacer anotaciones en las partes y también sirven para todos los usuarios. Cada usuario puede hacer anotaciones privadas en la parte que ensaya. Las anotaciones se pueden encender o apagar.
-Advertencias: se podría implementar advertencias para cambios de compás, de tempo, de armadura de clave.
+#Advertencias: se podría implementar advertencias para cambios de compás, de tempo, de armadura de clave.
+Pasajes difíciles: pensar en que se pueda marcar pasajes difíciles y después buscarlos para practicarlos.
