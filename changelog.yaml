@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.19.3"
+  date: "2026-07-29"
+  changes:
+    - type: corregido
+      text: "En Sincronizar compases, \"Reiniciar\"/Play (modo Reproducción) podía volver al principio de la obra sin explicación cuando el primer compás del rango elegido no tenía tiempo real propio — ahora cae en el compás con tiempo real más cercano hacia atrás, y avisa cuando eso pasa."
 - version: "1.19.2"
   date: "2026-07-29"
   changes:

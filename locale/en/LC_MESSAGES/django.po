@@ -276,6 +276,27 @@ msgstr "Measure"
 msgid "Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos)"
 msgstr "Measure, or measure,beat (e.g. 5,1.3 = measure 5, beat 1 + 3 tenths)"
 
+msgid "Ningún compás tiene tiempo real marcado hasta"
+msgstr "No measure has a real time marked up to"
+
+msgid "No hay tiempo real marcado en"
+msgstr "There's no real time marked at"
+
+msgid "el compás"
+msgstr "measure"
+
+msgid "el fin de la obra"
+msgstr "the end of the piece"
+
+msgid "el más cercano hacia atrás que sí lo tiene."
+msgstr "the nearest one back that has one."
+
+msgid "se arrancó desde"
+msgstr "playback started from"
+
+msgid "se arrancó desde el comienzo del audio."
+msgstr "playback started from the beginning of the audio."
+
 msgid ""
 "Con el botón de play va a ejecutarse la música en tiempo real, resaltando "
 "los compases correspondientes (siguiendo el tempo cargado en Notación, o el "

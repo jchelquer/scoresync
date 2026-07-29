@@ -219,6 +219,7 @@
                  title="{% translate 'Bajar la velocidad no cambia el tiempo real que se guarda al marcar — sólo hace más cómodo tapear con precisión.' %}">
           <span id="sync-velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">100%</span>
         </div>
+        <div id="sync-reposicion-aviso" class="small text-warning mb-2" style="display:none;"></div>
         <div class="d-flex align-items-center gap-3 mb-2">
           <span id="sync-tiempo-actual" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
           <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
@@ -308,6 +309,7 @@
   const btnInterpolar = document.getElementById('sync-btn-interpolar');
   const btnBorrarTiempos = document.getElementById('sync-btn-borrar-tiempos');
   const avisoInterpolar = document.getElementById('sync-interpolar-aviso');
+  const avisoReposicion = document.getElementById('sync-reposicion-aviso');
   const velocidadSlider = document.getElementById('sync-velocidad');
   const velocidadValorEl = document.getElementById('sync-velocidad-valor');
   const scrubber = document.getElementById('sync-scrubber');
@@ -394,8 +396,60 @@
   // sólo en pausa) vuelve al punto de Play.
   let estadoReproduccion = 'inicial'; // sólo relevante con modo === 'reproduccion'
 
+  // Descripción corta de una fila para los avisos de reposicionamiento de
+  // abajo — ya incluye artículo ("el compás 12" / "el fin de la obra") para
+  // que quede prolijo tanto de sujeto ("el compás 12 no tiene...") como de
+  // objeto ("...se arrancó desde el compás 8").
+  function descripcionFila(i) {
+    const f = filas[i];
+    return f.dataset.esCierre === '1'
+      ? '{% translate "el fin de la obra" %}'
+      : '{% translate "el compás" %} ' + f.dataset.compas;
+  }
+
+  // Tiempo real de idx, con fallback al compás real más CERCANO hacia atrás
+  // si ese compás puntual no tiene marca propia — a diferencia de
+  // tiempoNCompasesAntes (que busca 2 compases de contexto ANTES para
+  // tapear, con un límite fijo), acá se busca la posición más precisa
+  // posible para reanudar la escucha, sin límite de cuántos compases hay
+  // que retroceder. Devuelve null sólo si NINGÚN compás desde el principio
+  // hasta idx tiene tiempo real — recién ahí cae en 0 (ver
+  // iniciarReproduccionDesde).
+  function tiempoRealCercanoHaciaAtras(idx) {
+    for (let i = idx; i >= 0; i--) {
+      const t = tiempoDeFila(i);
+      if (t != null) return { indice: i, segundos: t };
+    }
+    return null;
+  }
+
+  // Avisa cuando Play/Reiniciar (modo reproducción) no pudo arrancar
+  // exactamente en el compás pedido — antes esto pasaba en silencio y caía
+  // derecho a 0 (comienzo del audio) apenas ESE compás puntual no tenía
+  // tiempo propio, aunque hubiera temporización cerca; confuso ("por qué
+  // volvió al principio de la obra si elegí este rango"), reportado por el
+  // usuario 2026-07-29. Sin aviso cuando pedido === encontrado (caso normal)
+  // ni cuando el pedido es el compás 1 de la obra sin tiempo propio y sin
+  // nada antes (ahí caer en 0 es lo esperable, no una sorpresa).
+  function actualizarAvisoReposicion(idxPedido, encontrado) {
+    if (!avisoReposicion) return;
+    if ((!encontrado && idxPedido === 0) || (encontrado && encontrado.indice === idxPedido)) {
+      avisoReposicion.style.display = 'none';
+      return;
+    }
+    avisoReposicion.textContent = encontrado
+      ? '{% translate "No hay tiempo real marcado en" %} ' + descripcionFila(idxPedido)
+        + ' — {% translate "se arrancó desde" %} ' + descripcionFila(encontrado.indice)
+        + ', {% translate "el más cercano hacia atrás que sí lo tiene." %}'
+      : '{% translate "Ningún compás tiene tiempo real marcado hasta" %} ' + descripcionFila(idxPedido)
+        + ' — {% translate "se arrancó desde el comienzo del audio." %}';
+    avisoReposicion.style.display = '';
+  }
+
   function iniciarReproduccionDesde(idx) {
-    audio.currentTime = tiempoDeFila(idx) ?? 0;
+    const encontrado = tiempoRealCercanoHaciaAtras(idx);
+    audio.currentTime = encontrado ? encontrado.segundos : 0;
+    actualizarAvisoReposicion(idx, encontrado);
     audio.play().catch(() => {});
   }
 
