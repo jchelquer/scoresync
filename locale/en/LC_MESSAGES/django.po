@@ -1,0 +1,1668 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-29 20:22+0000\n"
+"PO-Revision-Date: 2026-07-29 20:22+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "(fin de la obra — no hay un compás puntual que mostrar)"
+msgstr "(end of the piece — no specific measure to show)"
+
+msgid ""
+"A diferencia de lo de arriba (un valor vigente hasta la próxima marca), un "
+"efecto es un tramo o un punto ACOTADO. Desde/Hasta aceptan \"compás\" o "
+"\"compás,pulso\" (ej: 10 o 10,2.5). En un calderón dejá Hasta vacío — Valor "
+"es el bpm de llegada (accelerando/ritardando) o el factor de duración del "
+"calderón (ej: 1.5 = 50% más largo)."
+msgstr ""
+"Unlike the above (a value in effect until the next mark), an effect is a "
+"BOUNDED span or point. From/To accept \"measure\" or \"measure,beat\" (e.g. "
+"10 or 10,2.5). For a fermata leave To empty — Value is the arrival tempo "
+"(accelerando/ritardando) or the fermata's duration factor (e.g. 1.5 = 50% "
+"longer)."
+
+msgid "Aceptada"
+msgstr "Accepted"
+
+msgid "Aceptada — clic para marcar dudosa, doble clic para borrar"
+msgstr "Accepted — click to mark as doubtful, double-click to delete"
+
+msgid "Acercar"
+msgstr "Zoom in"
+
+msgid ""
+"Acá se junta todo lo que hace falta para poder practicar: el audio de "
+"referencia, las partes (partituras) y la configuración de "
+"itinerario/notación de cada una."
+msgstr ""
+"This is where everything needed to practice comes together: the reference "
+"audio, the parts (scores), and each one's itinerary/notation setup."
+
+msgid "Adjuntar"
+msgstr "Attach"
+
+msgid "Adjuntar parte suelta"
+msgstr "Attach loose part"
+
+msgid "Agregar sistema"
+msgstr "Add system"
+
+msgid "Ajustar ancla (barra de referencia)"
+msgstr "Adjust anchor (reference barline)"
+
+msgid "Ajustar barras y numerar compases"
+msgstr "Adjust barlines and number measures"
+
+msgid "Ajustar márgenes"
+msgstr "Adjust margins"
+
+msgid "Ajustar orientación"
+msgstr "Adjust orientation"
+
+msgid "Ajustar pulsos"
+msgstr "Adjust beats"
+
+msgid "Ajustar pulsos dentro de este compás"
+msgstr "Adjust beats within this measure"
+
+msgid "Ajustar sistemas"
+msgstr "Adjust systems"
+
+msgid "Ajuste fino"
+msgstr "Fine adjustment"
+
+msgid "Ajustes en bloque"
+msgstr "Bulk adjustments"
+
+msgid "Alejar"
+msgstr "Zoom out"
+
+msgid "Ancla"
+msgstr "Anchor"
+
+msgid "Ancla confirmada — podés seguir ajustándola"
+msgstr "Anchor confirmed — you can keep adjusting it"
+
+msgid "Anterior"
+msgstr "Previous"
+
+msgid "Aplicar"
+msgstr "Apply"
+
+msgid "Armadura"
+msgstr "Key signature"
+
+msgid ""
+"Arrastrá los bordes de una banda para redimensionarla, o el centro para "
+"moverla entera."
+msgstr "Drag a band's edges to resize it, or its center to move it entirely."
+
+msgid "Arreglista (opcional)"
+msgstr "Arranger (optional)"
+
+msgid "Atajos de teclado"
+msgstr "Keyboard shortcuts"
+
+msgid "Audio de referencia"
+msgstr "Reference audio"
+
+msgid "Avisa cambios de tempo, armadura y compás superpuestos a la partitura"
+msgstr "Overlays tempo, key signature and time signature changes on the score"
+
+msgid "Ayuda"
+msgstr "Help"
+
+msgid ""
+"Bajar la velocidad no cambia el tiempo real que se guarda al marcar — sólo "
+"hace más cómodo tapear con precisión."
+msgstr ""
+"Lowering the speed doesn't change the real time saved when marking — it just"
+" makes it easier to tap accurately."
+
+msgid "Bajar un sistema"
+msgstr "Move down one system"
+
+msgid "Barras"
+msgstr "Barlines"
+
+msgid "Barras / compases"
+msgstr "Barlines / measures"
+
+msgid "Biblioteca"
+msgstr "Library"
+
+msgid ""
+"Borde de sistema (arranque) — clic para descartarlo, clic en la zona antes "
+"de él para reubicarlo"
+msgstr ""
+"System edge (start) — click to discard it, click in the area before it to "
+"relocate it"
+
+msgid ""
+"Borde de sistema (cierre) — clic para descartarlo, clic en la zona después "
+"de él para reubicarlo"
+msgstr ""
+"System edge (end) — click to discard it, click in the area after it to "
+"relocate it"
+
+msgid "Borde de sistema (línea azul)"
+msgstr "System edge (blue line)"
+
+msgid "Borrar"
+msgstr "Delete"
+
+msgid ""
+"Borrar la obra no se puede deshacer — hay que escribir el título exacto para"
+" confirmar."
+msgstr ""
+"Deleting the piece can't be undone — you have to type the exact title to "
+"confirm."
+
+msgid "Borrar obra"
+msgstr "Delete piece"
+
+msgid "Borrar seleccionadas"
+msgstr "Delete selected"
+
+msgid "Borrar temporización"
+msgstr "Delete timing"
+
+msgid "Buscar en este rectángulo"
+msgstr "Search within this rectangle"
+
+msgid ""
+"Buscar visualmente subiendo/bajando la ventana, sin cambiar la selección"
+msgstr ""
+"Look around by moving the window up/down, without changing the selection"
+
+msgid "Búsqueda libre"
+msgstr "Free-text search"
+
+msgid "Búsqueda y filtros"
+msgstr "Search and filters"
+
+msgid "Cada celda lleva directo a esa etapa en esa página."
+msgstr "Each cell links directly to that stage on that page."
+
+msgid ""
+"Cada etapa se habilita cuando la anterior está confirmada en todas las "
+"páginas."
+msgstr ""
+"Each stage is enabled once the previous one is confirmed on every page."
+
+msgid ""
+"Cada parte es una partitura (PDF) de un instrumento. \"Cargar parte\" sube "
+"una nueva; \"Adjuntar parte suelta\" suma una que ya subiste para otra obra "
+"o quedó huérfana. Sólo el dueño de cada parte puede editarla, separarla "
+"(queda suelta, sin borrarla) o borrarla."
+msgstr ""
+"Each part is one instrument's score (PDF). \"Upload part\" adds a new one; "
+"\"Attach loose part\" adds one you already uploaded for another piece or "
+"that was left orphaned. Only each part's owner can edit it, detach it (it "
+"becomes loose, not deleted) or delete it."
+
+msgid "Cambiar contraseña"
+msgstr "Change password"
+
+msgid "Cancelar"
+msgstr "Cancel"
+
+msgid "Cancelar trazo"
+msgstr "Cancel tracing"
+
+msgid "Cargalo acá"
+msgstr "Load it here"
+
+msgid "Cargar parte"
+msgstr "Upload part"
+
+msgid "Cerrar"
+msgstr "Close"
+
+msgid "Clic sobre una línea: cambia entre"
+msgstr "Click on a line: switches between"
+
+msgid "Click para escribir el tiempo a mano"
+msgstr "Click to type the time by hand"
+
+msgid "Comentario"
+msgstr "Comment"
+
+msgid "Compases"
+msgstr "Measures"
+
+msgid "Compases al aire"
+msgstr "Lead-in count"
+
+msgid ""
+"Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes "
+"de ejecutar."
+msgstr ""
+"Complete them in \"Sync measures\" (for example with Interpolate) before "
+"running it."
+
+msgid "Completá el ancla primero"
+msgstr "Complete the anchor first"
+
+msgid "Completá el formulario y te avisamos cuando tu cuenta esté lista."
+msgstr "Fill out the form and we'll let you know when your account is ready."
+
+msgid "Completá la orientación primero"
+msgstr "Complete the orientation first"
+
+msgid "Completá los márgenes primero"
+msgstr "Complete the margins first"
+
+msgid "Completá los sistemas primero"
+msgstr "Complete the systems first"
+
+msgid "Compositor"
+msgstr "Composer"
+
+msgid "Compositor (opcional)"
+msgstr "Composer (optional)"
+
+msgid "Compás"
+msgstr "Measure"
+
+msgid "Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos)"
+msgstr "Measure, or measure,beat (e.g. 5,1.3 = measure 5, beat 1 + 3 tenths)"
+
+msgid ""
+"Con el botón de play va a ejecutarse la música en tiempo real, resaltando "
+"los compases correspondientes (siguiendo el tempo cargado en Notación, o el "
+"audio real si activás"
+msgstr ""
+"With the play button the music runs in real time, highlighting the "
+"corresponding measures (following the tempo loaded in Notation, or the real "
+"audio if you enable"
+
+msgid "Con partitura"
+msgstr "With score"
+
+msgid "Confirmada"
+msgstr "Confirmed"
+
+msgid "Confirmar"
+msgstr "Confirm"
+
+msgid "Confirmar esta página"
+msgstr "Confirm this page"
+
+msgid "Contanos qué encontraste o qué se te ocurre…"
+msgstr "Tell us what you found or any idea you have…"
+
+msgid "Continuar"
+msgstr "Resume"
+
+msgid "Contraseña actualizada"
+msgstr "Password updated"
+
+msgid "Creada"
+msgstr "Created"
+
+msgid "Crear"
+msgstr "Create"
+
+msgid "Crear una obra nueva"
+msgstr "Create a new piece"
+
+msgid "Crear y adjuntar"
+msgstr "Create and attach"
+
+msgid ""
+"Cuando hay bloques repetidos o saltos (2da vez, D.C., al Segno, a Coda, "
+"etc.) simplemente se indica en una nueva fila por dónde debe seguir la "
+"ejecución secuencial."
+msgstr ""
+"When there are repeated blocks or jumps (2nd time, D.C., al Segno, to Coda, "
+"etc.) you simply add a new row for wherever the sequential performance "
+"should continue."
+
+msgid ""
+"Cuarto paso: encontrar una barra de compás real de referencia en la página, "
+"para calibrar la detección de barras de la etapa siguiente."
+msgstr ""
+"Fourth step: find one real reference barline on the page, to calibrate "
+"barline detection in the next stage."
+
+msgid "Cuántos compases vale (silencio de varios compases)"
+msgstr "How many measures it's worth (multi-measure rest)"
+
+msgid "Cómo ajustar barras y numerar compases"
+msgstr "How to adjust barlines and number measures"
+
+msgid "Cómo ajustar el ancla"
+msgstr "How to adjust the anchor"
+
+msgid "Cómo ajustar la orientación"
+msgstr "How to adjust orientation"
+
+msgid "Cómo ajustar los márgenes"
+msgstr "How to adjust the margins"
+
+msgid "Cómo ajustar los sistemas"
+msgstr "How to adjust the systems"
+
+msgid "Cómo armar el Itinerario"
+msgstr "How to build the Itinerary"
+
+msgid "Cómo armar una obra"
+msgstr "How to set up a piece"
+
+msgid "Cómo cargar la Notación"
+msgstr "How to enter Notation"
+
+msgid "Cómo practicar"
+msgstr "How to practice"
+
+msgid "Cómo sincronizar por compás"
+msgstr "How to sync measure by measure"
+
+msgid "Cómo usar la Biblioteca"
+msgstr "How to use the Library"
+
+msgid ""
+"Debería rodear el contenido real de la página. Se arrastra desde adentro "
+"para moverlo entero, o desde cualquier borde para redimensionarlo."
+msgstr ""
+"It should surround the page's real content. Drag it from the inside to move "
+"it whole, or from any edge to resize it."
+
+msgid ""
+"Debería rodear una barra de compás real. Si no es así, movelo o "
+"redimensionalo (no hace falta precisión) y tocá"
+msgstr ""
+"It should surround a real barline. If it doesn't, move or resize it (no need"
+" for precision) and tap"
+
+msgid "Desalineado fino"
+msgstr "Fine deskew"
+
+msgid ""
+"Descarta el rectángulo actual y vuelve a correr la detección automática — "
+"útil si quedó mal después de tocar algo."
+msgstr ""
+"Discards the current rectangle and reruns automatic detection — useful if it"
+" went wrong after touching something."
+
+msgid ""
+"Descarta los cambios manuales y vuelve a correr la detección automática con "
+"el umbral actual — también sirve si entraste acá sin haber corrido la "
+"detección todavía."
+msgstr ""
+"Discards manual changes and reruns automatic detection with the current "
+"threshold — also useful if you got here without running detection yet."
+
+msgid "Descripción"
+msgstr "Description"
+
+msgid "Desde"
+msgstr "From"
+
+msgid "Desde / Hasta"
+msgstr "From / To"
+
+msgid "Deshacer (Backspace)"
+msgstr "Undo (Backspace)"
+
+msgid "Despublicada"
+msgstr "Unpublished"
+
+msgid "Despublicada: sólo su dueño, el dueño de la obra y los admins la ven."
+msgstr "Unpublished: only its owner, the piece's owner and admins can see it."
+
+msgid "Despublicada: sólo vos y los admins la ven (biblioteca y URL directa)."
+msgstr "Unpublished: only you and admins can see it (library and direct URL)."
+
+msgid "Detectada, falta confirmar"
+msgstr "Detected, needs confirming"
+
+msgid "Detectadas, falta confirmar"
+msgstr "Detected, need confirming"
+
+msgid "Detectados, falta confirmar"
+msgstr "Detected, need confirming"
+
+msgid "Detener"
+msgstr "Stop"
+
+msgid ""
+"Disponible sólo en compases con un calderón o dentro de un "
+"accelerando/ritardando — abre un ajuste más fino: un punto arrastrable por "
+"pulso, con una barra de referencia a velocidad constante como ayuda visual."
+msgstr ""
+"Only available on measures with a fermata or inside an "
+"accelerando/ritardando — opens a finer adjustment: one draggable point per "
+"beat, with a constant-speed reference bar as a visual guide."
+
+msgid ""
+"Doble clic: la borra. Clic en un espacio vacío del pentagrama: agrega una "
+"barra ahí. Arrastrá para dibujar un rectángulo y seleccionar varias —"
+msgstr ""
+"Double-click: deletes it. Click on an empty spot on the staff: adds a "
+"barline there. Drag to draw a rectangle and select several —"
+
+msgid "Duda"
+msgstr "Question"
+
+msgid "Dudosa"
+msgstr "Doubtful"
+
+msgid "Dudosa — clic para aceptar, doble clic para borrar"
+msgstr "Doubtful — click to accept, double-click to delete"
+
+msgid "Duplicar"
+msgstr "Duplicate"
+
+msgid "Editable en pausa, para ir a otro compás"
+msgstr "Editable while paused, to jump to another measure"
+
+msgid "Editar"
+msgstr "Edit"
+
+msgid "Editar obra"
+msgstr "Edit piece"
+
+msgid "Editar partitura"
+msgstr "Edit score"
+
+msgid "Efectos de tempo"
+msgstr "Tempo effects"
+
+msgid "Efectos de tempo (accelerando / ritardando / calderón)"
+msgstr "Tempo effects (accelerando / ritardando / fermata)"
+
+msgid "Ejecutar con audio"
+msgstr "Play with audio"
+
+msgid "Ejecutar en tiempo real"
+msgstr "Run in real time"
+
+msgid ""
+"El 100% corresponde al tempo real guardado. Puede reducirse o subirse con el"
+" deslizador (20%-150%) sin afectar ese tempo guardado."
+msgstr ""
+"100% corresponds to the saved real tempo. It can be lowered or raised with "
+"the slider (20%-150%) without affecting that saved tempo."
+
+msgid ""
+"El audio de referencia no tiene un tiempo real marcado para el arranque de "
+"este rango con la temporización elegida — no va a sonar (el resto de la "
+"ejecución sigue normalmente)."
+msgstr ""
+"The reference audio has no real time marked for the start of this range with"
+" the chosen timing source — it won't play (the rest of the performance "
+"continues normally)."
+
+msgid ""
+"El botón flotante de la esquina acerca la imagen para revisar el detalle; "
+"con el zoom activo, arrastrar la página la desplaza."
+msgstr ""
+"The floating button in the corner zooms in on the image to check details; "
+"with zoom active, dragging the page scrolls it."
+
+msgid ""
+"El enlace no es válido, puede que ya haya sido usado. Solicitá uno nuevo."
+msgstr ""
+"The link isn't valid, it may have already been used. Request a new one."
+
+msgid ""
+"El itinerario se usa para saber en qué orden se debe ejecutar la obra. Cada "
+"fila es un tramo de compases que se toca de corrido, en el orden real de "
+"ejecución."
+msgstr ""
+"The itinerary is used to know in what order the piece should be performed. "
+"Each row is a stretch of measures played straight through, in the real "
+"performance order."
+
+msgid ""
+"El número grande de compás es editable con un click cuando está en pausa, "
+"para saltar a otro punto sin volver a elegir el rango."
+msgstr ""
+"The big measure number is editable with a click while paused, to jump to "
+"another point without re-picking the range."
+
+msgid "El rectángulo"
+msgstr "The rectangle"
+
+msgid ""
+"El rectángulo debería rodear el contenido real de la página, excluyendo "
+"artefactos de escaneo (bordes, sombras de encuadernación). Movelo o "
+"redimensionalo si hace falta."
+msgstr ""
+"The rectangle should surround the page's real content, excluding scan "
+"artifacts (edges, binding shadows). Move or resize it if needed."
+
+msgid ""
+"El tilde verde en la esquina indica que ya quedó confirmada — se puede "
+"seguir ajustando igual; cualquier movimiento la marca como pendiente de "
+"nuevo hasta volver a confirmar."
+msgstr ""
+"The green checkmark in the corner shows it's already confirmed — you can "
+"still keep adjusting it; any move marks it as pending again until you "
+"confirm it once more."
+
+msgid "Elegir archivo"
+msgstr "Choose file"
+
+msgid "Elegir compases"
+msgstr "Pick measures"
+
+msgid "Elegir otro archivo"
+msgstr "Choose another file"
+
+msgid "Elegí una nueva contraseña"
+msgstr "Choose a new password"
+
+msgid "Enviar"
+msgstr "Send"
+
+msgid "Enviar comentario"
+msgstr "Send feedback"
+
+msgid "Enviar enlace"
+msgstr "Send link"
+
+msgid "Enviar solicitud"
+msgstr "Send request"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Error al enviar. Intentá de nuevo."
+msgstr "Error sending it. Try again."
+
+msgid "Es el título de la obra — no se puede cambiar por parte."
+msgstr "It's the piece's title — it can't be changed per part."
+
+msgid "Es el título de la obra — separá la parte para poder cambiarlo."
+msgstr "It's the piece's title — detach the part to be able to change it."
+
+msgid ""
+"Es un método sencillo para insertar filas o reordenarlas. Cada fila recibe "
+"un número (preferentemente de 10 en 10) y cuando hace falta cambiar una de "
+"lugar basta con ponerle un número acorde y guardar. Las filas marcadas con "
+"la casilla"
+msgstr ""
+"It's a simple way to insert rows or reorder them. Each row gets a number "
+"(preferably in steps of 10) and when one needs to move, you just give it a "
+"matching number and save. Rows checked with the"
+
+msgid ""
+"Es una estimación a partir del tempo cargado en Notación — se recalcula solo"
+" al guardar, es sólo de referencia hasta que se sincronice con audio real "
+"(ver \"Sincronizar compases\")."
+msgstr ""
+"It's an estimate based on the tempo loaded in Notation — it's recalculated "
+"only on save, and it's just a reference until it's synced with real audio "
+"(see \"Sync measures\")."
+
+msgid "Espacio"
+msgstr "Space"
+
+msgid "Esta obra todavía no tiene un itinerario de ejecución cargado."
+msgstr "This piece doesn't have a performance itinerary loaded yet."
+
+msgid "Esta parte no tiene el compás"
+msgstr "This part doesn't have measure"
+
+msgid "Estado por página"
+msgstr "Status by page"
+
+msgid ""
+"Este tramo no cubre el compás completo — un salto cae a mitad de compás acá."
+msgstr ""
+"This stretch doesn't cover the whole measure — a jump lands mid-measure "
+"here."
+
+msgid "Esto borra la obra"
+msgstr "This deletes the piece"
+
+msgid ""
+"Falta bpm o indicación de compás en alguna fila del rango — no se puede "
+"calcular el tiempo real."
+msgstr ""
+"Some row in the range is missing bpm or a time signature — the real time "
+"can't be calculated."
+
+msgid ""
+"Faltan compases sin temporización real (ni marcada ni interpolada) para "
+"ejecutar por compases: "
+msgstr ""
+"Measures without real timing (neither marked nor interpolated) are missing "
+"to play by measures: "
+
+msgid "Filtrar"
+msgstr "Filter"
+
+msgid "Fin del tramo."
+msgstr "End of the range."
+
+msgid "Guardar"
+msgstr "Save"
+
+msgid "Guardar itinerario"
+msgstr "Save itinerary"
+
+msgid "Guardar notación"
+msgstr "Save notation"
+
+msgid "Hacé clic en la partitura para ubicar el sistema nuevo."
+msgstr "Click on the score to place the new system."
+
+msgid ""
+"Hacé clic en «Trazar línea horizontal» y después marcá con el mouse, sobre "
+"la imagen, algo que debería quedar horizontal (por ejemplo una línea del "
+"pentagrama) — el ángulo se calcula solo. También podés escribirlo "
+"directamente."
+msgstr ""
+"Click \"Trace horizontal line\" and then mark with the mouse, on the image, "
+"something that should be horizontal (for example a staff line) — the angle "
+"is calculated automatically. You can also type it directly."
+
+msgid "Hasta"
+msgstr "To"
+
+msgid ""
+"Hechos de la PARTITURA por compás — indicación de compás, armadura, tempo "
+"base — a diferencia del itinerario (que sólo describe el orden de "
+"ejecución). Cada marca rige a partir del compás indicado, hasta la próxima "
+"marca del mismo tipo, sin importar qué fila del itinerario la usa: el compás"
+" 47 tiene la misma indicación la primera vez que se toca y en cualquier "
+"repetición."
+msgstr ""
+"Facts of the SCORE by measure — time signature, key signature, base tempo — "
+"unlike the itinerary (which only describes the performance order). Each mark"
+" holds from the given measure onward, until the next mark of the same type, "
+"no matter which itinerary row uses it: measure 47 has the same time "
+"signature the first time it's played and on any repeat."
+
+msgid "Idea"
+msgstr "Idea"
+
+msgid ""
+"Ignora el rectángulo actual (confirmado o no) y prueba la detección "
+"automática desde el principio."
+msgstr ""
+"Ignores the current rectangle (confirmed or not) and tries automatic "
+"detection again from scratch."
+
+msgid "Ignorada"
+msgstr "Ignored"
+
+msgid "Ignorar esta página"
+msgstr "Ignore this page"
+
+msgid "Ingresar"
+msgstr "Log in"
+
+msgid ""
+"Ingresá tu email y te enviaremos un enlace para restablecer tu contraseña."
+msgstr "Enter your email and we'll send you a link to reset your password."
+
+msgid "Inicio"
+msgstr "Home"
+
+msgid "Interpolar"
+msgstr "Interpolate"
+
+msgid "Ir a la biblioteca"
+msgstr "Go to the library"
+
+msgid "Ir al login"
+msgstr "Go to login"
+
+msgid "Itinerario de ejecución"
+msgstr "Performance itinerary"
+
+msgid "Itinerario, Notación y Sincronizar compases"
+msgstr "Itinerary, Notation and Sync measures"
+
+msgid ""
+"La detección automática puede tardar mucho o fallar con muchas páginas — "
+"esto salta directo al ajuste manual, sin rotación/inclinación corregida."
+msgstr ""
+"Automatic detection can take a long time or fail with many pages — this "
+"skips straight to manual adjustment, without rotation/tilt correction."
+
+msgid ""
+"La indicación de compás, el tempo base y los efectos de tempo "
+"(accelerando/ritardando/calderón) no se cargan acá — son hechos de la "
+"partitura por posición, se cargan una sola vez en Notación."
+msgstr ""
+"Time signature, base tempo and tempo effects "
+"(accelerando/ritardando/fermata) aren't loaded here — they're facts of the "
+"score by position, loaded once in Notation."
+
+msgid ""
+"La pantalla puede achicarse o agrandarse con los botones + y −, y se puede "
+"avanzar o retroceder en la partitura con las flechas hacia arriba y abajo o "
+"arrastrando la página. Con la ejecución detenida, un click sobre cualquier "
+"compás de la partitura lo elige como punto de arranque."
+msgstr ""
+"The view can be zoomed in or out with the + and − buttons, and you can move "
+"forward or back through the score with the up/down arrows or by dragging the"
+" page. With playback stopped, clicking any measure on the score picks it as "
+"the starting point."
+
+msgid ""
+"La velocidad del 100% corresponde a la versión grabada. Puede reducirse con "
+"el deslizador manteniendo la altura de las notas."
+msgstr ""
+"100% speed corresponds to the recorded version. It can be lowered with the "
+"slider while keeping the pitch of the notes."
+
+msgid "Las bandas"
+msgstr "The bands"
+
+msgid ""
+"Las guías rojas sobre la imagen se pueden arrastrar — movelas a donde te "
+"sirva para chequear si el pentagrama quedó horizontal."
+msgstr ""
+"The red guides over the image can be dragged — move them wherever helps you "
+"check if the staff came out horizontal."
+
+msgid ""
+"Las ventanas pasan automáticamente, mostrando con un tiempo antes el avance "
+"del primer compás de la siguiente."
+msgstr ""
+"Windows advance automatically, showing a preview of the first measure of the"
+" next one shortly before it happens."
+
+msgid "Limpiar"
+msgstr "Clear"
+
+msgid ""
+"Lista todas las obras publicadas de cualquier usuario, más las tuyas propias"
+" aunque no estén publicadas todavía. Un clic en cualquier tarjeta abre su "
+"ficha."
+msgstr ""
+"Lists every published piece from any user, plus your own even if not "
+"published yet. Clicking any card opens its page."
+
+msgid "Loop"
+msgstr "Loop"
+
+msgid ""
+"Los botones de 90° giran la página entera — para el caso de una página "
+"escaneada de costado o al revés."
+msgstr ""
+"The 90° buttons rotate the whole page — for a page scanned sideways or "
+"upside down."
+
+msgid ""
+"Los tres pasos para preparar la ejecución: el orden de los compases, los "
+"datos de la partitura (tempo/armadura/indicación), y la temporización real "
+"contra el audio."
+msgstr ""
+"The three steps to prepare a performance: the order of the measures, the "
+"score's data (tempo/key signature/time signature), and the real timing "
+"against the audio."
+
+msgid "Marc."
+msgstr "Mark"
+
+msgid ""
+"Marca dónde arranca/termina de verdad el contenido, más allá del margen de "
+"página. Clic sobre la línea: la descarta. Clic en la zona antes de ella (o "
+"después, si es la de cierre): la reubica ahí — así se corrige de un solo "
+"clic si la detección se equivocó."
+msgstr ""
+"Marks where the content really starts/ends, beyond the page margin. Click on"
+" the line: discards it. Click in the area before it (or after, if it's the "
+"closing one): relocates it there — a single click fixes it if detection got "
+"it wrong."
+
+msgid "Marcado"
+msgstr "Marking"
+
+msgid "Marcar (Espacio)"
+msgstr "Mark (Space)"
+
+msgid "Metrónomo visual"
+msgstr "Visual metronome"
+
+msgid ""
+"Mientras no esté completa la temporización real de un compás (ni marcada ni "
+"interpolada), ese compás no se puede ejecutar \"por compases\" en Practicar "
+"— hay que completarlo acá primero."
+msgstr ""
+"As long as a measure's real timing isn't complete (neither marked nor "
+"interpolated), that measure can't be played \"by measures\" in Practice — it"
+" has to be completed here first."
+
+msgid "Modo compás"
+msgstr "Measure mode"
+
+msgid "Modo partitura"
+msgstr "Score mode"
+
+msgid "Mostrar números de compás"
+msgstr "Show measure numbers"
+
+msgid "Márgenes"
+msgstr "Margins"
+
+msgid ""
+"Nada se guarda hasta tocar Confirmar — el aviso naranja de arriba recuerda "
+"que hay cambios sin confirmar todavía."
+msgstr ""
+"Nothing is saved until you tap Confirm — the orange banner above is a "
+"reminder that there are still unconfirmed changes."
+
+msgid "No"
+msgstr "No"
+
+msgid "No hay compases en este rango."
+msgstr "There are no measures in this range."
+
+msgid "No se pudo cargar la imagen de la página."
+msgstr "Couldn't load the page image."
+
+msgid "No se pudo conectar con el servidor."
+msgstr "Couldn't connect to the server."
+
+msgid "No se pudo interpolar (falta ancla explícita de un lado): compás"
+msgstr ""
+"Couldn't interpolate (missing an explicit anchor on one side): measure"
+
+msgid "No se pudo obtener el plan de ejecución."
+msgstr "Couldn't get the performance plan."
+
+msgid "No se pudo obtener la partitura."
+msgstr "Couldn't get the score."
+
+msgid "No se puede deshacer."
+msgstr "This can't be undone."
+
+msgid ""
+"No tenés partes sueltas — todo está prolijamente adjunto a alguna obra."
+msgstr ""
+"You don't have any loose parts — everything is neatly attached to some "
+"piece."
+
+msgid ""
+"Normalmente es un número de compás entero (p.ej. 20), pero puede indicarse "
+"un pulso dentro del compás (p.ej. 20,2 es el pulso 2), incluso una fracción "
+"de pulso (20,2.5 sería el pulso 2 y medio del compás 20)."
+msgstr ""
+"It's usually a whole measure number (e.g. 20), but you can point to a beat "
+"within the measure (e.g. 20,2 is beat 2), even a fraction of a beat (20,2.5 "
+"would be beat 2 and a half of measure 20)."
+
+msgid "Notación"
+msgstr "Notation"
+
+msgid "Notación de la partitura"
+msgstr "Score notation"
+
+msgid "Novedades"
+msgstr "What's new"
+
+msgid "Nueva contraseña"
+msgstr "New password"
+
+msgid "Numeración de filas"
+msgstr "Row numbering"
+
+msgid "Número de este compás"
+msgstr "This measure's number"
+
+msgid "Obra"
+msgstr "Piece"
+
+msgid "Omitir detección automática"
+msgstr "Skip automatic detection"
+
+msgid "Orden"
+msgstr "Order"
+
+msgid "Ordenar por"
+msgstr "Sort by"
+
+msgid ""
+"Organización de biblioteca (opcional) — repertorios y ciclos se crean desde "
+"el admin."
+msgstr ""
+"Library organization (optional) — repertoires and cycles are created from "
+"the admin."
+
+msgid "Orientación"
+msgstr "Orientation"
+
+msgid ""
+"Para cuando la página está derecha pero un poco torcida (deskew). Las guías "
+"rojas se pueden arrastrar sobre la imagen para chequear a ojo si un "
+"pentagrama quedó horizontal."
+msgstr ""
+"For when the page is right-side up but a little crooked (deskew). The red "
+"guides can be dragged over the image to eyeball whether a staff came out "
+"horizontal."
+
+msgid "Para la obra"
+msgstr "For the piece"
+
+msgid ""
+"Para páginas que no tienen música (portada, en blanco, texto) — quedan "
+"excluidas del resto del proceso, sin necesidad de ajustarles nada."
+msgstr ""
+"For pages that have no music (cover, blank, text) — they're excluded from "
+"the rest of the process, with nothing left to adjust on them."
+
+msgid "Parte"
+msgstr "Part"
+
+msgid "Partes"
+msgstr "Parts"
+
+msgid ""
+"Partes que quedaron sin obra (al separarlas, o si se borró la obra a la que "
+"pertenecían) — las partes nuevas se cargan siempre desde la ficha de una "
+"obra, no desde acá. Podés adjuntar una a una obra existente (desde la ficha "
+"de esa obra) o borrarla directamente."
+msgstr ""
+"Parts left without a piece (after detaching them, or if the piece they "
+"belonged to was deleted) — new parts are always uploaded from a piece's "
+"page, not from here. You can attach one to an existing piece (from that "
+"piece's page) or delete it directly."
+
+msgid "Partes sueltas"
+msgstr "Loose parts"
+
+msgid ""
+"Partituras propias que quedaron sin obra (por ejemplo, si se separó una "
+"parte o se borró la obra a la que pertenecía) — desde ahí se pueden editar o"
+" borrar."
+msgstr ""
+"Your own scores that ended up without a piece (for example, if a part was "
+"detached or the piece it belonged to was deleted) — from there they can be "
+"edited or deleted."
+
+msgid "Pasada"
+msgstr "Pass"
+
+msgid "Pausar"
+msgstr "Pause"
+
+msgid "Pausar/continuar (Enter)"
+msgstr "Pause/resume (Enter)"
+
+msgid "Pendiente"
+msgstr "Pending"
+
+msgid "Pendiente de confirmación — los cambios no se guardaron todavía."
+msgstr "Pending confirmation — the changes haven't been saved yet."
+
+msgid "Por favor escribí tu comentario antes de enviar."
+msgstr "Please write your comment before sending."
+
+msgid "Practicar"
+msgstr "Practice"
+
+msgid ""
+"Primer paso de la preparación de una parte: dejar cada página derecha antes "
+"de detectar márgenes, sistemas, ancla y compases. Cada etapa se habilita "
+"recién cuando la anterior está confirmada en TODAS las páginas — la tira de "
+"números de arriba muestra cuáles ya están (✓ verde) y cuáles faltan (rojo)."
+msgstr ""
+"First step in preparing a part: getting every page right-side up before "
+"detecting margins, systems, anchor and measures. Each stage is only enabled "
+"once the previous one is confirmed on EVERY page — the strip of numbers "
+"above shows which ones are already done (✓ green) and which are still "
+"missing (red)."
+
+msgid "Publicada"
+msgstr "Published"
+
+msgid "Publicada (visible para todos)"
+msgstr "Published (visible to everyone)"
+
+msgid "Pulso"
+msgstr "Beat"
+
+msgid "Página"
+msgstr "Page"
+
+msgid ""
+"Qué tan blanca tiene que ser una franja horizontal para contar como el hueco"
+" entre dos sistemas. Si una página con mucho texto de expresión/adornos "
+"entre pentagramas termina con sistemas reales fusionados en uno o "
+"directamente perdidos, subilo; si un sistema se corta de más, bajalo."
+msgstr ""
+"How white a horizontal strip has to be to count as the gap between two "
+"systems. If a page with a lot of expression text/ornaments between staves "
+"ends up with real systems merged into one or lost entirely, raise it; if a "
+"system gets cut off too much, lower it."
+
+msgid "Rango"
+msgstr "Range"
+
+msgid "Recuperar contraseña"
+msgstr "Recover password"
+
+msgid "Reemplazar"
+msgstr "Replace"
+
+msgid "Reiniciar"
+msgstr "Restart"
+
+msgid ""
+"Reiniciar — en Marcado arma el último de la selección (2 compases antes); en"
+" Reproducción arranca desde el primero"
+msgstr ""
+"Restart — in Marking mode it sets up the last of the selection (2 measures "
+"before it); in Playback mode it starts from the first"
+
+msgid "Repertorio-ciclo"
+msgstr "Repertoire-cycle"
+
+msgid "Repertorio/ciclo, título y compositor"
+msgstr "Repertoire/cycle, title and composer"
+
+msgid "Repr."
+msgstr "Play"
+
+msgid "Reproducción"
+msgstr "Playback"
+
+msgid "Revisá tu email"
+msgstr "Check your email"
+
+msgid "Rotación"
+msgstr "Rotation"
+
+msgid "Rotación actual"
+msgstr "Current rotation"
+
+msgid "Salir"
+msgstr "Exit"
+
+msgid "Saltear (Tab)"
+msgstr "Skip (Tab)"
+
+msgid "Score"
+msgstr "Score"
+
+msgid ""
+"Se carga en concierto (como suena) — cada parte transpositora la ve "
+"automáticamente adaptada a su propia transposición al practicar o en "
+"Sincronizar compases."
+msgstr ""
+"It's entered at concert pitch (as it sounds) — each transposing part "
+"automatically sees it adapted to its own transposition when practicing or in"
+" Sync measures."
+
+msgid ""
+"Se numeran solos a medida que agregás/sacás barras (la nueva/la que sigue "
+"toma el número que corresponde, las demás se corren). Clic sobre un número: "
+"aparecen dos cajitas, el número y cuántos compases vale (para un silencio de"
+" varios compases) — completá la que te resulte más cómoda, lo que sigue se "
+"acomoda solo."
+msgstr ""
+"They number themselves as you add/remove barlines (the new one/the next one "
+"takes the right number, the rest shift along). Click on a number: two small "
+"boxes appear, the number and how many measures it's worth (for a multi-"
+"measure rest) — fill in whichever is easier for you, the rest adjusts on its"
+" own."
+
+msgid ""
+"Se puede indicar un rango de compases (con pulso y fracción de pulso si hace"
+" falta, ej. \"20,1.5\") y una vez a repetir si ese compás se repite, activar"
+" o desactivar el"
+msgstr ""
+"You can set a range of measures (with a beat and a fraction of a beat if "
+"needed, e.g. \"20,1.5\") and which repeat to use if that measure repeats, "
+"turn the"
+
+msgid "Se puede indicar un rango de compases, activar o desactivar el"
+msgstr "You can set a range of measures, turn the"
+
+msgid ""
+"Segundo paso: marcar dónde empieza y termina el contenido REAL de la página,"
+" para que los márgenes de escaneo (bordes, sombra de encuadernación) no se "
+"confundan con música."
+msgstr ""
+"Second step: mark where the page's REAL content starts and ends, so scan "
+"margins (edges, binding shadow) don't get mistaken for music."
+
+msgid "Separar"
+msgstr "Detach"
+
+msgid "Separar de la obra"
+msgstr "Detach from the piece"
+
+msgid ""
+"Si existe una cuenta con ese email, te enviamos un enlace para restablecer "
+"la contraseña."
+msgstr ""
+"If an account exists with that email, we've sent a link to reset the "
+"password."
+
+msgid ""
+"Si la parte tiene una partitura procesada, aparece un panel con el score "
+"siguiendo al compás actual — un clic sobre cualquier compás de la partitura "
+"lo elige como punto de arranque."
+msgstr ""
+"If the part has a processed score, a panel appears with the score following "
+"the current measure — clicking any measure on it picks it as the starting "
+"point."
+
+msgid "Siguiente"
+msgstr "Next"
+
+msgid "Silenciar"
+msgstr "Mute"
+
+msgid "Sin audio todavía."
+msgstr "No audio yet."
+
+msgid "Sincronizar compases"
+msgstr "Sync measures"
+
+msgid "Sincronizar por compás"
+msgstr "Sync measure by measure"
+
+msgid "Sincronizá partituras digitales con ejecuciones musicales reales."
+msgstr "Sync digital scores with real musical performances."
+
+msgid "Sistemas"
+msgstr "Systems"
+
+msgid "Solicitar acceso"
+msgstr "Request access"
+
+msgid "Solicitar nuevo enlace"
+msgstr "Request new link"
+
+msgid "Solicitarlo"
+msgstr "Request it"
+
+msgid "Solicitud recibida"
+msgstr "Request received"
+
+msgid "Solicitudes"
+msgstr "Requests"
+
+msgid "Sonido"
+msgstr "Sound"
+
+msgid "Subir"
+msgstr "Upload"
+
+msgid "Subir un sistema"
+msgstr "Move up one system"
+
+msgid ""
+"Subí una grabación de referencia para poder sincronizar el itinerario con el"
+" tiempo real."
+msgstr ""
+"Upload a reference recording so you can sync the itinerary with real time."
+
+msgid "Sí"
+msgstr "Yes"
+
+msgid "Sólo quien la subió puede editar el procesamiento de esta parte."
+msgstr "Only whoever uploaded it can edit this part's processing."
+
+msgid ""
+"Tercer paso: marcar la franja de cada sistema (línea de pentagramas) de la "
+"página, para que las etapas siguientes (ancla, barras) sepan dónde buscar."
+msgstr ""
+"Third step: mark the band for each system (line of staves) on the page, so "
+"the next stages (anchor, barlines) know where to look."
+
+msgid "Tiempo calculado"
+msgstr "Calculated time"
+
+msgid "Tipo"
+msgstr "Type"
+
+msgid "Tipo (opcional)"
+msgstr "Type (optional)"
+
+msgid "Todas"
+msgstr "All"
+
+msgid "Todavía no hay ninguna obra creada."
+msgstr "No piece has been created yet."
+
+msgid ""
+"Todavía no hay una parte procesada para mostrar acá la partitura — podés "
+"sincronizar igual, guiándote sólo por el audio."
+msgstr ""
+"There's no processed part yet to show the score here — you can still sync, "
+"guided only by the audio."
+
+msgid "Todavía no pertenece a ninguna obra."
+msgstr "It doesn't belong to any piece yet."
+
+msgid "Todavía no se corrió la detección"
+msgstr "Detection hasn't run yet"
+
+msgid ""
+"Todavía no se puede publicar: hace falta un itinerario armado, al menos una "
+"parte con los compases confirmados, y la temporización por compases completa"
+" (sin ningún compás sin marcar) en \"Sincronizar compases\"."
+msgstr ""
+"Can't be published yet: it needs an itinerary in place, at least one part "
+"with its measures confirmed, and complete measure-by-measure timing (no "
+"unmarked measures) in \"Sync measures\"."
+
+msgid "Todavía no tiene ninguna parte adjunta."
+msgstr "It doesn't have any part attached yet."
+
+msgid "Todos"
+msgstr "All"
+
+msgid "Trazar línea horizontal"
+msgstr "Trace horizontal line"
+
+msgid "Título"
+msgstr "Title"
+
+msgid "Título de la obra"
+msgstr "Piece title"
+
+msgid "Umbral de contenido de sistema"
+msgstr "System content threshold"
+
+msgid "Umbral de contenido de sistema (%)"
+msgstr "System content threshold (%)"
+
+msgid "Umbral de separación entre sistemas"
+msgstr "System separation threshold"
+
+msgid "Umbral de separación entre sistemas (%)"
+msgstr "System separation threshold (%)"
+
+msgid ""
+"Un click en cualquier compás (de la lista o de la partitura) lo elige para "
+"marcar/escuchar desde ahí;"
+msgstr ""
+"Clicking any measure (in the list or on the score) picks it to mark/listen "
+"from there;"
+
+msgid ""
+"Una obra despublicada sólo la ven el dueño y los admins. Para poder "
+"publicarla hace falta un itinerario armado, al menos una parte con los "
+"compases confirmados, y la temporización por compases completa en "
+"\"Sincronizar compases\"."
+msgstr ""
+"An unpublished piece is only seen by its owner and admins. To publish it, it"
+" needs an itinerary in place, at least one part with its measures confirmed,"
+" and complete measure-by-measure timing in \"Sync measures\"."
+
+msgid ""
+"Usado para detectar dónde empieza/termina realmente un sistema (bordes de "
+"compás extremos). Si la detección falla en esta página — se ve un borde muy "
+"corrido o nunca aparece — probá cambiar este valor: más alto para páginas "
+"escaneadas con ruido de fondo, más bajo si un contenido real muy tenue (una "
+"nota suelta) queda cortado."
+msgstr ""
+"Used to detect where a system really starts/ends (outermost measure edges). "
+"If detection fails on this page — an edge looks way off or never shows up — "
+"try changing this value: higher for pages scanned with background noise, "
+"lower if some very faint real content (a lone note) gets cut off."
+
+msgid ""
+"Vacía = rige siempre que se pase por ese compás. Completala sólo para el "
+"caso raro de que una repetición puntual necesite un valor distinto (1ra vez,"
+" 2da vez, etc.)."
+msgstr ""
+"Empty = applies every time that measure is played. Fill it in only for the "
+"rare case where one specific repeat needs a different value (1st time, 2nd "
+"time, etc.)."
+
+msgid "Valor"
+msgstr "Value"
+
+msgid ""
+"Vamos a revisar tu solicitud y te contactamos por email cuando tu cuenta "
+"esté lista."
+msgstr ""
+"We'll review your request and reach out by email once your account is ready."
+
+msgid "Velocidad"
+msgstr "Speed"
+
+msgid "Volver a 100%"
+msgstr "Back to 100%"
+
+msgid "Volver a Obras"
+msgstr "Back to Pieces"
+
+msgid "Volver a detectar de cero"
+msgstr "Redetect from scratch"
+
+msgid "Volver a la obra"
+msgstr "Back to the piece"
+
+msgid "Volver a partes sueltas"
+msgstr "Back to loose parts"
+
+msgid "Volver al inicio"
+msgstr "Back to home"
+
+msgid "Volver al login"
+msgstr "Back to login"
+
+msgid "Ya podés ingresar con tu nueva contraseña."
+msgstr "You can now log in with your new password."
+
+msgid "Zoom"
+msgstr "Zoom"
+
+msgid "aceptada"
+msgstr "accepted"
+
+msgid "actualizada"
+msgstr "updated"
+
+msgid "al aire"
+msgstr "lead-in"
+
+msgid "ant"
+msgstr "prev"
+
+msgid "arr."
+msgstr "arr."
+
+msgid ""
+"avanza a la siguiente — hace falta confirmar todas las páginas para pasar a "
+"la etapa siguiente."
+msgstr ""
+"moves to the next one — every page needs to be confirmed to move on to the "
+"next stage."
+
+msgid "avisos"
+msgstr "alerts"
+
+msgid ""
+"baja el audio para tapear con más precisión, sin cambiar el tiempo real que "
+"se graba."
+msgstr ""
+"slows down the audio to tap more precisely, without changing the real time "
+"that gets recorded."
+
+msgid "busca por título o compositor;"
+msgstr "searches by title or composer;"
+
+msgid "cambia el orden de la lista."
+msgstr "changes the list's order."
+
+msgid "clic derecho o clic afuera de la partitura deseleccionan."
+msgstr "right-click or clicking outside the score deselect."
+
+msgid ""
+"compacta todos los controles en una sola fila arriba, para aprovechar el "
+"máximo de pantalla al practicar con la parte."
+msgstr ""
+"compacts every control into a single row up top, to make the most of the "
+"screen while practicing with the part."
+
+msgid "compases al aire"
+msgstr "lead-in count"
+
+msgid ""
+"completa los compases sin marca real de la selección repartiendo el tiempo "
+"entre las marcas explícitas más cercanas;"
+msgstr ""
+"fills in the selection's measures with no real mark by spreading the time "
+"between the nearest explicit marks;"
+
+msgid "compás"
+msgstr "measure"
+
+msgid "confirmado"
+msgstr "confirmed"
+
+msgid ""
+"corre el tiempo grabado de la selección (por si el tap quedó "
+"sistemáticamente adelantado o atrasado)."
+msgstr ""
+"shifts the selection's recorded time (in case the tap ended up consistently "
+"early or late)."
+
+msgid ""
+"deja marcar con el mouse algo que debería ser horizontal (una línea del "
+"pentagrama) — el ángulo se calcula solo; también se puede escribir "
+"directamente y tocar"
+msgstr ""
+"lets you mark with the mouse something that should be horizontal (a staff "
+"line) — the angle is calculated automatically; you can also type it directly"
+" and tap"
+
+msgid ""
+"deja marcar uno nuevo con un clic sobre la partitura. El ícono de copia "
+"duplica una banda (desplazada, para distinguirla del original) y después se "
+"mueve igual que las demás; el ✕ la borra."
+msgstr ""
+"lets you mark a new one with a click on the score. The copy icon duplicates "
+"a band (offset, to tell it apart from the original) and it can then be moved"
+" just like the rest; the ✕ deletes it."
+
+msgid "deja sonar sólo el metrónomo/avisos, sin el audio."
+msgstr "leaves only the metronome/alerts sounding, without the audio."
+
+msgid "desde c."
+msgstr "from m."
+
+msgid "desde pulso"
+msgstr "from beat"
+
+msgid "deshace la última marca."
+msgstr "undoes the last mark."
+
+msgid "detectado, falta confirmar"
+msgstr "detected, needs confirming"
+
+msgid "dudosa"
+msgstr "doubtful"
+
+msgid "ej. 5,1.3"
+msgstr "e.g. 5,1.3"
+
+msgid "escuchá lo ya marcado (verde = sonando ahora) sin grabar nada nuevo."
+msgstr ""
+"listen to what's already marked (green = playing now) without recording "
+"anything new."
+
+msgid "filtran, y"
+msgstr "filter, and"
+
+msgid "fin"
+msgstr "end"
+
+msgid ""
+"hace lo mismo que Shift+click, escribiendo compás (y vez, si se repite)."
+msgstr ""
+"does the same as Shift+click, by typing the measure (and which repeat, if it"
+" repeats)."
+
+msgid "hasta c."
+msgstr "to m."
+
+msgid "hasta pulso"
+msgstr "to beat"
+
+msgid ""
+"la da por buena y avanza — hace falta confirmar todas las páginas de la "
+"parte para pasar a la siguiente etapa."
+msgstr ""
+"approves it and moves on — every page of the part needs to be confirmed to "
+"move on to the next stage."
+
+msgid "loop"
+msgstr "loop"
+
+msgid "marca y avanza (el tap),"
+msgstr "marks and advances (the tap),"
+
+msgid "mía"
+msgstr "mine"
+
+msgid "n° compás"
+msgstr "measure #"
+
+msgid "o creá una obra nueva"
+msgstr "or create a new piece"
+
+msgid "o el botón las borra juntas;"
+msgstr "or the button deletes them together;"
+
+msgid "opcional"
+msgstr "optional"
+
+msgid ""
+"para que busque adentro. La línea roja es la barra ya encontrada; mover el "
+"rectángulo entero la mueve con él, pero redimensionar un borde la deja donde"
+" está."
+msgstr ""
+"so it searches inside it. The red line is the barline already found; moving "
+"the whole rectangle moves it along, but resizing an edge leaves it where it "
+"is."
+
+msgid "parte(s)"
+msgstr "part(s)"
+
+msgid "pausa/continúa el audio,"
+msgstr "pauses/resumes the audio,"
+
+msgid "pulsos"
+msgstr "beats"
+
+msgid "real"
+msgstr "real"
+
+msgid "saca cualquier marca (explícita o interpolada) de la selección."
+msgstr "removes any mark (explicit or interpolated) from the selection."
+
+msgid "salta el compás actual SIN marcarlo (si te lo perdiste),"
+msgstr "skips the current measure WITHOUT marking it (if you missed it),"
+
+msgid "se eliminan al guardar."
+msgstr "get removed on save."
+
+msgid "selecciona un rango,"
+msgstr "selects a range,"
+
+msgid "sig"
+msgstr "next"
+
+msgid "sin detectar"
+msgstr "not detected"
+
+msgid "sin poder deshacerlo. Para confirmar, escribí exactamente"
+msgstr "with no way to undo it. To confirm, type exactly"
+
+msgid ""
+"sincroniza el cursor con la grabación real en vez de con el tempo calculado "
+"— necesita que el rango elegido tenga temporización real completa (marcada o"
+" interpolada en \"Sincronizar compases\"); si falta algún compás, avisa "
+"antes de arrancar."
+msgstr ""
+"syncs the cursor with the real recording instead of the calculated tempo — "
+"it needs the chosen range to have complete real timing (marked or "
+"interpolated in \"Sync measures\"); if any measure is missing it, it warns "
+"before starting."
+
+msgid "son toggles aparte."
+msgstr "are separate toggles."
+
+msgid ""
+"suma uno suelto — para el Ajuste fino o para Interpolar/Borrar temporización"
+" de varios a la vez. También podés escribir un tiempo a mano haciendo click "
+"sobre su valor. El campo"
+msgstr ""
+"adds one loose one — for Fine adjustment or for Interpolate/Delete timing on"
+" several at once. You can also type a time by hand by clicking on its value."
+" The"
+
+msgid "superpone los cambios de compás, armadura o tempo que vienen"
+msgstr "overlays upcoming time signature, key signature or tempo changes"
+
+msgid ""
+"tap compás a compás para grabar el tiempo real de cada uno (repeticiones "
+"incluidas, cada pasada la suya)."
+msgstr ""
+"tap measure by measure to record each one's real time (repeats included, "
+"each pass its own)."
+
+msgid "tuya"
+msgstr "yours"
+
+msgid "título, compositor..."
+msgstr "title, composer..."
+
+msgid "una cuenta de entrada antes de arrancar o al retomar de una pausa"
+msgstr "a lead-in count before starting or when resuming from a pause"
+
+msgid "vez"
+msgstr "rep."
+
+msgid "y"
+msgstr "and"
+
+msgid "y agregar"
+msgstr "and add"
+
+msgid ""
+"y sacar o poner los números de compás y avisos de cambio de armadura de "
+"clave, compás, etc. Asimismo, un clic en un compás lo selecciona para "
+"reproducir."
+msgstr ""
+"and show or hide measure numbers and alerts for key signature, time "
+"signature changes, etc. Also, clicking a measure selects it for playback."
+
+msgid "¡Bienvenido a ScoreSync!"
+msgstr "Welcome to ScoreSync!"
+
+msgid "¡Contraseña actualizada!"
+msgstr "Password updated!"
+
+msgid "¡Gracias! Tu comentario fue enviado."
+msgstr "Thanks! Your comment was sent."
+
+msgid "¡Solicitud recibida!"
+msgstr "Request received!"
+
+msgid "¿Borrar"
+msgstr "Delete"
+
+msgid "¿Borrar esta parte? No se puede deshacer."
+msgstr "Delete this part? This can't be undone."
+
+msgid ""
+"¿Borrar la temporización (explícita e interpolada) de los compases "
+"seleccionados? No se puede deshacer."
+msgstr ""
+"Delete the timing (explicit and interpolated) of the selected measures? This"
+" can't be undone."
+
+msgid "¿No tenés acceso?"
+msgstr "Don't have access?"
+
+msgid "¿Olvidaste tu contraseña?"
+msgstr "Forgot your password?"
+
+msgid ""
+"Último paso: marcar las barras de compás reales de la página — a partir de "
+"ahí, los compases se numeran solos."
+msgstr ""
+"Last step: mark the page's real barlines — from there, the measures number "
+"themselves."
+
+msgid "— fin de la obra —"
+msgstr "— end of the piece —"
+
+msgid "— seleccioná —"
+msgstr "— select —"

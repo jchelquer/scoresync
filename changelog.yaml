@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.19.0"
+  date: "2026-07-29"
+  changes:
+    - type: nuevo
+      text: "ScoreSync ahora está disponible en inglés — el selector de idioma (ES/EN) está en el menú de usuario, arriba a la derecha."
 - version: "1.18.0"
   date: "2026-07-29"
   changes:
