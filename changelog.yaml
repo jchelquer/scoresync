@@ -1,6 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.22.0"
+  date: "2026-07-30"
+  changes:
+    - type: nuevo
+      text: "Anotaciones: ahora se puede dejar carteles de texto anclados a un compás, directamente sobre la partitura en Practicar (botón \"Anotar\") — de obra (las pone el dueño de la obra, las ve todo el mundo), de parte (las pone el dueño de esa parte) o privadas (cada usuario las suyas, en cualquier parte que practique, sea o no suya). Se pueden ubicar arriba o abajo del pentagrama, arrastrar para reubicarlas sin perder el texto, y tienen un color distinto según el nivel."
+    - type: corregido
+      text: "Se corrigió un aviso de cambio de tempo duplicado: si el itinerario vuelve a pasar por un compás en una repetición, el aviso ya no se muestra dos veces superpuesto."
 - version: "1.21.0"
   date: "2026-07-30"
   changes:

@@ -723,3 +723,72 @@ class PreferenciaParte(models.Model):
 
     def __str__(self):
         return f"{self.usuario} — {self.partitura}"
+
+
+class Anotacion(models.Model):
+    """Cartel de texto anclado a un compás, puesto directamente sobre la
+    partitura en Practicar (misma herramienta ad-hoc para los tres niveles,
+    ver navegador_obra.html) — no vigente hasta la próxima marca como
+    MarcaNotacion, ni un tramo/punto de tempo como EfectoTempo: es un dato
+    de contenido libre, puntual, sin efecto en la ejecución/temporización.
+
+    Tres niveles según qué campos están seteados (sin necesidad de un
+    campo `nivel` propio — se deriva, ver la property):
+    - partitura=None: de OBRA — la puso el dueño de la obra, se ve en
+      cualquier parte que se practique.
+    - partitura=X, usuario=None: de PARTE — la puso el dueño de esa
+      partitura, se ve para cualquiera que practique ESA parte.
+    - partitura=X, usuario=Y: PRIVADA — la puso ese usuario mientras
+      practicaba esa parte, sólo él la ve. Requiere partitura siempre
+      (una privada nace de estar mirando una parte puntual) — ver
+      services.guardar_anotacion, que valida esto al guardar.
+
+    El permiso para crear/editar/borrar cada nivel se apoya en dueños que
+    YA existen (Obra.owner, Partitura.owner) o en "soy yo" para las
+    privadas — no hace falta ningún concepto de permiso nuevo (ver
+    services.puede_editar_anotacion/niveles_permitidos)."""
+    NIVELES = [
+        ('obra', 'De obra'),
+        ('parte', 'De parte'),
+        ('privada', 'Privada'),
+    ]
+    TIPOS = [
+        ('texto', 'Texto'),
+    ]
+    POSICIONES = [
+        ('arriba', 'Arriba del pentagrama'),
+        ('abajo', 'Abajo del pentagrama'),
+    ]
+
+    obra = models.ForeignKey(Obra, related_name='anotaciones', on_delete=models.CASCADE)
+    partitura = models.ForeignKey(
+        Partitura, null=True, blank=True, related_name='anotaciones', on_delete=models.CASCADE,
+        help_text="Vacío = de obra (para cualquier parte). Con parte y sin usuario = de esa parte. "
+                   "Con parte Y usuario = privada de ese usuario.",
+    )
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, related_name='anotaciones', on_delete=models.CASCADE,
+        help_text="Seteado = privada de este usuario (siempre junto con partitura). Vacío = de obra o de parte.",
+    )
+    compas = models.PositiveIntegerField(help_text="Compás al que está anclada — el más cercano al punto donde se hizo clic.")
+    tipo = models.CharField(max_length=10, choices=TIPOS, default='texto')
+    posicion = models.CharField(max_length=10, choices=POSICIONES, default='arriba')
+    texto = models.TextField()
+    creado = models.DateTimeField(auto_now_add=True)
+    actualizado = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['compas']
+        verbose_name = 'Anotación'
+        verbose_name_plural = 'Anotaciones'
+
+    @property
+    def nivel(self):
+        if self.usuario_id:
+            return 'privada'
+        if self.partitura_id:
+            return 'parte'
+        return 'obra'
+
+    def __str__(self):
+        return f"{self.obra} — c.{self.compas} ({self.nivel}): {self.texto[:30]}"

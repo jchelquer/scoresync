@@ -21,7 +21,7 @@ from .forms import (
     SegmentoFormSet,
 )
 from .models import (
-    Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
+    Anotacion, Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
     Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
@@ -273,6 +273,47 @@ def _puede_ver_partitura(user, partitura, obra=None):
     if obra and obra.owner_id == user.id:
         return True
     return _es_admin(user)
+
+
+def _puede_editar_anotacion(user, anotacion):
+    """Dueño de la obra para las de nivel 'obra', dueño de la parte para
+    las de 'parte', el propio usuario para las privadas — ningún permiso
+    nuevo, se apoya en los dueños que ya existen (ver Anotacion.nivel)."""
+    if _es_admin(user):
+        return True
+    nivel = anotacion.nivel
+    if nivel == 'obra':
+        return anotacion.obra.owner_id == user.id
+    if nivel == 'parte':
+        return anotacion.partitura.owner_id == user.id
+    return anotacion.usuario_id == user.id
+
+
+def _niveles_permitidos_anotacion(user, obra, partitura):
+    """Qué niveles puede CREAR este usuario ahora mismo (obra requiere ser
+    su dueño; parte requiere ser dueño de la partitura elegida; privada
+    siempre que haya una partitura elegida — no depende de ser su dueño,
+    ver notas de diseño de Anotacion)."""
+    niveles = []
+    if obra.owner_id == user.id or _es_admin(user):
+        niveles.append('obra')
+    if partitura and (partitura.owner_id == user.id or _es_admin(user)):
+        niveles.append('parte')
+    if partitura:
+        niveles.append('privada')
+    return niveles
+
+
+def _serializar_anotacion(anotacion, user):
+    return {
+        'id': anotacion.pk,
+        'compas': anotacion.compas,
+        'texto': anotacion.texto,
+        'posicion': anotacion.posicion,
+        'tipo': anotacion.tipo,
+        'nivel': anotacion.nivel,
+        'puede_editar': _puede_editar_anotacion(user, anotacion),
+    }
 
 
 def _obra_completa(obra):
@@ -1307,6 +1348,103 @@ def score_geometria_obra(request, pk):
         "partitura": {"id": partitura.pk, "titulo": partitura.titulo, "parte": partitura.nombre_parte},
         "paginas": paginas,
     })
+
+
+@login_required
+def anotaciones_obra(request, pk):
+    """Anotaciones (carteles de texto anclados a un compás, ver Anotacion)
+    visibles para este usuario en esta obra, para la parte que se está
+    siguiendo (?parte=, mismo criterio que score_geometria_obra/plan_obra) —
+    de obra siempre, de esa parte puntual, y privadas propias de esa parte.
+    Sin parte elegida sólo hay de obra (las otras dos dependen de una
+    partitura concreta). Devuelve también qué niveles puede CREAR este
+    usuario ahora, para que el cliente arme el selector sólo con esas
+    opciones."""
+    obra = get_object_or_404(Obra, pk=pk)
+    partitura = _partitura_seguida(obra, request)
+
+    if partitura:
+        visibles = Anotacion.objects.filter(obra=obra).filter(
+            Q(partitura__isnull=True)
+            | Q(partitura=partitura, usuario__isnull=True)
+            | Q(partitura=partitura, usuario=request.user)
+        )
+    else:
+        visibles = Anotacion.objects.filter(obra=obra, partitura__isnull=True)
+
+    return JsonResponse({
+        "anotaciones": [_serializar_anotacion(a, request.user) for a in visibles],
+        "niveles_permitidos": _niveles_permitidos_anotacion(request.user, obra, partitura),
+    })
+
+
+@login_required
+@require_POST
+def guardar_anotacion(request, pk):
+    """Crea (sin "id") o edita (con "id") una anotación — "compas"/"texto"/
+    "posicion" siempre; "nivel" ("obra"/"parte"/"privada") y "parte" (id de
+    Partitura) sólo hacen falta al CREAR, una anotación no cambia de nivel
+    después (ver notas de diseño de Anotacion — reasignar de quién es una
+    anotación ya existente no tiene un caso de uso real). El mismo
+    endpoint sirve para "mover" (arrastrar): el cliente reenvía el texto
+    sin cambios junto con el compás/posición nuevos."""
+    obra = get_object_or_404(Obra, pk=pk)
+    try:
+        compas = int(request.POST.get("compas", ""))
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "compás inválido"}, status=400)
+    texto = request.POST.get("texto", "").strip()
+    if not texto:
+        return JsonResponse({"ok": False, "error": "el texto no puede estar vacío"}, status=400)
+    posicion = request.POST.get("posicion") or "arriba"
+    if posicion not in ("arriba", "abajo"):
+        return JsonResponse({"ok": False, "error": "posición inválida"}, status=400)
+
+    anotacion_id = request.POST.get("id")
+    if anotacion_id:
+        anotacion = get_object_or_404(Anotacion, pk=anotacion_id, obra=obra)
+        if not _puede_editar_anotacion(request.user, anotacion):
+            return HttpResponseForbidden()
+        anotacion.compas = compas
+        anotacion.texto = texto
+        anotacion.posicion = posicion
+        anotacion.save(update_fields=["compas", "texto", "posicion", "actualizado"])
+        return JsonResponse({"ok": True, "anotacion": _serializar_anotacion(anotacion, request.user)})
+
+    nivel = request.POST.get("nivel")
+    partitura_id = request.POST.get("parte")
+    partitura = get_object_or_404(Partitura, pk=partitura_id) if partitura_id else None
+    if nivel == "obra":
+        if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+            return HttpResponseForbidden()
+        anotacion = Anotacion.objects.create(obra=obra, compas=compas, texto=texto, posicion=posicion)
+    elif nivel == "parte":
+        if not partitura or not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+            return HttpResponseForbidden()
+        anotacion = Anotacion.objects.create(
+            obra=obra, partitura=partitura, compas=compas, texto=texto, posicion=posicion,
+        )
+    elif nivel == "privada":
+        if not partitura:
+            return JsonResponse({"ok": False, "error": "una anotación privada necesita una parte elegida"}, status=400)
+        anotacion = Anotacion.objects.create(
+            obra=obra, partitura=partitura, usuario=request.user, compas=compas, texto=texto, posicion=posicion,
+        )
+    else:
+        return JsonResponse({"ok": False, "error": "nivel inválido"}, status=400)
+
+    return JsonResponse({"ok": True, "anotacion": _serializar_anotacion(anotacion, request.user)})
+
+
+@login_required
+@require_POST
+def borrar_anotacion(request, pk):
+    obra = get_object_or_404(Obra, pk=pk)
+    anotacion = get_object_or_404(Anotacion, pk=request.POST.get("id"), obra=obra)
+    if not _puede_editar_anotacion(request.user, anotacion):
+        return HttpResponseForbidden()
+    anotacion.delete()
+    return JsonResponse({"ok": True})
 
 
 @login_required

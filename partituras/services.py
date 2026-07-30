@@ -1305,6 +1305,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     # rampa, sólo una marca de tempo nueva de verdad cambia esto. Pensado
     # para el aviso visual en el navegador (ver navegador_obra.html).
     cambios = []
+    cambios_ya_emitidos = set()  # (compas, tipo, valor) — ver comentario abajo
     info_anterior = None
 
     pulsos = []
@@ -1321,8 +1322,17 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         if info_anterior is not None:
             for campo, tipo in (('indicacion_compas', 'compas'), ('armadura', 'armadura'), ('bpm', 'tempo')):
                 valor_nuevo = info_c.get(campo)
-                if valor_nuevo and valor_nuevo != info_anterior.get(campo):
+                # Sin este chequeo, un compás que el itinerario revisita más
+                # de una vez (una repetición que vuelve a un compás ya
+                # tocado antes) generaba el mismo aviso una vez por cada
+                # pasada — la partitura física sólo tiene ese compás
+                # dibujado una vez, así que el aviso visual (pensado para
+                # esa vista física, ver navegador_obra.html) no debe
+                # duplicarse aunque la ejecución sí pase dos veces por ahí.
+                clave = (compas, tipo, valor_nuevo)
+                if valor_nuevo and valor_nuevo != info_anterior.get(campo) and clave not in cambios_ya_emitidos:
                     cambios.append({'compas': compas, 'tipo': tipo, 'valor': valor_nuevo})
+                    cambios_ya_emitidos.add(clave)
         info_anterior = info_c
 
         if seg.id not in posiciones_por_fila:

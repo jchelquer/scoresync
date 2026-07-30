@@ -307,6 +307,11 @@
     <input class="form-check-input" type="checkbox" id="toggle-avisos-cambio" checked>
     <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás superpuestos a la partitura' %}">{% translate "avisos" %}</label>
   </div>
+  <div class="form-check form-switch d-flex align-items-center" id="control-mostrar-anotaciones">
+    <input class="form-check-input" type="checkbox" id="toggle-mostrar-anotaciones" checked>
+    <label class="form-check-label small ms-1" for="toggle-mostrar-anotaciones" style="color: var(--ss-text-muted);">{% translate "anotaciones" %}</label>
+  </div>
+  <button id="btn-anotar" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Anotar — clic sobre la partitura para dejar un cartel de texto en ese compás. Se queda activa hasta que la apagués de nuevo o apretés Esc.' %}">✏️ {% translate "Anotar" %}</button>
   {% endif %}
 </div>
 </div>
@@ -362,6 +367,25 @@
            que queda debajo del canvas dentro del contenedor (el canvas se
            dimensiona al contenido real, no al alto completo disponible). -->
       <canvas id="score-preview-abajo" style="display:none; position:absolute; left:0;"></canvas>
+      <!-- Editor inline de anotaciones (ver cargarAnotaciones/abrirEditorAnotacion
+           en el script) — se posiciona en píxeles sobre el punto donde se
+           clickeó, mismo truco que la vieja edición de números de compás
+           (clic → aparece un input ahí mismo). Sirve tanto para crear una
+           nueva (selector de nivel visible) como para editar/borrar una
+           existente (nivel fijo, mostrado como etiqueta de color). -->
+      <div id="anotacion-editor" style="display:none; position:absolute; z-index:20; background: var(--ss-surface); border: 1px solid #2a4a47; border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.6); min-width: 220px;">
+        <div id="anotacion-editor-niveles" class="d-flex gap-2 mb-1 small flex-wrap"></div>
+        <div class="d-flex gap-2 mb-1 small">
+          <label><input type="radio" name="anotacion-posicion" value="arriba" checked> {% translate "arriba" %}</label>
+          <label><input type="radio" name="anotacion-posicion" value="abajo"> {% translate "abajo" %}</label>
+        </div>
+        <textarea id="anotacion-editor-texto" rows="2" class="form-control form-control-sm mb-1" style="resize: vertical;"></textarea>
+        <div class="d-flex gap-2 justify-content-end">
+          <button id="anotacion-editor-borrar" type="button" class="btn btn-sm btn-outline-danger me-auto" style="display:none;">{% translate "Borrar" %}</button>
+          <button id="anotacion-editor-cancelar" type="button" class="btn btn-sm btn-outline-light">{% translate "Cancelar" %}</button>
+          <button id="anotacion-editor-guardar" type="button" class="btn btn-sm btn-ss">{% translate "Guardar" %}</button>
+        </div>
+      </div>
     </div>
     <p id="score-error" class="small text-warning mt-2 mb-0" style="display:none;"></p>
     <p id="score-tacet" class="small text-info mt-2 mb-0" style="display:none;"></p>
@@ -413,6 +437,8 @@
   const toggleMuteAudio = document.getElementById('toggle-mute-audio');
   const controlNumerosCompas = document.getElementById('control-numeros-compas');
   const controlAvisosCambio = document.getElementById('control-avisos-cambio');
+  const controlMostrarAnotaciones = document.getElementById('control-mostrar-anotaciones');
+  const btnAnotar = document.getElementById('btn-anotar');
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
@@ -454,6 +480,8 @@
     { el: controlEjecutarAudio, destino: barraCompacta },
     { el: controlNumerosCompas, destino: barraCompacta },
     { el: controlAvisosCambio, destino: barraCompacta },
+    { el: controlMostrarAnotaciones, destino: barraCompacta },
+    { el: btnAnotar, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: btnAyudaNavegador, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
@@ -990,6 +1018,13 @@
   const scorePreviewAbajo = document.getElementById('score-preview-abajo');
   const scoreErrorEl = document.getElementById('score-error');
   const scoreTacetEl = document.getElementById('score-tacet');
+  const toggleMostrarAnotaciones = document.getElementById('toggle-mostrar-anotaciones');
+  const anotacionEditorEl = document.getElementById('anotacion-editor');
+  const anotacionEditorNiveles = document.getElementById('anotacion-editor-niveles');
+  const anotacionEditorTexto = document.getElementById('anotacion-editor-texto');
+  const anotacionEditorBorrar = document.getElementById('anotacion-editor-borrar');
+  const anotacionEditorCancelar = document.getElementById('anotacion-editor-cancelar');
+  const anotacionEditorGuardar = document.getElementById('anotacion-editor-guardar');
 
   // El panel no arranca en el borde superior de la pantalla (tiene el
   // header, la fila compacta o los controles completos arriba, según el
@@ -1362,6 +1397,7 @@
     ventana.escalaRender = escala; // px en pantalla por unidad de píxel natural de la imagen
     dibujarNumerosCompas(ventana);
     dibujarAvisosCambio(ventana);
+    dibujarAnotaciones(ventana);
   }
 
   // Número de cada compás visible en la ventana (todos, no sólo el
@@ -1428,12 +1464,336 @@
         const valor = (c.tipo === 'armadura' && c.valor === '') ? '♮' : c.valor;
         const etiqueta = (PREFIJO_AVISO_CAMBIO[c.tipo] || '') + valor;
         const anchoTexto = ctx.measureText(etiqueta).width;
+        ctx.globalAlpha = 0.55;
         ctx.fillStyle = COLOR_AVISO_CAMBIO[c.tipo] || '#666666';
         ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
-        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#000000';
         ctx.fillText(etiqueta, px, py);
+        ctx.globalAlpha = 1;
         py += 15;
       });
+    });
+  }
+
+  // ── Anotaciones (carteles de texto anclados a un compás, ver Anotacion
+  // en models.py) — tres niveles (obra/parte/privada), unificados en una
+  // sola herramienta ad-hoc acá mismo en Practicar, ver conversación de
+  // diseño: el permiso de cada nivel sale de dueños que ya existen
+  // (Obra.owner/Partitura.owner) o de "soy yo" para las privadas, nunca
+  // un concepto de permiso nuevo.
+  const COLOR_NIVEL_ANOTACION = { obra: '#2f8f4e', parte: '#c77d17', privada: '#5a6270' };
+  const ETIQUETA_NIVEL_ANOTACION = {
+    obra: '{% translate "De obra" %}', parte: '{% translate "De parte" %}', privada: '{% translate "Privada" %}',
+  };
+
+  let anotacionesPorCompas = new Map();
+  let nivelesPermitidosAnotacion = [];
+  let herramientaAnotando = false;
+  // Hit-regions del último dibujado (píxeles del BUFFER del canvas, no
+  // CSS) — el canvas no tiene un elemento DOM por anotación, así que el
+  // click/drag se resuelve comparando contra lo último que se dibujó,
+  // mismo principio que ya usa compasEnClick con las cajas de compás
+  // (calcularCaja), sólo que ahí se recalcula cada vez y acá se recuerda
+  // porque el ancho del cartel depende del texto medido al dibujar.
+  let ultimasCajasAnotaciones = [];
+  // Anotación (objeto ya resuelto) que se está arrastrando para moverla,
+  // o null — ver pointerdown/pointermove/pointerup del canvas más abajo.
+  let arrastrandoAnotacion = null;
+  let huboArrastreAnotacion = false;
+  let origenArrastreAnotacion = { x: 0, y: 0 };
+  // Copia translúcida que sigue el puntero mientras se arrastra de verdad
+  // (huboArrastreAnotacion) — sin esto no había ninguna referencia visual
+  // de que se agarró algo, ver dibujarGhostAnotacion. La original queda
+  // dibujada en su lugar de siempre (repintarScore la sigue mostrando),
+  // así se ve a la vez de dónde viene y adónde iría.
+  let ghostAnotacion = null; // { texto, nivel, x, y } en píxeles del buffer del canvas, o null
+  // {id, nivel, compas} de la que se está editando, o {id: null, ...}
+  // mientras se crea una nueva — null si el editor está cerrado.
+  let anotacionEditando = null;
+
+  async function cargarAnotaciones() {
+    if (!scoreVentanaCanvas) return;
+    try {
+      const parteVal = formRango ? new FormData(formRango).get('parte') : null;
+      const url = '{% url "partituras:anotaciones_obra" obra.pk %}' + (parteVal ? '?parte=' + encodeURIComponent(parteVal) : '');
+      const resp = await fetch(url);
+      const data = await resp.json();
+      nivelesPermitidosAnotacion = data.niveles_permitidos || [];
+      anotacionesPorCompas = new Map();
+      (data.anotaciones || []).forEach((a) => {
+        if (!anotacionesPorCompas.has(a.compas)) anotacionesPorCompas.set(a.compas, []);
+        anotacionesPorCompas.get(a.compas).push(a);
+      });
+      if (ventanaActiva) repintarScore();
+    } catch (e) {
+      // silencioso a propósito — mismo criterio que cargarAvisosCambioIniciales,
+      // es un plus visual, no debe bloquear la ejecución si falla.
+    }
+  }
+
+  // Cartel corto de una sola línea sobre la partitura (la primera línea
+  // del texto, cortada con "…" si sigue o es larga) — el texto completo
+  // sólo se ve al abrir el editor, ver abrirEditorAnotacion. Se apilan
+  // hacia ARRIBA desde el borde superior del compás (posicion=arriba) o
+  // hacia ABAJO desde su borde inferior (posicion=abajo), independientes
+  // entre sí — así varias anotaciones en el mismo compás no se superponen.
+  function dibujarAnotaciones(ventana) {
+    ultimasCajasAnotaciones = [];
+    if (!toggleMostrarAnotaciones || !toggleMostrarAnotaciones.checked || !anotacionesPorCompas.size) return;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const ordenes = new Set(ventana.sistemas.map(s => s.orden));
+    ctx.font = '11px sans-serif';
+    ctx.textBaseline = 'top';
+    pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
+      const lista = anotacionesPorCompas.get(compas.numero);
+      if (!lista || !lista.length) return;
+      const caja = calcularCaja({ numero: compas.numero }, pagina);
+      if (!caja) return;
+      // Justificado a la DERECHA del compás (no a la izquierda, donde ya
+      // dibujan el número y los avisos de cambio, ver dibujarNumerosCompas/
+      // dibujarAvisosCambio) — más simple que reservar el alto que esos
+      // dos ya ocupan, y alcanza: sólo colisiona en un compás angosto con
+      // pocos pulsos, caso raro (a diferencia del acumArriba/acumAbajo de
+      // abajo, que sigue haciendo falta para VARIAS anotaciones juntas en
+      // el mismo compás y lado).
+      const pxDerecha = (caja.right - pagina.margen_x0) * img.naturalWidth * escala - 3;
+      const topPx = (caja.top - ventana.top) * img.naturalHeight * escala;
+      const bottomPx = (caja.bottom - ventana.top) * img.naturalHeight * escala;
+      const alto = 14;
+      let acumArriba = 0;
+      let acumAbajo = 0;
+      lista.forEach((a) => {
+        const lineas = a.texto.split('\n');
+        const corto = lineas.length > 1 || lineas[0].length > 40;
+        const etiqueta = lineas[0].slice(0, 40) + (corto ? '…' : '');
+        const anchoTexto = ctx.measureText(etiqueta).width;
+        const px = pxDerecha - anchoTexto;
+        // DENTRO de la caja del compás (nunca afuera, ver más abajo), desde
+        // el extremo correspondiente hacia el pentagrama — arriba arranca
+        // pegada al borde superior y crece hacia abajo, abajo arranca
+        // pegada al borde inferior y crece hacia arriba. La caja de un
+        // compás siempre está completa dentro de la ventana (calcularVentanaSync
+        // sólo incluye sistemas enteros) — a diferencia de dibujar afuera
+        // del borde (versión anterior), esto nunca se sale del canvas, no
+        // hace falta acotar nada.
+        let py;
+        if (a.posicion === 'abajo') {
+          py = bottomPx - alto - acumAbajo;
+          acumAbajo += alto + 2;
+        } else {
+          py = topPx + acumArriba;
+          acumArriba += alto + 2;
+        }
+        // Semitransparente — a pedido del usuario, para que se pueda leer
+        // la notación de abajo (mismo espíritu que un resaltador de papel).
+        // Sólo el fondo lleva alpha: el texto se dibuja después, opaco,
+        // para que siga siendo legible.
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
+        ctx.fillRect(px - 2, py, anchoTexto + 4, alto);
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = '#000000';
+        ctx.fillText(etiqueta, px, py + 1);
+        ctx.globalAlpha = 1;
+        ultimasCajasAnotaciones.push({ x: px - 2, y: py, w: anchoTexto + 4, h: alto, anotacion: a });
+      });
+    });
+  }
+
+  // Referencia visual de que "agarraste" algo mientras arrastrás una
+  // anotación para moverla — una copia translúcida centrada en el puntero
+  // (no en el punto de la caja, para que se sienta pegada a la mano). Se
+  // llama DESPUÉS de repintarScore() en cada pointermove, encima de todo
+  // lo demás — repintarScore ya limpió/redibujó la base, así que acá sólo
+  // se agrega este dibujo puntual, sin tocar el resto del pipeline.
+  function dibujarGhostAnotacion() {
+    if (!ghostAnotacion) return;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const lineas = ghostAnotacion.texto.split('\n');
+    const corto = lineas.length > 1 || lineas[0].length > 40;
+    const etiqueta = lineas[0].slice(0, 40) + (corto ? '…' : '');
+    ctx.font = '11px sans-serif';
+    ctx.textBaseline = 'top';
+    const anchoTexto = ctx.measureText(etiqueta).width;
+    const alto = 14;
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = COLOR_NIVEL_ANOTACION[ghostAnotacion.nivel] || '#666666';
+    ctx.fillRect(ghostAnotacion.x - anchoTexto / 2 - 2, ghostAnotacion.y - alto / 2, anchoTexto + 4, alto);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(etiqueta, ghostAnotacion.x - anchoTexto / 2, ghostAnotacion.y - alto / 2 + 1);
+    ctx.globalAlpha = 1;
+  }
+
+  // Mismo cálculo que ya hace compasEnClick para pasar de coordenadas de
+  // pantalla a píxeles del BUFFER del canvas (no del tamaño CSS, que
+  // puede diferir) — factorizado acá porque lo necesitan tanto el hit-test
+  // de anotaciones como (potencialmente) cualquier otra herramienta futura.
+  function pixelesCanvasDesdeEvento(evt) {
+    const rect = scoreVentanaCanvas.getBoundingClientRect();
+    const escalaX = scoreVentanaCanvas.width / rect.width;
+    const escalaY = scoreVentanaCanvas.height / rect.height;
+    return { px: (evt.clientX - rect.left) * escalaX, py: (evt.clientY - rect.top) * escalaY };
+  }
+
+  function anotacionEnPixeles(px, py) {
+    return ultimasCajasAnotaciones.find(c => px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) || null;
+  }
+
+  // Posición del editor inline en píxeles CSS relativos al contenedor
+  // (que es position:relative y overflow:auto) — distinto del helper de
+  // arriba, que da píxeles del buffer del canvas para el hit-test; acá
+  // hace falta sumar el scroll porque el contenedor puede estar
+  // scrolleado cuando se hace zoom.
+  function posicionEditorDesdeEvento(evt) {
+    const contRect = scoreVentanaContenedor.getBoundingClientRect();
+    return {
+      left: evt.clientX - contRect.left + scoreVentanaContenedor.scrollLeft,
+      top: evt.clientY - contRect.top + scoreVentanaContenedor.scrollTop,
+    };
+  }
+
+  function cerrarEditorAnotacion() {
+    if (anotacionEditorEl) anotacionEditorEl.style.display = 'none';
+    anotacionEditando = null;
+  }
+
+  function abrirEditorAnotacion({ left, top, compas, existente }) {
+    if (!anotacionEditorEl) return;
+    anotacionEditando = existente
+      ? { id: existente.id, nivel: existente.nivel, compas: existente.compas }
+      : { id: null, nivel: null, compas };
+
+    // Nueva: selector de nivel, sólo con lo que este usuario puede crear
+    // acá. Existente: el nivel no se reasigna — se muestra como etiqueta
+    // de color, no como radios (ver notas de diseño de Anotacion).
+    anotacionEditorNiveles.innerHTML = '';
+    if (existente) {
+      const span = document.createElement('span');
+      span.textContent = ETIQUETA_NIVEL_ANOTACION[existente.nivel] || existente.nivel;
+      span.style.color = COLOR_NIVEL_ANOTACION[existente.nivel] || '#666';
+      span.style.fontWeight = 'bold';
+      anotacionEditorNiveles.appendChild(span);
+    } else {
+      nivelesPermitidosAnotacion.forEach((nivel, i) => {
+        const label = document.createElement('label');
+        label.style.color = COLOR_NIVEL_ANOTACION[nivel] || '#666';
+        label.className = 'me-1';
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = 'anotacion-nivel';
+        input.value = nivel;
+        if (i === 0) input.checked = true;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(' ' + (ETIQUETA_NIVEL_ANOTACION[nivel] || nivel)));
+        anotacionEditorNiveles.appendChild(label);
+      });
+    }
+
+    anotacionEditorTexto.value = existente ? existente.texto : '';
+    const posicionGuardada = existente ? existente.posicion : 'arriba';
+    anotacionEditorEl.querySelectorAll('input[name="anotacion-posicion"]').forEach((inp) => {
+      inp.checked = inp.value === posicionGuardada;
+    });
+
+    const soloLectura = !!(existente && !existente.puede_editar);
+    anotacionEditorBorrar.style.display = (existente && existente.puede_editar) ? '' : 'none';
+    anotacionEditorGuardar.style.display = soloLectura ? 'none' : '';
+    anotacionEditorTexto.readOnly = soloLectura;
+    anotacionEditorEl.querySelectorAll('input[name="anotacion-posicion"]').forEach((inp) => { inp.disabled = soloLectura; });
+
+    anotacionEditorEl.style.display = '';
+    anotacionEditorEl.style.left = Math.round(left) + 'px';
+    anotacionEditorEl.style.top = Math.round(top) + 'px';
+    if (!soloLectura) anotacionEditorTexto.focus();
+  }
+
+  async function guardarAnotacion({ id, compas, texto, posicion, nivel }) {
+    const params = new URLSearchParams();
+    if (id) params.set('id', id);
+    params.set('compas', compas);
+    params.set('texto', texto);
+    params.set('posicion', posicion);
+    if (!id) {
+      params.set('nivel', nivel);
+      const parteVal = formRango ? new FormData(formRango).get('parte') : null;
+      if (parteVal) params.set('parte', parteVal);
+    }
+    const resp = await fetch('{% url "partituras:guardar_anotacion" obra.pk %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+      body: params.toString(),
+    });
+    if (resp.ok) await cargarAnotaciones();
+    return resp.ok;
+  }
+
+  async function borrarAnotacion(id) {
+    const params = new URLSearchParams();
+    params.set('id', id);
+    const resp = await fetch('{% url "partituras:borrar_anotacion" obra.pk %}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': getCookie('csrftoken') },
+      body: params.toString(),
+    });
+    if (resp.ok) await cargarAnotaciones();
+    return resp.ok;
+  }
+
+  if (anotacionEditorCancelar) anotacionEditorCancelar.addEventListener('click', () => cerrarEditorAnotacion());
+  if (anotacionEditorGuardar) {
+    anotacionEditorGuardar.addEventListener('click', async () => {
+      if (!anotacionEditando) return;
+      const texto = anotacionEditorTexto.value.trim();
+      if (!texto) return;
+      const posicionInput = anotacionEditorEl.querySelector('input[name="anotacion-posicion"]:checked');
+      const posicion = posicionInput ? posicionInput.value : 'arriba';
+      if (anotacionEditando.id) {
+        await guardarAnotacion({ id: anotacionEditando.id, compas: anotacionEditando.compas, texto, posicion });
+      } else {
+        const nivelInput = anotacionEditorEl.querySelector('input[name="anotacion-nivel"]:checked');
+        if (!nivelInput) return;
+        await guardarAnotacion({ compas: anotacionEditando.compas, texto, posicion, nivel: nivelInput.value });
+      }
+      cerrarEditorAnotacion();
+    });
+  }
+  if (anotacionEditorBorrar) {
+    anotacionEditorBorrar.addEventListener('click', async () => {
+      if (!anotacionEditando || !anotacionEditando.id) return;
+      await borrarAnotacion(anotacionEditando.id);
+      cerrarEditorAnotacion();
+    });
+  }
+
+  if (toggleMostrarAnotaciones) toggleMostrarAnotaciones.addEventListener('change', () => { if (ventanaActiva) repintarScore(); });
+
+  if (btnAnotar) {
+    const ETIQUETA_ANOTAR_NORMAL = '✏️ {% translate "Anotar" %}';
+    const ETIQUETA_ANOTAR_ACTIVO = '✏️ {% translate "Anotando… (Esc para salir)" %}';
+    const salirModoAnotar = () => {
+      herramientaAnotando = false;
+      btnAnotar.classList.remove('active');
+      if (scoreVentanaCanvas) scoreVentanaCanvas.style.cursor = 'pointer';
+      btnAnotar.textContent = ETIQUETA_ANOTAR_NORMAL;
+      cerrarEditorAnotacion();
+    };
+    btnAnotar.addEventListener('click', () => {
+      if (herramientaAnotando) {
+        salirModoAnotar();
+        return;
+      }
+      herramientaAnotando = true;
+      btnAnotar.classList.add('active');
+      if (scoreVentanaCanvas) scoreVentanaCanvas.style.cursor = 'crosshair';
+      btnAnotar.textContent = ETIQUETA_ANOTAR_ACTIVO;
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && herramientaAnotando) salirModoAnotar();
     });
   }
 
@@ -1954,12 +2314,43 @@
       // touch-action:none en el CSS del canvas) el scroll/arrastre nativo
       // le ganaba al nuestro, sobre todo en touch.
       e.preventDefault();
+      // Apretar sobre una anotación existente (editable por este usuario)
+      // arranca un posible arrastre-para-mover en vez del pan de ventana —
+      // se decide recién en pointerup si hubo movimiento real o fue un
+      // click quieto (ver más abajo).
+      const { px, py } = pixelesCanvasDesdeEvento(e);
+      const cajaAnotacion = anotacionEnPixeles(px, py);
+      if (cajaAnotacion && cajaAnotacion.anotacion.puede_editar) {
+        arrastrandoAnotacion = cajaAnotacion.anotacion;
+        huboArrastreAnotacion = false;
+        origenArrastreAnotacion = { x: e.clientX, y: e.clientY };
+        scoreVentanaCanvas.setPointerCapture(e.pointerId);
+        scoreVentanaCanvas.style.cursor = 'grabbing';
+        return;
+      }
       arrastrandoNav = true;
       huboArrastreNav = false;
       ultimaYArrastreNav = e.clientY;
       scoreVentanaCanvas.setPointerCapture(e.pointerId);
     });
     scoreVentanaCanvas.addEventListener('pointermove', (e) => {
+      if (arrastrandoAnotacion) {
+        // Umbral chico (no el de paneo, que es para "sistemas enteros") —
+        // sólo para distinguir un click quieto de un arrastre real; la
+        // reubicación en sí ocurre una sola vez, al soltar.
+        if (Math.abs(e.clientX - origenArrastreAnotacion.x) > 4 || Math.abs(e.clientY - origenArrastreAnotacion.y) > 4) {
+          huboArrastreAnotacion = true;
+        }
+        // Referencia visual de que se está arrastrando de verdad — recién
+        // a partir de que se cruza el umbral, no en cada micro-temblor.
+        if (huboArrastreAnotacion && ventanaActiva) {
+          const { px, py } = pixelesCanvasDesdeEvento(e);
+          ghostAnotacion = { texto: arrastrandoAnotacion.texto, nivel: arrastrandoAnotacion.nivel, x: px, y: py };
+          repintarScore();
+          dibujarGhostAnotacion();
+        }
+        return;
+      }
       if (!arrastrandoNav) return;
       const delta = e.clientY - ultimaYArrastreNav;
       if (Math.abs(delta) >= UMBRAL_ARRASTRE_NAV_PX) {
@@ -1968,15 +2359,74 @@
         huboArrastreNav = true;
       }
     });
-    scoreVentanaCanvas.addEventListener('pointerup', (e) => {
+    scoreVentanaCanvas.addEventListener('pointerup', async (e) => {
+      if (arrastrandoAnotacion) {
+        const anot = arrastrandoAnotacion;
+        const seMovio = huboArrastreAnotacion;
+        arrastrandoAnotacion = null;
+        huboArrastreAnotacion = false;
+        ghostAnotacion = null;
+        scoreVentanaCanvas.style.cursor = herramientaAnotando ? 'crosshair' : 'pointer';
+        if (scoreVentanaCanvas.hasPointerCapture(e.pointerId)) scoreVentanaCanvas.releasePointerCapture(e.pointerId);
+        // Limpia el ghost ya mismo (se haya movido de verdad o no) — si
+        // hubo un cambio real, guardarAnotacion también repinta al
+        // terminar (vía cargarAnotaciones), un repintado extra acá no
+        // molesta.
+        if (ventanaActiva) repintarScore();
+        // Si no se movió, fue un click quieto — el evento 'click' que sigue
+        // la abre para editar (mismo criterio que huboArrastreNav abajo).
+        // Sólo cambia el ancla (compás) — texto/nivel/posición quedan
+        // intactos, ver notas de diseño de Anotacion.
+        if (seMovio && ventanaActiva) {
+          const numero = compasEnClick(ventanaActiva, e);
+          if (numero != null && numero !== anot.compas) {
+            await guardarAnotacion({ id: anot.id, compas: numero, texto: anot.texto, posicion: anot.posicion });
+          }
+        }
+        return;
+      }
       arrastrandoNav = false;
       if (scoreVentanaCanvas.hasPointerCapture(e.pointerId)) scoreVentanaCanvas.releasePointerCapture(e.pointerId);
     });
-    scoreVentanaCanvas.addEventListener('pointercancel', () => { arrastrandoNav = false; });
+    scoreVentanaCanvas.addEventListener('pointercancel', () => {
+      if (arrastrandoAnotacion) {
+        ghostAnotacion = null;
+        scoreVentanaCanvas.style.cursor = herramientaAnotando ? 'crosshair' : 'pointer';
+        if (ventanaActiva) repintarScore();
+      }
+      arrastrandoNav = false;
+      arrastrandoAnotacion = null;
+      huboArrastreAnotacion = false;
+    });
 
     scoreVentanaCanvas.addEventListener('click', (e) => {
       if (huboArrastreNav) { huboArrastreNav = false; return; } // fue un arrastre, no un click de selección
+      if (huboArrastreAnotacion) { huboArrastreAnotacion = false; return; } // fue mover una anotación, no abrirla
       if (!ventanaActiva) return;
+
+      // Click sobre una anotación YA EXISTENTE la abre para editar/borrar,
+      // sea o no que la herramienta "Anotar" esté activa — independiente
+      // de eso, siempre se puede reabrir lo que ya está puesto.
+      const { px, py } = pixelesCanvasDesdeEvento(e);
+      const cajaAnotacion = anotacionEnPixeles(px, py);
+      if (cajaAnotacion) {
+        const pos = posicionEditorDesdeEvento(e);
+        abrirEditorAnotacion({ left: pos.left, top: pos.top, compas: cajaAnotacion.anotacion.compas, existente: cajaAnotacion.anotacion });
+        return;
+      }
+
+      // Con la herramienta activa, un click en el vacío crea una nueva en
+      // el compás más cercano — no cae al comportamiento normal de abajo
+      // (que reposicionaría la ejecución), la herramienta manda mientras
+      // esté prendida.
+      if (herramientaAnotando) {
+        const numero = compasEnClick(ventanaActiva, e);
+        if (numero == null) return;
+        const pos = posicionEditorDesdeEvento(e);
+        abrirEditorAnotacion({ left: pos.left, top: pos.top, compas: numero, existente: null });
+        return;
+      }
+
       const numero = compasEnClick(ventanaActiva, e);
       if (numero == null) return;
       if (!planCargado) {
@@ -2043,6 +2493,7 @@
 
   cargarScoreGeometria();
   cargarAvisosCambioIniciales();
+  cargarAnotaciones();
   // Modo partitura es el default en pantallas normales; en pantallas
   // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
   // la app) arranca en modo compás — controles completos, más fáciles de

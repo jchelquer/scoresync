@@ -88,6 +88,37 @@ msgstr "Zoom out"
 msgid "Ancla"
 msgstr "Anchor"
 
+msgid "Anotando… (Esc para salir)"
+msgstr "Annotating… (Esc to exit)"
+
+msgid "Anotar"
+msgstr "Annotate"
+
+msgid ""
+"Anotar — clic sobre la partitura para dejar un cartel de texto en ese "
+"compás. Se queda activa hasta que la apagués de nuevo o apretés Esc."
+msgstr ""
+"Annotate — click on the score to leave a text note on that measure. Stays "
+"active until you turn it off again or press Esc."
+
+msgid "anotaciones"
+msgstr "annotations"
+
+msgid "arriba"
+msgstr "above"
+
+msgid "abajo"
+msgstr "below"
+
+msgid "De obra"
+msgstr "Piece-wide"
+
+msgid "De parte"
+msgstr "Part-wide"
+
+msgid "Privada"
+msgstr "Private"
+
 msgid "Ancla confirmada — podés seguir ajustándola"
 msgstr "Anchor confirmed — you can keep adjusting it"
 

@@ -89,6 +89,37 @@ msgstr "Alejar"
 msgid "Ancla"
 msgstr "Ancla"
 
+msgid "Anotando… (Esc para salir)"
+msgstr "Anotando… (Esc para salir)"
+
+msgid "Anotar"
+msgstr "Anotar"
+
+msgid ""
+"Anotar — clic sobre la partitura para dejar un cartel de texto en ese "
+"compás. Se queda activa hasta que la apagués de nuevo o apretés Esc."
+msgstr ""
+"Anotar — clic sobre la partitura para dejar un cartel de texto en ese "
+"compás. Se queda activa hasta que la apagués de nuevo o apretés Esc."
+
+msgid "anotaciones"
+msgstr "anotaciones"
+
+msgid "arriba"
+msgstr "arriba"
+
+msgid "abajo"
+msgstr "abajo"
+
+msgid "De obra"
+msgstr "De obra"
+
+msgid "De parte"
+msgstr "De parte"
+
+msgid "Privada"
+msgstr "Privada"
+
 msgid "Ancla confirmada — podés seguir ajustándola"
 msgstr "Ancla confirmada — podés seguir ajustándola"
 
