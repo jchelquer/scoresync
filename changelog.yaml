@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.20.1"
+  date: "2026-07-30"
+  changes:
+    - type: mejorado
+      text: "La fila de pausa en el Itinerario ahora se marca con el mismo número que ya se cargó en Notación (Desde = ese número, Hasta vacío) en vez de dejar los dos campos vacíos — antes no tenía ninguna relación visible con la pausa correspondiente. Se resalta con un color de fondo distinto en Itinerario y en Sincronizar compases, y cada pantalla avisa si le falta su contraparte en la otra."
 - version: "1.20.0"
   date: "2026-07-30"
   changes:
