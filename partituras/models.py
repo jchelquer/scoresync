@@ -326,12 +326,26 @@ class EfectoTempo(models.Model):
     pulso_hasta quedan vacíos — multiplica la duración calculada de ESE
     pulso por `valor` (factor, ej. "1.5" = 50% más largo). No dice nada de
     cómo se reparte visualmente dentro del compás — eso es tarea de
-    sincronización con audio real, no de este modelo."""
+    sincronización con audio real, no de este modelo.
+
+    pausa: un corte real de tiempo (silencio) entre dos tramos — típico
+    entre movimientos de una obra — que no es un calderón (no es "una nota
+    que se sostiene más", es tiempo sin música). Igual que calderón, sólo
+    tiene (compas_desde, pulso_desde) — pero acá `compas_desde` NO es la
+    posición de un compás real: es un número UMBRAL, elegido a mano (p.ej.
+    200), que actúa de frontera inamovible para la numeración de compases
+    (ver difundirNumeros/guardar_compases_pagina en services.py) — "la
+    pausa ocurre justo antes del primer compás real numerado >= este
+    umbral". `valor` es la duración ESTIMADA en segundos (no un factor) —
+    se usa mientras no haya un tiempo real tapeado para ese corte (ver
+    Segmento, fila de cierre interna, que sí ancla el tiempo real una vez
+    que existe — el estimado nunca lo reemplaza, sólo lo antecede)."""
 
     TIPOS = [
         ('accelerando', 'Accelerando'),
         ('ritardando', 'Ritardando'),
         ('calderon', 'Calderón'),
+        ('pausa', 'Pausa'),
     ]
 
     obra = models.ForeignKey(Obra, on_delete=models.CASCADE, related_name='efectos_tempo')
@@ -354,7 +368,8 @@ class EfectoTempo(models.Model):
     pulso_hasta = models.FloatField(null=True, blank=True)
     valor = models.CharField(
         max_length=20,
-        help_text='Según tipo: bpm de llegada (accelerando/ritardando) o factor de duración (calderón, ej: "1.5").',
+        help_text='Según tipo: bpm de llegada (accelerando/ritardando), factor de duración (calderón, ej: "1.5") '
+                   'o duración estimada en segundos (pausa, ej: "8").',
     )
 
     class Meta:
@@ -365,6 +380,8 @@ class EfectoTempo(models.Model):
     def __str__(self):
         if self.tipo == 'calderon':
             return f"{self.obra} — calderón en {self.desde_texto}"
+        if self.tipo == 'pausa':
+            return f"{self.obra} — pausa antes del compás {self.compas_desde} (~{self.valor}s)"
         return f"{self.obra} — {self.get_tipo_display().lower()} {self.desde_texto}–{self.hasta_texto} → {self.valor}"
 
 

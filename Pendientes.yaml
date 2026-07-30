@@ -26,3 +26,17 @@
 Anotaciones globales y por parte: el owner de la obra puede hacer anotaciones globales. El owner de la parte puede hacer anotaciones en las partes y también sirven para todos los usuarios. Cada usuario puede hacer anotaciones privadas en la parte que ensaya. Las anotaciones se pueden encender o apagar.
 #Advertencias: se podría implementar advertencias para cambios de compás, de tempo, de armadura de clave.
 Pasajes difíciles: pensar en que se pueda marcar pasajes difíciles y después buscarlos para practicarlos.
+
+#Movimientos con pausas reales entre sí: CONSTRUIDO 30/07 (sin deployar todavía) — tipo "pausa" en EfectoTempo (Notación, con duración estimada), fila de cierre interna en el Itinerario (tiempo real tapeado), freno de renumeración en el umbral (ajuste_barras + guardar_compases_pagina — de paso corrigió un bug real de renumeración que ya existía), salto anticipado de vista en Sincronizar compases. Quedó pendiente (deliberadamente, por riesgo de tocar sin poder probar en navegador real): el mismo salto de vista en el Navegador de ejecución en vivo, y que la cuenta "compases al aire" se dispare también antes de que termine una pausa.
+
+Partes con tacet: una parte puede no tener un movimiento entero. Probé simular con un compás de multirest grande pero no quedó bien — pensar una solución mejor.
+
+Entender cuándo se recalcula el plan de tiempos: no tengo claro cuándo se reenvía/recalcula el plan de ejecución (plan_obra/construir_plan) — a veces siento que compases bien temporizados "se corren" solos. No necesariamente es un bug, puede ser que sólo falte que se entienda el ciclo.
+
+Compás estirado por salto espacial (sin pausa real): cuando hay un salto espacial dentro de lo que debería ser el mismo sistema, sin que haya un corte real en la ejecución, uno de los dos compases queda dibujado artificialmente largo — sólo afecta dónde se dibujan los pulsos, no es grave. Hace falta un caso concreto (imagen real) para diagnosticarlo bien.
+
+Plica/ledger-line como falso positivo en detección de barras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
+
+Anacrusis (compás de arranque sin numerar): hoy todo compás recibe un número real correlativo — falta poder tener un compás de anacrusis al principio de la obra (o de un movimiento) que no consuma ni corra la numeración normal. Sólo una idea anotada, no arrancar sin pedirlo de nuevo.
+
+Layout alternativo con panel de control a la izquierda: como alternativa a la barra compacta de arriba en "modo partitura". Quedó como charla pausada a mitad camino, sin decidir nada.

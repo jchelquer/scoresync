@@ -131,6 +131,16 @@ def guardar_compases_pagina(pagina, compases_data):
     a todos los compases desde ahí en adelante (cruzando páginas) — un
     desplazamiento parejo, no una resecuencia, para no romper ninguna otra
     numeración manual que hubiera más adelante en la partitura.
+
+    EXCEPTO más allá de una pausa (ver EfectoTempo tipo 'pausa'): su
+    compas_desde es un umbral de numeración inamovible (la convención del
+    usuario de arrancar cada movimiento en 201/301/...) — nada con numero
+    >= ese umbral se corre nunca, aunque el cálculo de acá arriba diga lo
+    contrario. Antes de esto, CUALQUIER edición en una página anterior
+    corría en silencio el arranque de todos los movimientos siguientes en
+    cada reconfirmación — bug real, confirmado en vivo. Mismo criterio del
+    lado del cliente, dentro de una sola página, en
+    ajuste_barras.difundirNumeros().
     """
     sistemas_por_id = {s.id: s for s in pagina.sistemas.all()}
 
@@ -161,6 +171,18 @@ def guardar_compases_pagina(pagina, compases_data):
         sistema__pagina__partitura=pagina.partitura,
         sistema__pagina__numero__gt=pagina.numero,
     ).order_by('sistema__pagina__numero', 'sistema__orden', 'x')
+
+    # Freno de pausa: nada con numero >= el umbral de la próxima pausa se
+    # toca — ver docstring de arriba. Una parte suelta (sin obra todavía,
+    # ver Partitura.obra) no tiene EfectoTempo que consultar — sin freno.
+    if pagina.partitura.obra_id is not None:
+        umbral = next(
+            (p['compas_desde'] for p in indice_pausas(pagina.partitura.obra) if p['compas_desde'] > ultimo.numero),
+            None,
+        )
+        if umbral is not None:
+            siguientes = siguientes.filter(numero__lt=umbral)
+
     primero_siguiente = siguientes.first()
     if primero_siguiente is None:
         return
@@ -281,16 +303,19 @@ def renumerar_segmentos(obra):
     todavía no fue procesada (viola unique_together (obra, orden)). Pasar
     primero por un rango que no puede colisionar con nada evita eso.
 
-    La fila de cierre (compas_desde vacío — ver docstring de Segmento)
-    SIEMPRE queda última, sin importar qué valor de orden tenga o le hayan
-    tipeado: si sólo se ordenara por orden a secas, un contenido nuevo con
-    un orden más alto que el de la fila de cierre (fácil de tipear sin
-    querer, esa fila no se distingue a simple vista salvo por tener Desde/
-    Hasta vacíos) la dejaba encajada en el medio — y como resolver_segmentos
-    corta la acumulación de tiempo apenas encuentra la fila de cierre, todo
-    lo que quedara después se perdía en silencio (ni tiempo calculado, ni
-    plan de ejecución)."""
-    segmentos = sorted(obra.segmentos.all(), key=lambda s: (s.compas_desde is None, s.orden))
+    Se ordena PURO por orden. Antes había un criterio extra que forzaba
+    cualquier fila de cierre (compas_desde vacío) siempre al final, sin
+    importar su propio orden — tenía sentido cuando sólo podía haber UNA
+    fila de cierre (la del fin de la obra) y resolver_segmentos cortaba la
+    acumulación de tiempo apenas encontraba la primera. Ahora puede haber
+    más de una (una interna, en medio del itinerario, para una pausa entre
+    movimientos — ver EfectoTempo tipo 'pausa') y resolver_segmentos ya no
+    corta ahí (sigue acumulando después de cada cierre) — forzarlas
+    siempre al final volvía a romper exactamente lo que esto necesita:
+    bug real, encontrado 2026-07-30 con una obra real de varios
+    movimientos, la fila de cierre interna terminaba después del
+    movimiento siguiente en vez de entre los dos."""
+    segmentos = sorted(obra.segmentos.all(), key=lambda s: s.orden)
     OFFSET_TEMPORAL = 10_000_000
     for i, seg in enumerate(segmentos):
         seg.orden = OFFSET_TEMPORAL + i
@@ -469,8 +494,8 @@ def _posiciones_calculadas_fila(seg, notacion_por_compas, bpm_por_pulso, factor_
     return posiciones
 
 
-def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
-                      bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre=None):
+def _anclas_globales(todos_los_segmentos, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
+                      bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, pausas=None):
     """Anclas reales "por compases", para la obra ENTERA de una sola vez, en
     la MISMA posición calculada por bpm (ver _posiciones_calculadas_fila) —
     acumulada globalmente, cruzando filas del itinerario sin resetear (mismo
@@ -486,9 +511,21 @@ def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas
       filas distintas (p.ej. un compás de anacrusis solo en su propia fila,
       o un acelerando que cruza un borde de fila).
 
-    tiempo_cierre (segundos, opcional): Segmento.tiempo_inicio de la fila de
-    cierre — si está, cuenta como ancla del extremo derecho (fin real de la
-    obra).
+    todos_los_segmentos: TODAS las filas de la obra en orden, no sólo las
+    navegables (con contenido) — a diferencia de antes, esta función
+    necesita ver también las filas de cierre (Segmento.compas_desde None)
+    para intercalar sus anclas reales en el punto exacto donde ocurren, no
+    sólo al final: hoy puede haber más de una (la fila de cierre interna de
+    una pausa entre movimientos, además de la final de la obra — ver
+    Segmento).
+
+    pausas (opcional, ver indice_pausas): da una duración ESTIMADA para el
+    hueco de una fila de cierre que todavía no tiene tiempo real tapeado —
+    sólo para que la posición estimada de lo que sigue no ignore por
+    completo el hueco (evita que un tramo de silencio real se reparta como
+    si fuera duración de los pocos pulsos reales vecinos). No genera una
+    ancla propia: una vez que el hueco SÍ tiene tiempo real, ese real es la
+    única ancla ahí, la estimación no compite con él.
 
     Devuelve (anclas_compases, posicion_inicio: {(segmento_id, compas):
     posición calculada del primer pulso de esa ocurrencia}) — filas sin bpm/
@@ -497,8 +534,18 @@ def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas
     anclas_compases = []
     posicion_inicio = {}
     pasadas_ya_ancladas = set()  # (compas, pasada) — ver nota abajo
+    pausas_restantes = list(pausas or [])
     offset_global = 0.0
-    for seg in navegables:
+    for i, seg in enumerate(todos_los_segmentos):
+        if seg.compas_desde is None:
+            if seg.tiempo_inicio is not None:
+                anclas_compases.append((offset_global, seg.tiempo_inicio.total_seconds()))
+            siguiente = todos_los_segmentos[i + 1] if i + 1 < len(todos_los_segmentos) else None
+            if siguiente is not None and siguiente.compas_desde is not None:
+                while pausas_restantes and pausas_restantes[0]['compas_desde'] <= siguiente.compas_desde:
+                    offset_global += pausas_restantes.pop(0)['valor_segundos']
+            continue
+
         posiciones_fila = _posiciones_calculadas_fila(seg, notacion_por_compas, bpm_por_pulso, factor_por_pulso)
         if posiciones_fila is None:
             continue
@@ -535,8 +582,6 @@ def _anclas_globales(navegables, notacion_por_compas, pasadas_por_compas, marcas
                         idx_en_fila = idx_compas + (pulso - pulso_ini_compas)
                         anclas_compases.append((offset_global + posiciones_fila[idx_en_fila], tiempo_pulso))
         offset_global += posiciones_fila[-1]
-    if tiempo_cierre is not None:
-        anclas_compases.append((offset_global, tiempo_cierre))
     anclas_compases.sort(key=lambda a: a[0])
     return anclas_compases, posicion_inicio
 
@@ -729,7 +774,7 @@ def _resolver_rampas(obra, notacion_por_compas):
     notación resuelta. Ordenadas por posición de arranque."""
     pulsos_compas_global = _pulsos_compas_global(notacion_por_compas)
     rampas = []
-    for e in obra.efectos_tempo.exclude(tipo='calderon').order_by('compas_desde', 'pulso_desde'):
+    for e in obra.efectos_tempo.exclude(tipo__in=('calderon', 'pausa')).order_by('compas_desde', 'pulso_desde'):
         pulso_desde = e.pulso_desde if e.pulso_desde is not None else 1.0
         if e.compas_hasta is None:
             continue
@@ -765,6 +810,27 @@ def _indice_calderones(obra):
         except (TypeError, ValueError):
             continue
     return calderones
+
+
+def indice_pausas(obra):
+    """EfectoTempo tipo 'pausa' de la obra, resueltas a dicts simples
+    {compas_desde, valor_segundos} y ordenadas por compas_desde — a
+    diferencia de calderón/rampas, acá compas_desde NO es la posición de
+    un compás real: es el umbral inamovible de numeración elegido a mano
+    (ver docstring de EfectoTempo). Consumidas en ese orden por
+    _anclas_globales/resolver_segmentos/compases_desenrollados, que le dan
+    su duración ESTIMADA (valor_segundos) al hueco de la fila de cierre
+    (Segmento.compas_desde None) que cae justo antes del primer compás
+    real numerado >= ese umbral — sólo mientras esa fila no tenga todavía
+    un tiempo real tapeado (ahí el real gana siempre)."""
+    pausas = []
+    for e in obra.efectos_tempo.filter(tipo='pausa').order_by('compas_desde'):
+        try:
+            valor = float(e.valor)
+        except (TypeError, ValueError):
+            continue
+        pausas.append({'compas_desde': e.compas_desde, 'valor_segundos': valor})
+    return pausas
 
 
 def _indice_marcas_pulso(obra):
@@ -893,7 +959,14 @@ def resolver_segmentos(obra):
     Si en algún punto falta bpm o indicación de compás para calcular, la
     acumulación de tiempo se corta ahí — el resto de las filas quedan con
     tiempo_inicio_calculado en None en vez de inventar un valor con un
-    tempo/indicación por defecto que nadie pidió."""
+    tempo/indicación por defecto que nadie pidió.
+
+    Una fila de cierre (compas_desde None) puede aparecer más de una vez,
+    no sólo al final (ver Segmento, fila de cierre interna de una pausa
+    entre movimientos) — al llegar a una, si hay una EfectoTempo 'pausa'
+    cuyo umbral cae en el hueco hasta la fila siguiente, su duración
+    ESTIMADA (valor_segundos) se suma antes de seguir acumulando, para que
+    el resto de la obra no arranque como si la pausa durara cero segundos."""
     segmentos = list(obra.segmentos.order_by('orden'))
     indice = _indice_notacion(obra)
     pasadas_por_compas = _pasadas_por_compas(obra)
@@ -901,6 +974,7 @@ def resolver_segmentos(obra):
     navegables = segmentos_navegables(obra)
     rampas = _resolver_rampas(obra, por_compas)
     calderones = _indice_calderones(obra)
+    pausas = indice_pausas(obra)
     bpm_por_pulso, factor_por_pulso, _ = _resolver_bpm_por_pulso(
         obra, navegables, por_compas, pasadas_por_compas, indice, rampas, calderones,
     )
@@ -908,7 +982,7 @@ def resolver_segmentos(obra):
     resueltos = []
     tiempo_acumulado = 0.0
 
-    for seg in segmentos:
+    for i, seg in enumerate(segmentos):
         entrada = por_fila.get(seg.id, {})
         info = {
             'segmento': seg,
@@ -922,7 +996,11 @@ def resolver_segmentos(obra):
         resueltos.append(info)
 
         if seg.compas_desde is None:
-            break  # fila de cierre: sólo el ancla de tiempo que ya se guardó arriba
+            siguiente = segmentos[i + 1] if i + 1 < len(segmentos) else None
+            if tiempo_acumulado is not None and siguiente is not None and siguiente.compas_desde is not None:
+                while pausas and pausas[0]['compas_desde'] <= siguiente.compas_desde:
+                    tiempo_acumulado += pausas.pop(0)['valor_segundos']
+            continue
 
         if tiempo_acumulado is None:
             continue  # ya se cortó la acumulación en una fila anterior
@@ -1156,16 +1234,15 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
     }
     marcas_pulso_por_compas_pasada = _indice_marcas_pulso(obra)
-    cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
-    tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
+    pausas = indice_pausas(obra)
     rampas = _resolver_rampas(obra, notacion_por_compas)
     calderones = _indice_calderones(obra)
     bpm_por_pulso, factor_por_pulso, variacion_por_pulso = _resolver_bpm_por_pulso(
         obra, navegables, notacion_por_compas, pasadas_por_compas, indice, rampas, calderones,
     )
     anclas_compases_globales, posicion_inicio_por_seg_compas = _anclas_globales(
-        navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
-        bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre,
+        todos_los_segmentos, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
+        bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, pausas,
     )
     posiciones_por_fila = {}  # cache: seg.id -> posiciones (ver _posiciones_calculadas_fila)
     pulsos_por_compas_por_fila = {}  # cache: seg.id -> {compas: pulsos_por_compas}
@@ -1382,12 +1459,12 @@ def compases_desenrollados(obra):
     si lo hay — ver ese modelo)/es_cierre; completo es False si algún compás
     quedó sin bpm/indicación resueltos (mismo criterio que construir_plan).
 
-    La ÚLTIMA entrada, si la obra tiene fila de cierre (ver Segmento —
-    compas_desde null, marca dónde termina el último compás de verdad), es
-    esa fila de cierre en vez de un compás puntual (compas/pasada quedan en
-    None, es_cierre en True) — su tiempo_inicio (Segmento.tiempo_inicio, no
-    una MarcaTiempoCompas) hay que guardarlo con marcar_tiempo_segmento, no
-    marcar_tiempo_compas."""
+    Puede haber MÁS de una entrada de cierre (compas/pasada en None,
+    es_cierre en True) — no sólo la última: una pausa entre movimientos
+    (ver EfectoTempo tipo 'pausa') también vive como una fila de cierre,
+    en medio del itinerario, en su posición cronológica real. Cada una
+    guarda su tiempo_inicio (Segmento.tiempo_inicio, no una
+    MarcaTiempoCompas) con marcar_tiempo_segmento, no marcar_tiempo_compas."""
     navegables = segmentos_navegables(obra)
     if not navegables:
         return [], True
@@ -1395,54 +1472,65 @@ def compases_desenrollados(obra):
     pulsos, completo, _cambios = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     pasadas = _pasadas_por_compas(obra)
     marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
+    pausas = indice_pausas(obra)
+    todos_los_segmentos = list(obra.segmentos.order_by('orden'))
 
     entradas = []
     entradas_por_pasada = {}  # (compas, pasada) -> dict ya agregado a `entradas`
     acumulado = 0.0
-    for p in pulsos:
-        pasada = pasadas.get((p['segmento_id'], p['compas']), 1)
-        clave = (p['compas'], pasada)
-        if p.get('es_primer_pulso_compas') and clave not in entradas_por_pasada:
-            marca = marcas.get(clave)
-            entrada = {
-                'segmento_id': p['segmento_id'],
-                'compas': p['compas'],
-                'pasada': pasada,
-                'indicacion_compas': p['indicacion_compas'],
-                'armadura': p['armadura'],
-                'bpm': p['bpm'],
-                'pulsos_por_compas': _pulsos_por_compas(p['indicacion_compas']),
-                'pulso_inicial': p.get('pulso', 1),
-                'pulso_final': p.get('pulso', 1),
+    idx_pulso = 0
+    for i, seg in enumerate(todos_los_segmentos):
+        if seg.compas_desde is None:
+            entradas.append({
+                'segmento_id': seg.id,
+                'compas': None,
+                'pasada': None,
+                'indicacion_compas': None,
+                'armadura': None,
+                'bpm': None,
+                'pulsos_por_compas': None,
+                'pulso_inicial': None,
+                'pulso_final': None,
                 'tiempo_inicio_calculado': acumulado,
-                'tiempo_inicio': marca.tiempo_inicio if marca else None,
-                'explicita': marca.explicita if marca else None,
-                'es_cierre': False,
-            }
-            entradas.append(entrada)
-            entradas_por_pasada[clave] = entrada
-        if clave in entradas_por_pasada:
-            entradas_por_pasada[clave]['pulso_final'] = p.get('pulso', entradas_por_pasada[clave]['pulso_final'])
-        if acumulado is not None:
-            acumulado = (acumulado + p['duracion']) if p['duracion'] is not None else None
+                'tiempo_inicio': seg.tiempo_inicio,
+                'explicita': True if seg.tiempo_inicio is not None else None,
+                'es_cierre': True,
+            })
+            siguiente = todos_los_segmentos[i + 1] if i + 1 < len(todos_los_segmentos) else None
+            if acumulado is not None and siguiente is not None and siguiente.compas_desde is not None:
+                while pausas and pausas[0]['compas_desde'] <= siguiente.compas_desde:
+                    acumulado += pausas.pop(0)['valor_segundos']
+            continue
 
-    cierre = obra.segmentos.filter(compas_desde__isnull=True).first()
-    if cierre:
-        entradas.append({
-            'segmento_id': cierre.id,
-            'compas': None,
-            'pasada': None,
-            'indicacion_compas': None,
-            'armadura': None,
-            'bpm': None,
-            'pulsos_por_compas': None,
-            'pulso_inicial': None,
-            'pulso_final': None,
-            'tiempo_inicio_calculado': acumulado,
-            'tiempo_inicio': cierre.tiempo_inicio,
-            'explicita': True if cierre.tiempo_inicio is not None else None,
-            'es_cierre': True,
-        })
+        while idx_pulso < len(pulsos) and pulsos[idx_pulso]['segmento_id'] == seg.id:
+            p = pulsos[idx_pulso]
+            idx_pulso += 1
+            pasada = pasadas.get((p['segmento_id'], p['compas']), 1)
+            clave = (p['compas'], pasada)
+            if p.get('es_primer_pulso_compas') and clave not in entradas_por_pasada:
+                marca = marcas.get(clave)
+                entrada = {
+                    'segmento_id': p['segmento_id'],
+                    'compas': p['compas'],
+                    'pasada': pasada,
+                    'indicacion_compas': p['indicacion_compas'],
+                    'armadura': p['armadura'],
+                    'bpm': p['bpm'],
+                    'pulsos_por_compas': _pulsos_por_compas(p['indicacion_compas']),
+                    'pulso_inicial': p.get('pulso', 1),
+                    'pulso_final': p.get('pulso', 1),
+                    'tiempo_inicio_calculado': acumulado,
+                    'tiempo_inicio': marca.tiempo_inicio if marca else None,
+                    'explicita': marca.explicita if marca else None,
+                    'es_cierre': False,
+                }
+                entradas.append(entrada)
+                entradas_por_pasada[clave] = entrada
+            if clave in entradas_por_pasada:
+                entradas_por_pasada[clave]['pulso_final'] = p.get('pulso', entradas_por_pasada[clave]['pulso_final'])
+            if acumulado is not None:
+                acumulado = (acumulado + p['duracion']) if p['duracion'] is not None else None
+
     return entradas, completo
 
 
@@ -1476,16 +1564,15 @@ def tiempo_real_ancla(obra, segmento_id, compas, pulso, pulso_fraccion=0.0):
         (m.compas, m.pasada): m.tiempo_inicio for m in obra.marcas_tiempo_compas.all()
     }
     marcas_pulso_por_compas_pasada = _indice_marcas_pulso(obra)
-    cierre = next((s for s in todos_los_segmentos if s.compas_desde is None), None)
-    tiempo_cierre = cierre.tiempo_inicio.total_seconds() if cierre and cierre.tiempo_inicio is not None else None
+    pausas = indice_pausas(obra)
     rampas = _resolver_rampas(obra, notacion_por_compas)
     calderones = _indice_calderones(obra)
     bpm_por_pulso, factor_por_pulso, _ = _resolver_bpm_por_pulso(
         obra, navegables, notacion_por_compas, pasadas_por_compas, indice, rampas, calderones,
     )
     anclas, posicion_inicio = _anclas_globales(
-        navegables, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
-        bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, tiempo_cierre,
+        todos_los_segmentos, notacion_por_compas, pasadas_por_compas, marcas_por_compas_pasada,
+        bpm_por_pulso, factor_por_pulso, marcas_pulso_por_compas_pasada, pausas,
     )
 
     posicion_compas = posicion_inicio.get((segmento.id, compas))

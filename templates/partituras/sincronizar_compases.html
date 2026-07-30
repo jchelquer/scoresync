@@ -263,7 +263,11 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
-                  {% translate "— fin de la obra —" %}
+                  {% if forloop.last %}
+                    {% translate "— fin de la obra —" %}
+                  {% else %}
+                    {% translate "— pausa (fin del tramo anterior) —" %}
+                  {% endif %}
                 {% else %}
                   {% translate "Compás" %} {{ entrada.compas }}{% if entrada.pasada > 1 %} <small style="color: var(--ss-text-muted)">({{ entrada.pasada }}ª {% translate "vez" %})</small>{% endif %}
                   {% if entrada.pulso_inicial > 1 or entrada.pulso_final < entrada.pulsos_por_compas %}
@@ -509,7 +513,11 @@
   // compás 1 apenas se conoce sin depender del audio) — recién acá se
   // conoce audio.duration, por eso este paso es del lado del cliente.
   function completarCierreSiFalta() {
-    const filaCierre = filas.find(f => f.dataset.esCierre === '1');
+    // La ÚLTIMA fila de cierre es la del fin real de la obra — puede haber
+    // otra(s) antes (una pausa entre movimientos, ver Segmento/EfectoTempo
+    // tipo 'pausa'), que no se autocompletan con la duración del audio.
+    const filasCierre = filas.filter(f => f.dataset.esCierre === '1');
+    const filaCierre = filasCierre[filasCierre.length - 1];
     if (!filaCierre) return;
     const tiempoEl = filaCierre.querySelector('.tiempo-real');
     if (tiempoEl.dataset.segundos !== '') return;
@@ -707,6 +715,29 @@
     return i;
   }
 
+  // Próxima fila con contenido real (no cierre) a partir de idx —
+  // usada por el salto anticipado de vista de más abajo.
+  function filaSiguienteReal(idx) {
+    for (let i = idx; i < filas.length; i++) {
+      if (filas[i].dataset.esCierre !== '1') return filas[i];
+    }
+    return null;
+  }
+
+  // Si el último tiempo real tapeado ANTES de ahora pertenece a una fila
+  // de cierre (pausa interna entre movimientos, o fin de la obra), estamos
+  // en su hueco — devuelve esa fila, o null si no. Recorre `filas` en
+  // orden cronológico (mismo orden que ya vienen del servidor).
+  function filaEnHuecoDePausa() {
+    let ultima = null;
+    for (const f of filas) {
+      const seg = f.querySelector('.tiempo-real').dataset.segundos;
+      if (seg === '') continue;
+      if (parseFloat(seg) <= audio.currentTime) ultima = f; else break;
+    }
+    return ultima && ultima.dataset.esCierre === '1' ? ultima : null;
+  }
+
   function refrescarPanelScore() {
     if (!tieneScore) {
       scoreCanvas.style.display = 'none';
@@ -731,8 +762,19 @@
       // que está SONANDO (verde), no en el rojo de marcado; si todavía no
       // arrancó a sonar nada, se apoya en el último armado sólo para no
       // dejar el panel vacío, pero sin pintar su caja roja (dibujarArmado=false).
-      const numeroCrop = compasSonando != null ? compasSonando
+      let numeroCrop = compasSonando != null ? compasSonando
         : (idxArmada >= 0 && filas[idxArmada].dataset.esCierre !== '1' ? parseInt(filas[idxArmada].dataset.compas, 10) : null);
+      // Salto anticipado durante el hueco de una pausa: en vez de quedarse
+      // mostrando el último compás que sonó (técnicamente correcto — nada
+      // suena todavía en el tramo siguiente — pero deja a quien ejecuta
+      // mirando el final de lo anterior durante todo el silencio), mostrar
+      // directo el próximo compás real, para que la partitura ya esté
+      // lista cuando vuelva a sonar. Pedido explícito del usuario.
+      const cierreHueco = filaEnHuecoDePausa();
+      if (cierreHueco) {
+        const siguienteReal = filaSiguienteReal(filas.indexOf(cierreHueco) + 1);
+        if (siguienteReal) numeroCrop = parseInt(siguienteReal.dataset.compas, 10);
+      }
       mostrarCompas(numeroCrop, null, sonando, seleccionados, false);
       return;
     }

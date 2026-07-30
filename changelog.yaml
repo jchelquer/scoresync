@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.20.0"
+  date: "2026-07-30"
+  changes:
+    - type: nuevo
+      text: "Pausas reales entre movimientos: en Notación se puede marcar una pausa (con duración estimada, tipo \"Pausa\") y en el Itinerario agregar una fila para tapear en Sincronizar compases cuándo termina de verdad el movimiento anterior. Antes no había forma de representar un silencio real entre dos tramos, y el último compás antes del corte podía quedar mal temporizado."
+    - type: mejorado
+      text: "En Sincronizar compases, durante el silencio de una pausa la vista de la partitura salta directo al próximo compás real en vez de quedarse mostrando el final del tramo anterior."
+    - type: corregido
+      text: "Se corrigió un bug real de numeración de compases: reconfirmar barras en una página anterior podía correr en silencio la numeración manual de un movimiento siguiente (por ejemplo, el \"201\" del arranque de un segundo movimiento)."
 - version: "1.19.3"
   date: "2026-07-29"
   changes:

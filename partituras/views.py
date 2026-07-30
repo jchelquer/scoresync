@@ -9,7 +9,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.db.models import Max, Q
+from django.db.models import Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -29,7 +29,7 @@ from .pdf import contar_paginas, rasterizar_pagina
 from .services import (
     armadura_transportada, avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
     construir_plan, desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
-    interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
+    indice_pausas, interpolar_marcas_compas, invalidar_desde_ancla, invalidar_desde_margenes,
     invalidar_desde_orientacion, invalidar_desde_sistemas, numero_inicial_pagina,
     parsear_compas_pulso, recalcular_tiempos_calculados, renumerar_segmentos,
     resolver_efecto_tempo_en_compas, resolver_notacion_en_compas, retroceder_compas,
@@ -798,11 +798,23 @@ def itinerario_obra(request, pk):
                 # "orden=5" para que una fila pase a ser la primera no hacía
                 # nada, porque esa fila se mandaba a un rango temporal aparte
                 # sin comparar contra el 10/20/30... de las filas intactas.
+                #
+                # Se ordena PURO por orden — antes había un criterio extra
+                # (s.compas_desde is None primero en la tupla) que forzaba
+                # cualquier fila de cierre siempre al final, sin importar su
+                # propio orden tipeado. Tenía sentido cuando sólo podía haber
+                # UNA fila de cierre (la del fin de la obra); ahora que
+                # también puede haber una interna, en medio del itinerario
+                # (pausa entre movimientos), ese forzado la empujaba mal
+                # hasta el final de todas formas — bug real, encontrado
+                # 2026-07-30 porque el usuario armó una pausa de verdad y la
+                # fila de cierre interna terminaba después del movimiento
+                # siguiente en vez de antes.
                 ids_tocados = {i.pk for i in instancias_tocadas if i.pk}
                 no_tocadas = list(Segmento.objects.filter(obra=obra).exclude(pk__in=ids_tocados))
                 orden_deseado = sorted(
                     list(instancias_tocadas) + no_tocadas,
-                    key=lambda s: (s.compas_desde is None, s.orden),
+                    key=lambda s: s.orden,
                 )
 
                 # OJO: este offset temporal tiene que ser DISTINTO del que usa
@@ -833,17 +845,20 @@ def itinerario_obra(request, pk):
                 # de ir agotándose de a poco.
                 renumerar_segmentos(obra)
 
-                # Si todavía no hay fila de cierre (compas_desde vacío, sólo
-                # marca dónde termina el último compás real — ver docstring
-                # de Segmento), se agrega sola: no hay forma intuitiva de
-                # armarla a mano desde la tabla (hay que saber dejar Desde/
-                # Hasta en blanco y no pisar ningún orden existente), y sin
-                # ella nunca se ve el tiempo estimado de fin de la obra.
-                tiene_contenido = Segmento.objects.filter(obra=obra).exists()
-                tiene_cierre = Segmento.objects.filter(obra=obra, compas_desde__isnull=True).exists()
-                if tiene_contenido and not tiene_cierre:
-                    ultimo_orden = Segmento.objects.filter(obra=obra).aggregate(m=Max("orden"))["m"]
-                    Segmento.objects.create(obra=obra, orden=ultimo_orden + 10)
+                # Si la ÚLTIMA fila (por orden) todavía no es una de cierre
+                # (compas_desde vacío, sólo marca dónde termina el último
+                # compás real — ver docstring de Segmento), se agrega sola:
+                # no hay forma intuitiva de armarla a mano desde la tabla
+                # (hay que saber dejar Desde/Hasta en blanco y no pisar
+                # ningún orden existente), y sin ella nunca se ve el tiempo
+                # estimado de fin de la obra. OJO: se chequea la ÚLTIMA fila
+                # puntualmente, no "si existe alguna" — puede haber otra
+                # fila de cierre MÁS ADENTRO del itinerario (una pausa entre
+                # movimientos, ver EfectoTempo tipo 'pausa'), que no cuenta
+                # como la de fin de obra.
+                ultimo_segmento = Segmento.objects.filter(obra=obra).order_by("-orden").first()
+                if ultimo_segmento is not None and ultimo_segmento.compas_desde is not None:
+                    Segmento.objects.create(obra=obra, orden=ultimo_segmento.orden + 10)
 
                 # Recalcula tiempo_inicio_calculado de toda la obra (no sólo
                 # las filas tocadas: cambiar un bpm más arriba corre el
@@ -2045,6 +2060,17 @@ def ajuste_barras(request, pk, numero):
     umbral_actual = pagina.umbral_contenido_sistema
     if umbral_actual is None:
         umbral_actual = UMBRAL_CONTENIDO_SISTEMA_DEFAULT
+    numero_inicial = numero_inicial_pagina(pagina)
+    # Umbral de la próxima pausa entre movimientos (ver EfectoTempo tipo
+    # 'pausa'), si hay una a partir de acá — frontera inamovible que
+    # difundirNumeros() no puede cruzar al renumerar (ver esa función y
+    # guardar_compases_pagina, mismo criterio del lado del servidor).
+    umbral_pausa = None
+    if partitura.obra_id is not None:
+        umbral_pausa = next(
+            (p["compas_desde"] for p in indice_pausas(partitura.obra) if p["compas_desde"] >= numero_inicial),
+            None,
+        )
     return render(request, "partituras/ajuste_barras.html", {
         "partitura": partitura,
         "pagina": pagina,
@@ -2052,6 +2078,7 @@ def ajuste_barras(request, pk, numero):
         "sistemas_json": json.dumps(sistemas),
         "barras_json": json.dumps(barras),
         "compases_json": json.dumps(compases),
-        "numero_inicial": numero_inicial_pagina(pagina),
+        "numero_inicial": numero_inicial,
+        "umbral_pausa": umbral_pausa,
         "umbral_contenido_pct": round(umbral_actual * 100, 1),
     })

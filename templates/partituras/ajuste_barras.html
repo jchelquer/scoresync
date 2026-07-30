@@ -233,6 +233,10 @@ const sistemas = {{ sistemas_json|safe }};
 let barras = {{ barras_json|safe }}.map(b => ({...b, _key: b.id ?? ('nuevo-' + Math.random())}));
 let compases = {{ compases_json|safe }};
 const numeroInicial = {{ numero_inicial }};
+// Frontera inamovible de la próxima pausa entre movimientos (ver
+// EfectoTempo tipo 'pausa' y el docstring de difundirNumeros más abajo) —
+// null si no hay ninguna a partir de acá.
+const umbralPausa = {{ umbral_pausa|default_if_none:"null" }};
 let sucio = false;
 let ultimoClickBarra = null;
 let ultimoClickTiempo = 0;
@@ -335,12 +339,32 @@ function difundirNumeros(clavesViejas, numerosViejos, repeticionesViejos, claves
 
   const repeticionesPorClave = new Map();
   clavesViejas.forEach((k, idx) => repeticionesPorClave.set(k, repeticionesViejos[idx]));
+  const numeroPorClaveVieja = new Map();
+  clavesViejas.forEach((k, idx) => numeroPorClaveVieja.set(k, numerosViejos[idx]));
 
   const resultado = numerosViejos.slice(0, i);
   let n = (i < numerosViejos.length)
     ? numerosViejos[i]
     : numerosViejos[numerosViejos.length - 1] + (repeticionesViejos[repeticionesViejos.length - 1] ?? 1);
   for (let k = i; k < clavesNuevas.length; k++) {
+    // Frontera de pausa (ver umbralPausa arriba): mientras la cuenta
+    // secuencial (n) todavía no llegó al umbral, una clave que YA EXISTÍA
+    // (se busca por clave, no por índice — un insert/delete corre los
+    // índices) con un número viejo >= el umbral nunca se pisa con esa
+    // cuenta más baja — se preserva tal cual, y n salta directo a
+    // continuar desde ahí. Una vez que n YA está en o más allá del umbral
+    // (edición DENTRO del propio movimiento 2, p.ej.), no hace falta más
+    // este freno — ahí la cuenta normal ya numera en el rango correcto.
+    // Protege una convención como "cada movimiento arranca en 201" de que
+    // un cambio más atrás en la MISMA página la pise — rarísimo (los
+    // movimientos casi siempre arrancan página nueva), pero el freno real
+    // y esperado es el de guardar_compases_pagina, entre páginas.
+    const numeroViejo = numeroPorClaveVieja.get(clavesNuevas[k]);
+    if (umbralPausa != null && n < umbralPausa && numeroViejo != null && numeroViejo >= umbralPausa) {
+      resultado.push(numeroViejo);
+      n = numeroViejo + (repeticionesPorClave.get(clavesNuevas[k]) ?? 1);
+      continue;
+    }
     resultado.push(n);
     n += repeticionesPorClave.get(clavesNuevas[k]) ?? 1;
   }

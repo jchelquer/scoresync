@@ -215,9 +215,11 @@ class EfectoTempoForm(forms.ModelForm):
             self.instance.pulso_desde = pulso_desde
 
         hasta_texto = cleaned.get('hasta_texto', '')
-        if tipo == 'calderon':
+        if tipo in ('calderon', 'pausa'):
             if hasta_texto:
-                self.add_error('hasta_texto', 'Un calderón es un punto — dejá "Hasta" vacío.')
+                mensaje = 'Un calderón es un punto — dejá "Hasta" vacío.' if tipo == 'calderon' \
+                    else 'Una pausa es un punto (el umbral donde empieza) — dejá "Hasta" vacío.'
+                self.add_error('hasta_texto', mensaje)
             self.instance.compas_hasta = None
             self.instance.pulso_hasta = None
         else:
@@ -244,6 +246,13 @@ class EfectoTempoForm(forms.ModelForm):
                     raise ValueError
             except (TypeError, ValueError):
                 raise forms.ValidationError('El factor de duración del calderón tiene que ser un número mayor que 0 (ej: 1.5).')
+        elif tipo == 'pausa':
+            try:
+                segundos = float(valor)
+                if segundos <= 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                raise forms.ValidationError('La duración estimada de la pausa tiene que ser un número de segundos mayor que 0 (ej: 8 o 8.5).')
         else:
             try:
                 bpm = int(valor)
