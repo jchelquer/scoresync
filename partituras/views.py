@@ -870,7 +870,7 @@ def itinerario_obra(request, pk):
             for info in resueltos:
                 seg = info["segmento"]
                 pulsos_compas = info["pulsos_por_compas"]
-                if not pulsos_compas or seg.compas_desde is None:
+                if not pulsos_compas or seg.compas_hasta is None:
                     continue
                 pulso_desde = seg.pulso_desde if seg.pulso_desde is not None else 1
                 pulso_hasta = seg.pulso_hasta if seg.pulso_hasta is not None else pulsos_compas
@@ -895,6 +895,7 @@ def itinerario_obra(request, pk):
     return render(request, "partituras/itinerario_obra.html", {
         "obra": obra,
         "formset": formset,
+        "umbrales_con_pausa": {p["compas_desde"] for p in indice_pausas(obra)},
     })
 
 
@@ -941,6 +942,10 @@ def notacion_obra(request, pk):
         "obra": obra,
         "formset": formset,
         "formset_efectos": formset_efectos,
+        "umbrales_con_fila_itinerario": set(
+            obra.segmentos.filter(compas_desde__isnull=False, compas_hasta__isnull=True)
+            .values_list("compas_desde", flat=True)
+        ),
     })
 
 

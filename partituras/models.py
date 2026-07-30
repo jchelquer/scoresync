@@ -178,8 +178,10 @@ class Segmento(models.Model):
         verbose_name_plural = 'Segmentos'
 
     def __str__(self):
-        if self.compas_desde is None:
-            return f"{self.obra} — cierre"
+        if self.compas_hasta is None:
+            if self.compas_desde is None:
+                return f"{self.obra} — cierre"
+            return f"{self.obra} — pausa (umbral {self.compas_desde})"
         return f"{self.obra} — c.{self.compas_desde}–{self.compas_hasta}"
 
 

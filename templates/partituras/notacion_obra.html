@@ -75,6 +75,9 @@
           <td>{{ form.valor }}</td>
           <td class="text-center">{{ form.DELETE }}</td>
         </tr>
+        {% if form.instance.tipo == "pausa" and form.instance.compas_desde not in umbrales_con_fila_itinerario %}
+        <tr><td colspan="5" class="text-warning small">{% blocktranslate with n=form.instance.compas_desde %}⚠ No hay ninguna fila de cierre en el Itinerario con umbral {{ n }} — esta pausa todavía no tiene dónde tapear su tiempo real.{% endblocktranslate %}</td></tr>
+        {% endif %}
         {% if form.errors %}
         <tr><td colspan="5" class="text-danger small">{{ form.errors }}</td></tr>
         {% endif %}

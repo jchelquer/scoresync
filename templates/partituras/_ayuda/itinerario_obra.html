@@ -15,5 +15,8 @@
 
 <p>{% translate "La indicación de compás, el tempo base y los efectos de tempo (accelerando/ritardando/calderón) no se cargan acá — son hechos de la partitura por posición, se cargan una sola vez en Notación." %}</p>
 
-<h6 class="ayuda-subtitulo"><i class="bi bi-pause-circle"></i>{% translate "Fila de cierre (fin de la obra, o de una pausa entre movimientos)" %}</h6>
-<p class="mb-0">{% translate "Dejando Desde y Hasta vacíos se arma una fila sin compases propios, sólo para tapear un tiempo real en Sincronizar compases — se usa siempre al final (marca el fin real de la grabación) y también se puede insertar en el medio, entre dos movimientos, para marcar dónde termina de verdad el anterior antes de un silencio real (ver Pausa en Notación, que le da a ese hueco una duración estimada mientras no esté tapeado)." %} <strong>{% translate "Ojo: los DOS campos vacíos, de verdad — no escribas ahí el número umbral de la pausa (ese ya se carga en Notación); si ponés un número acá, la fila deja de funcionar como cierre." %}</strong></p>
+<h6 class="ayuda-subtitulo"><i class="bi bi-flag"></i>{% translate "Fila de cierre: fin de la obra" %}</h6>
+<p>{% translate "Dejando Desde Y Hasta vacíos (los dos) se arma una fila sin compases propios, sólo para tapear en Sincronizar compases el fin real de la grabación — se usa siempre al final." %}</p>
+
+<h6 class="ayuda-subtitulo"><i class="bi bi-pause-circle"></i>{% translate "Fila de pausa (silencio real entre movimientos)" %}</h6>
+<p class="mb-0">{% translate "Se arma con Desde = el MISMO número umbral que le pusiste a la pausa en Notación (ej: 200), y Hasta vacío — se resalta con otro color de fondo para identificarla. Ahí se tapea en Sincronizar compases el tiempo real en que termina el tramo anterior, antes del silencio. Si el número no coincide con ninguna pausa cargada en Notación, aparece un aviso." %}</p>

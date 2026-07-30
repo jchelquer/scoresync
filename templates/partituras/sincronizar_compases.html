@@ -18,6 +18,11 @@
      la vista, de un vistazo, qué falta terminar de marcar/confirmar. */
   .fila-sync.no-explicita, .fila-sync.sin-marcar { background: rgba(255, 255, 255, 0.10); }
   .fila-sync.no-explicita .tiempo-real { opacity: 0.6; font-style: italic; }
+  /* Pausa entre movimientos (fila de cierre con umbral propio, ver
+     Segmento/EfectoTempo tipo 'pausa') — definida ANTES de .armada, mismo
+     criterio que no-explicita/sin-marcar de arriba, para que .armada siga
+     ganando la cascada si coinciden. */
+  .fila-sync.fila-pausa { background: rgba(155, 89, 255, 0.14); border-left: 3px solid #9b59ff; }
   .fila-sync.armada {
     background: rgba(233, 69, 96, 0.18);
     border-left: 3px solid #e94560;
@@ -250,12 +255,13 @@
       <div class="card-body p-0">
         <div id="sync-filas" style="max-height: 56vh; overflow-y: auto;">
           {% for entrada in entradas %}
-          <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% else %} sin-marcar{% endif %}"
+          <div class="fila-sync{% if entrada.explicita %} marcada{% elif entrada.explicita == False %} no-explicita{% else %} sin-marcar{% endif %}{% if entrada.umbral_pausa %} fila-pausa{% endif %}"
                data-index="{{ forloop.counter0 }}"
                data-compas="{{ entrada.compas|default_if_none:'' }}"
                data-pasada="{{ entrada.pasada|default_if_none:'' }}"
                data-segmento-id="{{ entrada.segmento_id }}"
                data-es-cierre="{% if entrada.es_cierre %}1{% else %}0{% endif %}"
+               data-umbral-pausa="{{ entrada.umbral_pausa|default_if_none:'' }}"
                data-explicita="{% if entrada.explicita %}1{% elif entrada.explicita == False %}0{% endif %}"
                data-pulsos="{{ entrada.pulsos_por_compas|default_if_none:''|unlocalize }}"
                data-pulso-inicial="{{ entrada.pulso_inicial|default_if_none:''|unlocalize }}"
@@ -263,10 +269,10 @@
             <div class="d-flex justify-content-between align-items-center flex-wrap">
               <span style="color: var(--ss-text-bright)">
                 {% if entrada.es_cierre %}
-                  {% if forloop.last %}
-                    {% translate "— fin de la obra —" %}
+                  {% if entrada.umbral_pausa %}
+                    {% blocktranslate with n=entrada.umbral_pausa %}— pausa (compás {{ n }}) —{% endblocktranslate %}
                   {% else %}
-                    {% translate "— pausa (fin del tramo anterior) —" %}
+                    {% translate "— fin de la obra —" %}
                   {% endif %}
                 {% else %}
                   {% translate "Compás" %} {{ entrada.compas }}{% if entrada.pasada > 1 %} <small style="color: var(--ss-text-muted)">({{ entrada.pasada }}ª {% translate "vez" %})</small>{% endif %}
@@ -406,9 +412,10 @@
   // objeto ("...se arrancó desde el compás 8").
   function descripcionFila(i) {
     const f = filas[i];
-    return f.dataset.esCierre === '1'
-      ? '{% translate "el fin de la obra" %}'
-      : '{% translate "el compás" %} ' + f.dataset.compas;
+    if (f.dataset.esCierre !== '1') return '{% translate "el compás" %} ' + f.dataset.compas;
+    return f.dataset.umbralPausa
+      ? '{% translate "la pausa (compás" %} ' + f.dataset.umbralPausa + ')'
+      : '{% translate "el fin de la obra" %}';
   }
 
   // Tiempo real de idx, con fallback al compás real más CERCANO hacia atrás

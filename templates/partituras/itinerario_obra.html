@@ -2,6 +2,15 @@
 {% load i18n %}
 {% block title %}Itinerario — {{ obra.titulo }}{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* Fila de pausa entre movimientos: Desde con un número, Hasta vacío —
+     ver Segmento/EfectoTempo tipo 'pausa'. Mismo color que su fila
+     equivalente en Sincronizar compases (fila-pausa ahí). */
+  .fila-pausa-itinerario { background: rgba(155, 89, 255, 0.14); }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-2">
   <h5 style="color: var(--ss-text-bright)">
@@ -31,7 +40,7 @@
       </thead>
       <tbody>
         {% for form in formset %}
-        <tr>
+        <tr{% if form.instance.compas_desde and not form.instance.compas_hasta %} class="fila-pausa-itinerario"{% endif %}>
           {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
           <td>{{ form.orden }}</td>
           <td>{{ form.desde_texto }}</td>
@@ -40,6 +49,9 @@
           <td class="small">{{ form.instance.tiempo_inicio_calculado|default_if_none:"—" }}</td>
           <td class="text-center">{{ form.DELETE }}</td>
         </tr>
+        {% if form.instance.compas_desde and not form.instance.compas_hasta and form.instance.compas_desde not in umbrales_con_pausa %}
+        <tr class="fila-pausa-itinerario"><td colspan="6" class="text-warning small">{% blocktranslate with n=form.instance.compas_desde %}⚠ No hay ninguna pausa cargada en Notación con umbral {{ n }} — esta fila todavía no tiene duración estimada.{% endblocktranslate %}</td></tr>
+        {% endif %}
         {% if form.errors %}
         <tr><td colspan="6" class="text-danger small">{{ form.errors }}</td></tr>
         {% endif %}
