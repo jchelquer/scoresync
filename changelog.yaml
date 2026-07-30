@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.21.0"
+  date: "2026-07-30"
+  changes:
+    - type: nuevo
+      text: "Cuando una parte no tiene un compás (por ejemplo, un movimiento entero que no toca), Practicar ya no se queda congelado mostrando un error: se detiene, avisa qué rango falta y deja el punto de partida listo en el próximo compás real de esa parte."
+    - type: nuevo
+      text: "En Sincronizar compases, nuevo botón \"Seleccionar todo\" — junto con Interpolar, sirve para revisar de punta a punta si algún tapeo quedó con el tiempo real invertido (yendo hacia atrás), en vez de tener que buscarlo a mano."
+    - type: mejorado
+      text: "El botón \"Continuar\" en Practicar ahora tiene un ícono distinto (⏯) al de \"Ejecutar\" (▶), para no confundirlos de un vistazo."
 - version: "1.20.1"
   date: "2026-07-30"
   changes:

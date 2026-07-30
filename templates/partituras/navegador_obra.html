@@ -287,7 +287,7 @@
   {% endif %}
   <button id="btn-play" type="button" class="btn btn-ss" title="{% translate 'Ejecutar en tiempo real' %}">▶</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Pausar' %}">⏸</button>
-  <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Continuar' %}">▶</button>
+  <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Continuar' %}">⏯</button>
   <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Reiniciar' %}"><i class="bi bi-arrow-counterclockwise"></i></button>
   <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Detener' %}">⏹</button>
   <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
@@ -364,6 +364,7 @@
       <canvas id="score-preview-abajo" style="display:none; position:absolute; left:0;"></canvas>
     </div>
     <p id="score-error" class="small text-warning mt-2 mb-0" style="display:none;"></p>
+    <p id="score-tacet" class="small text-info mt-2 mb-0" style="display:none;"></p>
   </div>
 </div>
 {% endif %}
@@ -988,6 +989,7 @@
   const scoreVentanaCanvas = document.getElementById('score-ventana-canvas');
   const scorePreviewAbajo = document.getElementById('score-preview-abajo');
   const scoreErrorEl = document.getElementById('score-error');
+  const scoreTacetEl = document.getElementById('score-tacet');
 
   // El panel no arranca en el borde superior de la pantalla (tiene el
   // header, la fila compacta o los controles completos arriba, según el
@@ -1752,6 +1754,35 @@
     }
   }
 
+  // Próximo compás (a partir de numeroActual, inclusive) que esta parte SÍ
+  // tiene geometría — cubre tanto un tacet (la parte no toca un movimiento
+  // entero) como cualquier otro hueco de datos (página todavía no
+  // confirmada): no se distingue el motivo, el tratamiento es el mismo en
+  // los dos casos (ver conversación de diseño, deliberado por simplicidad).
+  // Con plan cargado busca en la secuencia REAL ya resuelta (respeta
+  // rango/saltos/repeticiones, nunca ofrece un compás fuera del rango
+  // elegido para ejecutar) arrancando en la ocurrencia actual — nunca
+  // recorre pulsos[] desde el principio, para no matchear una ocurrencia
+  // anterior del mismo número en una repetición y saltar hacia ATRÁS en el
+  // tiempo. Sin plan (la vista inicial antes de Ejecutar) no hay secuencia
+  // que recorrer ni reloj/audio que reposicionar — alcanza con el próximo
+  // número propio de la parte, sin buscar un índice de pulso.
+  function proximoCompasDisponible(numeroActual) {
+    if (planCargado && compasInicios.length) {
+      for (let k = indiceCompasActual(); k < compasInicios.length; k++) {
+        const idx = compasInicios[k];
+        const numero = pulsos[idx].compas;
+        if (scoreGeometria.porCompas[numero]) return { numero, idx };
+      }
+      return null;
+    }
+    const numeros = Object.keys(scoreGeometria.porCompas)
+      .map(Number)
+      .filter(n => n >= numeroActual)
+      .sort((a, b) => a - b);
+    return numeros.length ? { numero: numeros[0], idx: null } : null;
+  }
+
   // El score es un panel informativo — no puede llegar a cortar el reloj
   // de la ejecución en tiempo real si algo sale mal acá (compás sin
   // geometría, imagen que no carga, etc.): mostrarPulso llama a esto en
@@ -1762,11 +1793,43 @@
     if (!scoreVentanaCanvas || !scoreGeometria) return;
     try {
       scoreErrorEl.style.display = 'none';
-      const actual = scoreGeometria.porCompas[numeroActual] || null;
+      let actual = scoreGeometria.porCompas[numeroActual] || null;
+      let tacet = null;
       if (!actual) {
-        scoreErrorEl.textContent = '{% translate "Esta parte no tiene el compás" %} ' + numeroActual + '.';
-        scoreErrorEl.style.display = '';
-        return;
+        const destino = proximoCompasDisponible(numeroActual);
+        // DETENER, no pausar: "Continuar" retomaría vía continuarDesdePausa,
+        // que arma la cuenta al aire con la referencia de tempo/indicación
+        // de donde se había pausado ANTES de este salto (una posición que ya
+        // no es la que se está mostrando) y remapea por compás+pulso contra
+        // un plan que puede haber cambiado — un lío evitable. Al detener del
+        // todo (mismo camino que el botón Detener) y dejar el campo "desde
+        // compás" apuntando al próximo real, un Ejecutar fresco arranca
+        // limpio ahí, con su propia cuenta al aire ya resuelta contra ESE
+        // compás — mismo camino ya probado que cualquier otro arranque.
+        if (rafId || planCargado) detener();
+        if (!destino) {
+          scoreErrorEl.textContent = '{% translate "Esta parte no tiene más compases desde el" %} ' + numeroActual + '.';
+          scoreErrorEl.style.display = '';
+          scoreTacetEl.style.display = 'none';
+          return;
+        }
+        tacet = { desde: numeroActual, hasta: destino.numero };
+        actual = scoreGeometria.porCompas[destino.numero];
+        if (formRango) {
+          formRango.elements['desde_compas'].value = destino.numero;
+          formRango.elements['desde_pasada'].value = 1;
+          programarGuardadoPreferencias();
+        }
+        numeroActual = destino.numero;
+        pulsoActual = 1;
+        pulsosPorCompasActual = null;
+      }
+      if (tacet) {
+        scoreTacetEl.textContent = '{% translate "Falta desde el compás" %} ' + tacet.desde
+          + ' {% translate "hasta antes del" %} ' + tacet.hasta + '.';
+        scoreTacetEl.style.display = '';
+      } else {
+        scoreTacetEl.style.display = 'none';
       }
 
       // El cambio de ventana es reactivo, no anticipado: se espera a que el

@@ -247,6 +247,7 @@
           <button id="sync-btn-ajuste-m05" type="button" class="btn btn-sm btn-paso btn-ajuste-neg">−0,05s</button>
           <button id="sync-btn-ajuste-p05" type="button" class="btn btn-sm btn-paso btn-ajuste-pos">+0,05s</button>
           <button id="sync-btn-ajuste-p1" type="button" class="btn btn-sm btn-paso btn-ajuste-pos btn-ajuste-pos-fuerte">+0,1s</button>
+          <button id="sync-btn-seleccionar-todo" type="button" class="btn btn-sm btn-outline-light ms-2" title="{% translate "Selecciona toda la obra — combinado con Interpolar sirve también para revisar de punta a punta si algún tapeo quedó con el tiempo invertido." %}">{% translate "Seleccionar todo" %}</button>
           <button id="sync-btn-interpolar" type="button" class="btn btn-sm btn-outline-light d-none ms-2">{% translate "Interpolar" %}</button>
           <button id="sync-btn-borrar-tiempos" type="button" class="btn btn-sm btn-outline-danger d-none" title="{% translate "Borrar temporización" %}">🕒✕</button>
           <span id="sync-interpolar-aviso" class="small text-warning" style="display:none;"></span>
@@ -316,6 +317,7 @@
   const audio = document.getElementById('sync-audio');
   const btnPlayPause = document.getElementById('sync-btn-playpause');
   const btnReiniciar = document.getElementById('sync-btn-reiniciar');
+  const btnSeleccionarTodo = document.getElementById('sync-btn-seleccionar-todo');
   const btnInterpolar = document.getElementById('sync-btn-interpolar');
   const btnBorrarTiempos = document.getElementById('sync-btn-borrar-tiempos');
   const avisoInterpolar = document.getElementById('sync-interpolar-aviso');
@@ -1337,6 +1339,22 @@
   btnAjusteP05.addEventListener('click', () => ajustarSeleccion(0.05));
   btnAjusteP1.addEventListener('click', () => ajustarSeleccion(0.1));
 
+  // Selecciona toda la obra (menos las filas de cierre, que no son
+  // compases interpolables) — combinado con Interpolar, de paso sirve
+  // para revisar de punta a punta si algún tramo entre dos anclas
+  // explícitas quedó con el tiempo real invertido (ver invertidos más
+  // abajo): no hace falta un botón de control aparte, cualquier hueco
+  // real entre dos anclas tiene al menos un compás sin marcar adentro
+  // que dispara el chequeo.
+  if (btnSeleccionarTodo) {
+    btnSeleccionarTodo.addEventListener('click', () => {
+      anclaManualSistema = null;
+      seleccion = new Set(filas.map((f, i) => i).filter(i => filas[i].dataset.esCierre !== '1'));
+      anclaSeleccion = null;
+      actualizarClasesSeleccion();
+    });
+  }
+
   // ── Interpolar / Borrar temporización (selección) ────────────────────
   async function interpolarSeleccion() {
     const indices = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1' && filas[i].dataset.explicita !== '1');
@@ -1362,9 +1380,17 @@
       fila.classList.remove('marcada', 'sin-marcar');
       fila.classList.add('no-explicita');
     });
+    const partesAviso = [];
     if ((data.no_resueltos || []).length) {
-      avisoInterpolar.textContent = '{% translate "No se pudo interpolar (falta ancla explícita de un lado): compás" %} '
-        + data.no_resueltos.map(n => n.compas).join(', ');
+      partesAviso.push('{% translate "falta ancla explícita de un lado: compás" %} '
+        + data.no_resueltos.map(n => n.compas).join(', '));
+    }
+    if ((data.invertidos || []).length) {
+      partesAviso.push('{% translate "anclas con tiempo real invertido (revisá el tapeo): compás" %} '
+        + data.invertidos.map(n => n.compas).join(', '));
+    }
+    if (partesAviso.length) {
+      avisoInterpolar.textContent = '{% translate "No se pudo interpolar" %} — ' + partesAviso.join(' | ');
       avisoInterpolar.style.display = '';
     } else {
       avisoInterpolar.style.display = 'none';

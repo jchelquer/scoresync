@@ -974,8 +974,20 @@ msgstr "No se pudo cargar la imagen de la página."
 msgid "No se pudo conectar con el servidor."
 msgstr "No se pudo conectar con el servidor."
 
-msgid "No se pudo interpolar (falta ancla explícita de un lado): compás"
-msgstr "No se pudo interpolar (falta ancla explícita de un lado): compás"
+msgid "No se pudo interpolar"
+msgstr "No se pudo interpolar"
+
+msgid "falta ancla explícita de un lado: compás"
+msgstr "falta ancla explícita de un lado: compás"
+
+msgid "anclas con tiempo real invertido (revisá el tapeo): compás"
+msgstr "anclas con tiempo real invertido (revisá el tapeo): compás"
+
+msgid "Seleccionar todo"
+msgstr "Seleccionar todo"
+
+msgid "Selecciona toda la obra — combinado con Interpolar sirve también para revisar de punta a punta si algún tapeo quedó con el tiempo invertido."
+msgstr "Selecciona toda la obra — combinado con Interpolar sirve también para revisar de punta a punta si algún tapeo quedó con el tiempo invertido."
 
 msgid "No se pudo obtener el plan de ejecución."
 msgstr "No se pudo obtener el plan de ejecución."

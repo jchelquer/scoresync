@@ -598,6 +598,27 @@ def _anclas_globales(todos_los_segmentos, notacion_por_compas, pasadas_por_compa
     return anclas_compases, posicion_inicio
 
 
+def _bracket_anclas_invertido(anclas, posicion):
+    """True si el par de anclas consecutivas que encierran `posicion` (mismo
+    criterio de búsqueda que _tiempo_real_en_posicion) tiene el tiempo real
+    de la ancla de ADELANTE menor que el de la de ATRÁS — un tapeo
+    contradictorio (la que va después en la partitura quedó marcada con un
+    tiempo real anterior). None/False si coincide exacto con una ancla (no
+    hay bracket que evaluar) o si la posición queda fuera del tramo
+    cubierto (mismos casos en los que _tiempo_real_en_posicion no
+    interpola nada)."""
+    for pos_a, _t_a in anclas:
+        if pos_a == posicion:
+            return False
+    if len(anclas) < 2 or posicion < anclas[0][0] or posicion > anclas[-1][0]:
+        return False
+    ultimo_tramo = len(anclas) - 2
+    for i, ((pos_a, t_a), (pos_b, t_b)) in enumerate(zip(anclas, anclas[1:])):
+        if pos_a <= posicion < pos_b or (i == ultimo_tramo and posicion == pos_b):
+            return t_b < t_a
+    return False
+
+
 def _tiempo_real_en_posicion(anclas, posicion):
     """Tiempo real interpolado linealmente en una posición calculada
     arbitraria (no necesariamente el arranque de un pulso, puede caer a
@@ -1659,10 +1680,15 @@ def interpolar_marcas_compas(obra, objetivos):
     sobrescribiendo si ya había un valor no-explícito ahí (permite
     recalcular).
 
-    Devuelve (resueltos, no_resueltos): resueltos es la cantidad interpolada
-    con éxito; no_resueltos es la lista de (compas, pasada) a las que les
-    faltó una ancla explícita de algún lado (o cuya posición calculada no se
-    pudo resolver — bpm/indicación faltante en esa fila)."""
+    Devuelve (resueltos, no_resueltos, invertidos): resueltos es la cantidad
+    interpolada con éxito; no_resueltos es la lista de (compas, pasada) a
+    las que les faltó una ancla explícita de algún lado (o cuya posición
+    calculada no se pudo resolver — bpm/indicación faltante en esa fila);
+    invertidos es la lista de (compas, pasada) cuyas DOS anclas SÍ existen
+    pero están en el orden real equivocado (la de adelante en la partitura
+    tiene un tiempo real tapeado antes que la de atrás) — un tapeo
+    contradictorio, no un hueco de datos: no se interpola ahí en vez de
+    guardar un tiempo que iría hacia atrás (ver _bracket_anclas_invertido)."""
     entradas, _ = compases_desenrollados(obra)
     idx_por_clave = {
         (e['compas'], e['pasada']): i for i, e in enumerate(entradas) if not e['es_cierre']
@@ -1675,11 +1701,18 @@ def interpolar_marcas_compas(obra, objetivos):
     )
 
     no_resueltos = []
+    invertidos = []
     a_guardar = []
     for clave in objetivos:
         i = idx_por_clave.get(clave)
         posicion = entradas[i]['tiempo_inicio_calculado'] if i is not None else None
-        tiempo = _tiempo_real_en_posicion(anclas, posicion) if posicion is not None else None
+        if posicion is None:
+            no_resueltos.append(clave)
+            continue
+        if _bracket_anclas_invertido(anclas, posicion):
+            invertidos.append(clave)
+            continue
+        tiempo = _tiempo_real_en_posicion(anclas, posicion)
         if tiempo is None:
             no_resueltos.append(clave)
         else:
@@ -1691,7 +1724,7 @@ def interpolar_marcas_compas(obra, objetivos):
             defaults={'tiempo_inicio': timedelta(seconds=tiempo), 'explicita': False},
         )
 
-    return len(a_guardar), no_resueltos
+    return len(a_guardar), no_resueltos, invertidos
 
 
 def borrar_marcas_compas(obra, objetivos):

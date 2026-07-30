@@ -715,14 +715,17 @@ def interpolar_tiempos_compases(request, pk):
     sin marca explícita de la selección — "compases" (POST) es la misma
     lista "compas:pasada,..." que usa desplazar_tiempos_compases. Devuelve
     los tiempos resueltos (para que el cliente actualice esas filas sin
-    recargar la página) y la lista de los que no se pudieron resolver."""
+    recargar la página), los que no se pudieron resolver por falta de
+    ancla, y los que tenían las dos anclas pero en el orden real
+    equivocado (tapeo contradictorio, ver invertidos en
+    interpolar_marcas_compas)."""
     obra = get_object_or_404(Obra, pk=pk, owner=request.user)
     try:
         objetivos = _parsear_compas_pasada_lista(request.POST.get("compases", ""))
     except ValueError:
         return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
 
-    _resueltos, no_resueltos = interpolar_marcas_compas(obra, objetivos)
+    _resueltos, no_resueltos, invertidos = interpolar_marcas_compas(obra, objetivos)
     marcas = {
         (m.compas, m.pasada): m.tiempo_inicio.total_seconds()
         for m in obra.marcas_tiempo_compas.filter(
@@ -733,6 +736,7 @@ def interpolar_tiempos_compases(request, pk):
         "ok": True,
         "resueltos": [{"compas": c, "pasada": p, "tiempo_inicio": marcas[(c, p)]} for c, p in objetivos if (c, p) in marcas],
         "no_resueltos": [{"compas": c, "pasada": p} for c, p in no_resueltos],
+        "invertidos": [{"compas": c, "pasada": p} for c, p in invertidos],
     })
 
 

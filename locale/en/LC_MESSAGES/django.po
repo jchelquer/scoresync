@@ -963,9 +963,22 @@ msgstr "Couldn't load the page image."
 msgid "No se pudo conectar con el servidor."
 msgstr "Couldn't connect to the server."
 
-msgid "No se pudo interpolar (falta ancla explícita de un lado): compás"
+msgid "No se pudo interpolar"
+msgstr "Couldn't interpolate"
+
+msgid "falta ancla explícita de un lado: compás"
+msgstr "missing an explicit anchor on one side: measure"
+
+msgid "anclas con tiempo real invertido (revisá el tapeo): compás"
+msgstr "anchors with reversed real time (check the tapped marks): measure"
+
+msgid "Seleccionar todo"
+msgstr "Select all"
+
+msgid "Selecciona toda la obra — combinado con Interpolar sirve también para revisar de punta a punta si algún tapeo quedó con el tiempo invertido."
 msgstr ""
-"Couldn't interpolate (missing an explicit anchor on one side): measure"
+"Selects the whole piece — combined with Interpolate, this also works as an "
+"end-to-end check for any tapped mark that ended up with reversed time."
 
 msgid "No se pudo obtener el plan de ejecución."
 msgstr "Couldn't get the performance plan."
