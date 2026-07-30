@@ -1,6 +1,17 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.22.4"
+  date: "2026-07-30"
+  changes:
+    - type: nuevo
+      text: "Anotaciones: ahora se puede anclar una a un punto exacto de la partitura (por ejemplo, sobre una nota puntual) en vez de al compás entero — un candado \"🔒 Anclar a este punto exacto\" al crearla. Se ve justo ahí, sin acomodo automático (a propósito, para que quede pegada a la nota)."
+    - type: corregido
+      text: "El texto de una anotación podía quedar invisible (recortado fuera de la pantalla) en el último compás de un sistema angosto, con más razón a mayor zoom — ya no."
+    - type: mejorado
+      text: "El color de las anotaciones privadas pasó de gris a violeta (se leía mal el gris sobre el fondo del editor); \"arriba\"/\"abajo\" en el editor ya no se ven en negro."
+    - type: mejorado
+      text: "El editor de anotaciones cierra apenas se aprieta Guardar, sin esperar a la red."
 - version: "1.22.1"
   date: "2026-07-30"
   changes:

@@ -375,9 +375,13 @@
            existente (nivel fijo, mostrado como etiqueta de color). -->
       <div id="anotacion-editor" style="display:none; position:absolute; z-index:20; background: var(--ss-surface); border: 1px solid #2a4a47; border-radius: 6px; padding: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.6); min-width: 220px;">
         <div id="anotacion-editor-niveles" class="d-flex gap-2 mb-1 small flex-wrap"></div>
-        <div class="d-flex gap-2 mb-1 small">
+        <div id="anotacion-editor-posicion" class="d-flex gap-2 mb-1 small" style="color: var(--ss-text-muted);">
           <label><input type="radio" name="anotacion-posicion" value="arriba" checked> {% translate "arriba" %}</label>
           <label><input type="radio" name="anotacion-posicion" value="abajo"> {% translate "abajo" %}</label>
+        </div>
+        <div id="anotacion-editor-candado-wrap" class="form-check mb-1 small" style="display:none;">
+          <input class="form-check-input" type="checkbox" id="anotacion-editor-candado">
+          <label class="form-check-label" for="anotacion-editor-candado" title="{% translate 'Ancla al punto exacto donde clickeaste (por ejemplo, sobre una nota puntual) en vez de al compás — no se acomoda sola, queda justo ahí. No se puede cambiar después de creada.' %}">🔒 {% translate "Anclar a este punto exacto" %}</label>
         </div>
         <textarea id="anotacion-editor-texto" rows="2" class="form-control form-control-sm mb-1" style="resize: vertical;"></textarea>
         <div class="d-flex gap-2 justify-content-end">
@@ -1027,6 +1031,9 @@
   const anotacionEditorEl = document.getElementById('anotacion-editor');
   const anotacionEditorNiveles = document.getElementById('anotacion-editor-niveles');
   const anotacionEditorTexto = document.getElementById('anotacion-editor-texto');
+  const anotacionEditorPosicionWrap = document.getElementById('anotacion-editor-posicion');
+  const anotacionEditorCandadoWrap = document.getElementById('anotacion-editor-candado-wrap');
+  const anotacionEditorCandado = document.getElementById('anotacion-editor-candado');
   const anotacionEditorBorrar = document.getElementById('anotacion-editor-borrar');
   const anotacionEditorCancelar = document.getElementById('anotacion-editor-cancelar');
   const anotacionEditorGuardar = document.getElementById('anotacion-editor-guardar');
@@ -1596,7 +1603,7 @@
   // diseño: el permiso de cada nivel sale de dueños que ya existen
   // (Obra.owner/Partitura.owner) o de "soy yo" para las privadas, nunca
   // un concepto de permiso nuevo.
-  const COLOR_NIVEL_ANOTACION = { obra: '#2f8f4e', parte: '#c77d17', privada: '#5a6270' };
+  const COLOR_NIVEL_ANOTACION = { obra: '#2f8f4e', parte: '#c77d17', privada: '#8e44ad' };
   const ETIQUETA_NIVEL_ANOTACION = {
     obra: '{% translate "De obra" %}', parte: '{% translate "De parte" %}', privada: '{% translate "Privada" %}',
   };
@@ -1685,6 +1692,42 @@
         const corto = lineas.length > 1 || lineas[0].length > 40;
         const etiqueta = lineas[0].slice(0, 40) + (corto ? '…' : '');
         const anchoTexto = ctx.measureText(etiqueta).width;
+
+        // Modo PUNTO (candado): marcador exactamente donde se clickeó al
+        // crearla, sin acomodo automático — a propósito, ver notas de
+        // diseño de Anotacion (el punto lo elige el usuario, no colisiona
+        // con nada porque él ya lo vio al elegirlo). No usa acumArriba/
+        // acumAbajo ni el justificado a la derecha de más abajo — es un
+        // camino de dibujo totalmente aparte.
+        if (a.offset_x != null && a.offset_y != null) {
+          const puntoX = (caja.left - pagina.margen_x0) * img.naturalWidth * escala
+            + a.offset_x * (caja.right - caja.left) * img.naturalWidth * escala;
+          const puntoY = (caja.top - ventana.top) * img.naturalHeight * escala
+            + a.offset_y * (caja.bottom - caja.top) * img.naturalHeight * escala;
+          const colorNivel = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
+
+          ctx.beginPath();
+          ctx.arc(puntoX, puntoY, 4, 0, Math.PI * 2);
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = colorNivel;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+
+          // Mismo acotado a los bordes del canvas que el resto (ver más
+          // abajo) — el texto arranca pegado al marcador, hacia la derecha.
+          const pxTexto = Math.max(2, Math.min(puntoX + 6, canvas.width - anchoTexto - 2));
+          const pyTexto = Math.max(0, Math.min(puntoY - alto / 2, canvas.height - alto));
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = colorNivel;
+          ctx.fillRect(pxTexto - 2, pyTexto, anchoTexto + 4, alto);
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = TEXTO_SOBRE_COLOR;
+          ctx.fillText(etiqueta, pxTexto, pyTexto + 1);
+          ctx.globalAlpha = 1;
+          ultimasCajasAnotaciones.push({ x: pxTexto - 2, y: pyTexto, w: anchoTexto + 4, h: alto, anotacion: a });
+          return;
+        }
+
         // Acotado a los dos lados del canvas — un compás angosto (último de
         // un sistema corto) con un texto largo podía empujar el borde
         // izquierdo a negativo (fuera del canvas, invisible en silencio,
@@ -1717,9 +1760,10 @@
         ctx.fillStyle = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
         ctx.fillRect(px - 2, py, anchoTexto + 4, alto);
         ctx.globalAlpha = 0.8;
-        // "privada" es un gris (no un color vivo como obra/parte) — le
-        // toca texto CLARO, igual criterio que el número de compás.
-        ctx.fillStyle = a.nivel === 'privada' ? TEXTO_SOBRE_GRIS : TEXTO_SOBRE_COLOR;
+        // Los tres niveles son colores vivos (privada pasó de gris a
+        // violeta — se leía mal el gris sobre el fondo verde del editor,
+        // ver conversación) — todos con texto oscuro, igual que avisos.
+        ctx.fillStyle = TEXTO_SOBRE_COLOR;
         ctx.fillText(etiqueta, px, py + 1);
         ctx.globalAlpha = 1;
         ultimasCajasAnotaciones.push({ x: px - 2, y: py, w: anchoTexto + 4, h: alto, anotacion: a });
@@ -1767,6 +1811,26 @@
     return ultimasCajasAnotaciones.find(c => px >= c.x && px <= c.x + c.w && py >= c.y && py <= c.y + c.h) || null;
   }
 
+  // Punto exacto del click, como fracción DENTRO de la caja del compás
+  // resuelto (0,0 = esquina superior izquierda; 1,1 = inferior derecha) —
+  // mismo cálculo de xFrac/yFrac que ya hace compasEnClick puertas adentro
+  // (no expuesto ahí, se repite acá para no cambiarle la firma a una
+  // función ya usada en varios lugares). null si el compás no tiene caja
+  // (no debería pasar, ya se resolvió el numero antes de llamar a esto).
+  function offsetEnCompasDesdeEvento(ventana, evt, numero) {
+    const { px, py } = pixelesCanvasDesdeEvento(evt);
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const xFrac = px / (escala * img.naturalWidth) + pagina.margen_x0;
+    const yFrac = py / (escala * img.naturalHeight) + ventana.top;
+    const caja = calcularCaja({ numero }, pagina);
+    if (!caja || caja.right <= caja.left || caja.bottom <= caja.top) return null;
+    return {
+      offset_x: Math.max(0, Math.min(1, (xFrac - caja.left) / (caja.right - caja.left))),
+      offset_y: Math.max(0, Math.min(1, (yFrac - caja.top) / (caja.bottom - caja.top))),
+    };
+  }
+
   // Posición del editor inline en píxeles CSS relativos al contenedor
   // (que es position:relative y overflow:auto) — distinto del helper de
   // arriba, que da píxeles del buffer del canvas para el hit-test; acá
@@ -1785,11 +1849,16 @@
     anotacionEditando = null;
   }
 
-  function abrirEditorAnotacion({ left, top, compas, existente }) {
+  function abrirEditorAnotacion({ left, top, compas, existente, offsetClick }) {
     if (!anotacionEditorEl) return;
+    // offsetClick: { offset_x, offset_y } ya calculado en el punto donde se
+    // clickeó (ver click del canvas) — sólo se USA si el candado termina
+    // marcado; si no, se descarta y queda como una anotación normal
+    // anclada al compás. En una existente, el modo (y su offset) ya está
+    // fijo desde que se creó — nunca se recalcula acá.
     anotacionEditando = existente
-      ? { id: existente.id, nivel: existente.nivel, compas: existente.compas }
-      : { id: null, nivel: null, compas };
+      ? { id: existente.id, nivel: existente.nivel, compas: existente.compas, offset_x: existente.offset_x, offset_y: existente.offset_y }
+      : { id: null, nivel: null, compas, offsetClick };
 
     // Nueva: selector de nivel, sólo con lo que este usuario puede crear
     // acá. Existente: el nivel no se reasigna — se muestra como etiqueta
@@ -1823,6 +1892,22 @@
       inp.checked = inp.value === posicionGuardada;
     });
 
+    // El candado ("anclar a un punto exacto") sólo se ofrece al CREAR — el
+    // modo de una existente ya quedó fijo, no se puede pasar de una a otra
+    // (ver notas de diseño de Anotacion). "arriba/abajo" no tiene sentido
+    // en modo punto (la posición ES el punto) — se oculta en los dos casos
+    // donde aplica: creando con el candado marcado, o editando una que ya
+    // nació en modo punto.
+    const modoPuntoExistente = !!(existente && existente.offset_x != null);
+    if (existente) {
+      anotacionEditorCandadoWrap.style.display = 'none';
+      anotacionEditorPosicionWrap.style.display = modoPuntoExistente ? 'none' : '';
+    } else {
+      anotacionEditorCandadoWrap.style.display = offsetClick ? '' : 'none';
+      anotacionEditorCandado.checked = false;
+      anotacionEditorPosicionWrap.style.display = '';
+    }
+
     const soloLectura = !!(existente && !existente.puede_editar);
     anotacionEditorBorrar.style.display = (existente && existente.puede_editar) ? '' : 'none';
     anotacionEditorGuardar.style.display = soloLectura ? 'none' : '';
@@ -1835,12 +1920,16 @@
     if (!soloLectura) anotacionEditorTexto.focus();
   }
 
-  async function guardarAnotacion({ id, compas, texto, posicion, nivel }) {
+  async function guardarAnotacion({ id, compas, texto, posicion, nivel, offset_x, offset_y }) {
     const params = new URLSearchParams();
     if (id) params.set('id', id);
     params.set('compas', compas);
     params.set('texto', texto);
     params.set('posicion', posicion);
+    if (offset_x != null && offset_y != null) {
+      params.set('offset_x', offset_x);
+      params.set('offset_y', offset_y);
+    }
     if (!id) {
       params.set('nivel', nivel);
       const parteVal = formRango ? new FormData(formRango).get('parte') : null;
@@ -1868,6 +1957,14 @@
   }
 
   if (anotacionEditorCancelar) anotacionEditorCancelar.addEventListener('click', () => cerrarEditorAnotacion());
+  // Marcar/desmarcar el candado en vivo muestra/oculta arriba-abajo — no
+  // tiene sentido elegir un lado del pentagrama si la posición va a ser
+  // el punto exacto que ya se clickeó.
+  if (anotacionEditorCandado) {
+    anotacionEditorCandado.addEventListener('change', () => {
+      anotacionEditorPosicionWrap.style.display = anotacionEditorCandado.checked ? 'none' : '';
+    });
+  }
   if (anotacionEditorGuardar) {
     anotacionEditorGuardar.addEventListener('click', async () => {
       if (!anotacionEditando) return;
@@ -1875,14 +1972,31 @@
       if (!texto) return;
       const posicionInput = anotacionEditorEl.querySelector('input[name="anotacion-posicion"]:checked');
       const posicion = posicionInput ? posicionInput.value : 'arriba';
+      // Cierra YA, antes de esperar la red — si no, con la conexión un
+      // poco lenta la caja se quedaba abierta ese rato y daba la
+      // sensación de que Guardar no hacía nada.
       if (anotacionEditando.id) {
-        await guardarAnotacion({ id: anotacionEditando.id, compas: anotacionEditando.compas, texto, posicion });
+        const editando = anotacionEditando;
+        cerrarEditorAnotacion();
+        // Editar una existente: si ya es de modo punto, el offset no
+        // cambia acá (sólo se actualiza al arrastrarla, ver el drag) —
+        // este guardado es sólo para el TEXTO.
+        await guardarAnotacion({
+          id: editando.id, compas: editando.compas, texto, posicion,
+          offset_x: editando.offset_x, offset_y: editando.offset_y,
+        });
       } else {
         const nivelInput = anotacionEditorEl.querySelector('input[name="anotacion-nivel"]:checked');
         if (!nivelInput) return;
-        await guardarAnotacion({ compas: anotacionEditando.compas, texto, posicion, nivel: nivelInput.value });
+        const editando = anotacionEditando;
+        const candado = anotacionEditorCandado && anotacionEditorCandado.checked && editando.offsetClick;
+        cerrarEditorAnotacion();
+        await guardarAnotacion({
+          compas: editando.compas, texto, posicion, nivel: nivelInput.value,
+          offset_x: candado ? editando.offsetClick.offset_x : null,
+          offset_y: candado ? editando.offsetClick.offset_y : null,
+        });
       }
-      cerrarEditorAnotacion();
     });
   }
   if (anotacionEditorBorrar) {
@@ -2502,7 +2616,18 @@
         // intactos, ver notas de diseño de Anotacion.
         if (seMovio && ventanaActiva) {
           const numero = compasEnClick(ventanaActiva, e);
-          if (numero != null && numero !== anot.compas) {
+          if (numero != null && anot.offset_x != null) {
+            // Modo punto: SIEMPRE recalcula el offset al soltar (aunque el
+            // compás no haya cambiado — moverla unos pixeles dentro del
+            // mismo compás también cuenta como un movimiento real acá).
+            const offset = offsetEnCompasDesdeEvento(ventanaActiva, e, numero);
+            if (offset) {
+              await guardarAnotacion({
+                id: anot.id, compas: numero, texto: anot.texto, posicion: anot.posicion,
+                offset_x: offset.offset_x, offset_y: offset.offset_y,
+              });
+            }
+          } else if (numero != null && numero !== anot.compas) {
             await guardarAnotacion({ id: anot.id, compas: numero, texto: anot.texto, posicion: anot.posicion });
           }
         }
@@ -2546,7 +2671,11 @@
         const numero = compasEnClick(ventanaActiva, e);
         if (numero == null) return;
         const pos = posicionEditorDesdeEvento(e);
-        abrirEditorAnotacion({ left: pos.left, top: pos.top, compas: numero, existente: null });
+        // Se calcula siempre (barato, un par de cuentas) aunque después no
+        // se use — sólo se guarda de verdad si el usuario marca el candado
+        // en el editor, ver el handler de Guardar.
+        const offsetClick = offsetEnCompasDesdeEvento(ventanaActiva, e, numero);
+        abrirEditorAnotacion({ left: pos.left, top: pos.top, compas: numero, existente: null, offsetClick });
         return;
       }
 

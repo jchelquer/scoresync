@@ -773,6 +773,14 @@ class Anotacion(models.Model):
     compas = models.PositiveIntegerField(help_text="Compás al que está anclada — el más cercano al punto donde se hizo clic.")
     tipo = models.CharField(max_length=10, choices=TIPOS, default='texto')
     posicion = models.CharField(max_length=10, choices=POSICIONES, default='arriba')
+    offset_x = models.FloatField(
+        null=True, blank=True,
+        help_text="Vacío = anclada al compás (arriba/abajo, se acomoda sola sin superponerse con otras). "
+                   "Seteado junto con offset_y = anclada a un punto exacto dentro de la caja del compás "
+                   "(fracción 0-1 de su ancho) — para marcar una nota puntual, sin acomodo automático: "
+                   "el punto lo elige el usuario, a propósito. Se define sólo al crearla, no cambia después.",
+    )
+    offset_y = models.FloatField(null=True, blank=True, help_text="Ver offset_x — fracción 0-1 del alto de la caja del compás.")
     texto = models.TextField()
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(auto_now=True)

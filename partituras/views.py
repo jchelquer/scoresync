@@ -312,6 +312,8 @@ def _serializar_anotacion(anotacion, user):
         'posicion': anotacion.posicion,
         'tipo': anotacion.tipo,
         'nivel': anotacion.nivel,
+        'offset_x': anotacion.offset_x,
+        'offset_y': anotacion.offset_y,
         'puede_editar': _puede_editar_anotacion(user, anotacion),
     }
 
@@ -1379,6 +1381,23 @@ def anotaciones_obra(request, pk):
     })
 
 
+def _parsear_offset(request):
+    """offset_x/offset_y (POST) — el "candado" a un punto exacto dentro de
+    la caja del compás (ver Anotacion.offset_x). Ambos o ninguno: si falta
+    alguno, o no son números, se toma como "sin offset" (ancla al compás,
+    default). Acotado a [0,1] — un click nunca debería mandar algo fuera
+    de rango, pero no cuesta nada blindarlo."""
+    ox_raw = request.POST.get("offset_x")
+    oy_raw = request.POST.get("offset_y")
+    if ox_raw is None or oy_raw is None:
+        return None, None
+    try:
+        ox, oy = float(ox_raw), float(oy_raw)
+    except ValueError:
+        return None, None
+    return max(0.0, min(1.0, ox)), max(0.0, min(1.0, oy))
+
+
 @login_required
 @require_POST
 def guardar_anotacion(request, pk):
@@ -1388,7 +1407,12 @@ def guardar_anotacion(request, pk):
     después (ver notas de diseño de Anotacion — reasignar de quién es una
     anotación ya existente no tiene un caso de uso real). El mismo
     endpoint sirve para "mover" (arrastrar): el cliente reenvía el texto
-    sin cambios junto con el compás/posición nuevos."""
+    sin cambios junto con el compás/posición (o el offset, si es de punto
+    exacto) nuevos. "offset_x"/"offset_y" (opcionales): el "candado" a un
+    punto exacto — se fijan sólo al crear (el modo no cambia después) y,
+    si ya estaba en modo punto, se pueden actualizar al arrastrarla
+    (nunca al revés: una de compás no pasa a tener offset por esta vía,
+    ver más abajo)."""
     obra = get_object_or_404(Obra, pk=pk)
     try:
         compas = int(request.POST.get("compas", ""))
@@ -1400,6 +1424,7 @@ def guardar_anotacion(request, pk):
     posicion = request.POST.get("posicion") or "arriba"
     if posicion not in ("arriba", "abajo"):
         return JsonResponse({"ok": False, "error": "posición inválida"}, status=400)
+    offset_x, offset_y = _parsear_offset(request)
 
     anotacion_id = request.POST.get("id")
     if anotacion_id:
@@ -1408,8 +1433,15 @@ def guardar_anotacion(request, pk):
             return HttpResponseForbidden()
         anotacion.compas = compas
         anotacion.texto = texto
-        anotacion.posicion = posicion
-        anotacion.save(update_fields=["compas", "texto", "posicion", "actualizado"])
+        campos = ["compas", "texto", "actualizado"]
+        if anotacion.offset_x is not None and offset_x is not None:
+            anotacion.offset_x = offset_x
+            anotacion.offset_y = offset_y
+            campos += ["offset_x", "offset_y"]
+        else:
+            anotacion.posicion = posicion
+            campos.append("posicion")
+        anotacion.save(update_fields=campos)
         return JsonResponse({"ok": True, "anotacion": _serializar_anotacion(anotacion, request.user)})
 
     nivel = request.POST.get("nivel")
@@ -1418,18 +1450,22 @@ def guardar_anotacion(request, pk):
     if nivel == "obra":
         if not (obra.owner_id == request.user.id or _es_admin(request.user)):
             return HttpResponseForbidden()
-        anotacion = Anotacion.objects.create(obra=obra, compas=compas, texto=texto, posicion=posicion)
+        anotacion = Anotacion.objects.create(
+            obra=obra, compas=compas, texto=texto, posicion=posicion, offset_x=offset_x, offset_y=offset_y,
+        )
     elif nivel == "parte":
         if not partitura or not (partitura.owner_id == request.user.id or _es_admin(request.user)):
             return HttpResponseForbidden()
         anotacion = Anotacion.objects.create(
             obra=obra, partitura=partitura, compas=compas, texto=texto, posicion=posicion,
+            offset_x=offset_x, offset_y=offset_y,
         )
     elif nivel == "privada":
         if not partitura:
             return JsonResponse({"ok": False, "error": "una anotación privada necesita una parte elegida"}, status=400)
         anotacion = Anotacion.objects.create(
             obra=obra, partitura=partitura, usuario=request.user, compas=compas, texto=texto, posicion=posicion,
+            offset_x=offset_x, offset_y=offset_y,
         )
     else:
         return JsonResponse({"ok": False, "error": "nivel inválido"}, status=400)
