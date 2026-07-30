@@ -333,7 +333,7 @@ def _obra_completa(obra):
     navegables = segmentos_navegables(obra)
     if not navegables:
         return False
-    pulsos, completo, _cambios = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios, _rampas = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     if not completo or not pulsos:
         return False
     return not any(p['duracion_compases'] is None for p in pulsos)
@@ -1289,7 +1289,7 @@ def plan_obra(request, pk):
         hasta_compas, hasta_pulso = None, None
     hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
 
-    pulsos, completo, cambios = construir_plan(
+    pulsos, completo, cambios, rampas = construir_plan(
         obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
     )
@@ -1323,6 +1323,7 @@ def plan_obra(request, pk):
         "pulsos": pulsos,
         "completo": completo,
         "cambios": cambios,
+        "rampas": rampas,
         "primer_pulso_tiempo_real": primer_pulso_tiempo_real,
     })
 

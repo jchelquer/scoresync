@@ -230,7 +230,7 @@ class EfectoTempoForm(forms.ModelForm):
                 self.add_error('hasta_texto', 'Formato inválido — usá "compás" o "compás,pulso" (ej: 20 o 20,3).')
             else:
                 if compas_hasta is None:
-                    self.add_error('hasta_texto', 'Un accelerando/ritardando necesita dónde termina.')
+                    self.add_error('hasta_texto', 'Un accelerando/rallentando necesita dónde termina.')
                 self.instance.compas_hasta = compas_hasta
                 self.instance.pulso_hasta = pulso_hasta
 

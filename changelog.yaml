@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.22.1"
+  date: "2026-07-30"
+  changes:
+    - type: nuevo
+      text: "Ahora se ve en Practicar dónde hay un accelerando o un rallentando: una raya punteada con la etiqueta \"accel.\"/\"rall.\" muestra el tramo, arriba del pentagrama, junto con el resto de los avisos de cambio."
+    - type: mejorado
+      text: "\"Ritardando\" pasó a llamarse \"Rallentando\" en toda la app (el término más frecuente en la práctica)."
+    - type: mejorado
+      text: "El texto de los avisos de cambio y de las anotaciones ahora es gris (oscuro sobre fondos de color, claro sobre fondos grises) en vez de blanco o negro puro, para no confundirse con la tinta real de la partitura."
 - version: "1.22.0"
   date: "2026-07-30"
   changes:

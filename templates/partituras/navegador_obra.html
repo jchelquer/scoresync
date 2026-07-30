@@ -675,6 +675,11 @@
   // en la ventana visible — la ventana ya muestra sistemas por delante del
   // actual, así que el aviso aparece solo con antelación real.
   let cambiosPorCompas = new Map();
+  // EfectoTempo accelerando/rallentando de TODA la obra (ver
+  // _resolver_rampas/construir_plan) — a diferencia de cambios, no se
+  // reindexa por compás: dibujarRampas recorre esta lista entera en cada
+  // repintado y decide sola qué tramo cae en la ventana actual.
+  let rampasObra = [];
   // Contraparte de acumulados/totalDuracion pero con duracion_compases (ver
   // construir_plan) en vez de la calculada pura — nunca se le aplica
   // velocidad (un tiempo real capturado no es algo que se pueda
@@ -1156,6 +1161,7 @@
         if (!cambiosPorCompas.has(c.compas)) cambiosPorCompas.set(c.compas, []);
         cambiosPorCompas.get(c.compas).push(c);
       });
+      rampasObra = data.rampas || [];
       if (ventanaActiva) repintarScore();
     } catch (e) {
       // silencioso a propósito, ver comentario de arriba
@@ -1397,8 +1403,17 @@
     ventana.escalaRender = escala; // px en pantalla por unidad de píxel natural de la imagen
     dibujarNumerosCompas(ventana);
     dibujarAvisosCambio(ventana);
+    dibujarRampas(ventana);
     dibujarAnotaciones(ventana);
   }
+
+  // Gris, no blanco/negro puro, para el texto de todo lo que se dibuja
+  // ENCIMA de la partitura (número/avisos/anotaciones) — la notación real
+  // es tinta negra sobre papel claro; un texto blanco o negro puro se
+  // podía confundir con eso. Gris oscuro sobre fondos de color vivo, gris
+  // claro sobre fondos grises/negros (número, anotaciones privadas).
+  const TEXTO_SOBRE_COLOR = '#2b2b2b';
+  const TEXTO_SOBRE_GRIS = '#e0e0e0';
 
   // Número de cada compás visible en la ventana (todos, no sólo el
   // actual/siguiente) — toggleable (switch junto al zoom), para ubicarse
@@ -1424,7 +1439,7 @@
       const anchoTexto = ctx.measureText(etiqueta).width;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
       ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = TEXTO_SOBRE_GRIS;
       ctx.fillText(etiqueta, px, py);
     });
   }
@@ -1468,10 +1483,109 @@
         ctx.fillStyle = COLOR_AVISO_CAMBIO[c.tipo] || '#666666';
         ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = TEXTO_SOBRE_COLOR;
         ctx.fillText(etiqueta, px, py);
         ctx.globalAlpha = 1;
         py += 15;
+      });
+    });
+  }
+
+  // Raya punteada mostrando el tramo de un accelerando/rallentando (ver
+  // rampasObra/_resolver_rampas) — a diferencia de cambios (un valor
+  // puntual), esto es un TRAMO, así que en vez de una cajita en un
+  // compás se dibuja una línea entre el compás de arranque y el de
+  // llegada. Deliberadamente a nivel de COMPÁS, no de pulso exacto (el
+  // cliente no tiene pulsos_por_compas de cada compás fuera del pulso
+  // que se está reproduciendo en ese instante) — alcanza para mostrar
+  // "más o menos desde acá hasta allá", que es lo que se pidió, sin
+  // necesitar datos nuevos. Mismo toggle que los avisos de cambio (son
+  // el mismo tipo de información — hechos de tempo — mostrados de forma
+  // distinta porque uno es puntual y el otro es un tramo).
+  const ETIQUETA_RAMPA = { accelerando: 'accel.', ritardando: 'rall.' };
+
+  function dibujarRampas(ventana) {
+    if (!toggleAvisosCambio || !toggleAvisosCambio.checked || !rampasObra.length) return;
+    const canvas = scoreVentanaCanvas;
+    const ctx = canvas.getContext('2d');
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+
+    ventana.sistemas.forEach((sistema) => {
+      const compasesDelSistema = pagina.compases.filter(c => c.sistema_orden === sistema.orden);
+      if (!compasesDelSistema.length) return;
+      const primerNum = Math.min(...compasesDelSistema.map(c => c.numero));
+      const ultimaFila = compasesDelSistema.reduce((a, b) => (a.x > b.x ? a : b));
+      const ultimoNum = ultimaFila.numero + (ultimaFila.repeticiones || 1) - 1;
+      const cajaSistema = calcularCaja({ numero: primerNum }, pagina);
+      if (!cajaSistema) return;
+      // ARRIBA del pentagrama (convención real de accelerando/rallentando),
+      // misma franja donde ya arrancan los avisos de cambio (debajo del
+      // número de compás) — no en caja.bottom (eso cae en el hueco ANTES
+      // del PRÓXIMO sistema, tapando su número, error de la versión previa).
+      const y = (cajaSistema.top - ventana.top) * img.naturalHeight * escala + 16;
+      const alto = 14;
+
+      rampasObra.forEach((r) => {
+        if (r.compas_hasta < primerNum || r.compas_desde > ultimoNum) return; // no toca este sistema
+
+        // Si arranca/termina DENTRO de este sistema, desde/hasta el borde
+        // de ESE compás puntual; si el tramo ya venía de un sistema
+        // anterior (o sigue hacia uno posterior) todavía dentro de la
+        // misma ventana, se extiende hasta el borde de contenido visible
+        // de la página en ese lado — sigue siendo "hasta donde alcanza a
+        // verse", no requiere cruzar la línea entre sistemas con un dibujo.
+        let xIni;
+        if (r.compas_desde >= primerNum) {
+          const fila = compasesDelSistema.find(c => r.compas_desde >= c.numero && r.compas_desde < c.numero + (c.repeticiones || 1));
+          const caja = fila && calcularCaja({ numero: fila.numero }, pagina);
+          xIni = caja ? (caja.left - pagina.margen_x0) * img.naturalWidth * escala : null;
+        } else {
+          xIni = 0;
+        }
+        let xFin;
+        if (r.compas_hasta <= ultimoNum) {
+          const fila = compasesDelSistema.find(c => r.compas_hasta >= c.numero && r.compas_hasta < c.numero + (c.repeticiones || 1));
+          const caja = fila && calcularCaja({ numero: fila.numero }, pagina);
+          xFin = caja ? (caja.right - pagina.margen_x0) * img.naturalWidth * escala : null;
+        } else {
+          xFin = (pagina.margen_x1 - pagina.margen_x0) * img.naturalWidth * escala;
+        }
+        if (xIni == null || xFin == null || xFin <= xIni) return;
+
+        // Etiqueta abreviada ("accel."/"rall.") — sólo en el sistema donde
+        // arranca DE VERDAD el tramo (no en los que sólo lo continúan) —
+        // si no, la misma rampa repetiría la etiqueta en cada sistema que
+        // atraviesa. La raya sigue en la MISMA fila, arrancando justo
+        // después de la etiqueta (no en una fila aparte).
+        let xRayaIni = xIni;
+        if (r.compas_desde >= primerNum) {
+          const etiqueta = ETIQUETA_RAMPA[r.tipo] || r.tipo_display;
+          ctx.font = '11px sans-serif';
+          ctx.textBaseline = 'top';
+          const anchoTexto = ctx.measureText(etiqueta).width;
+          ctx.globalAlpha = 0.55;
+          ctx.fillStyle = COLOR_AVISO_CAMBIO.tempo;
+          ctx.fillRect(xIni - 2, y - 1, anchoTexto + 4, alto);
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = TEXTO_SOBRE_COLOR;
+          ctx.fillText(etiqueta, xIni, y);
+          ctx.globalAlpha = 1;
+          xRayaIni = xIni + anchoTexto + 6;
+        }
+        if (xRayaIni >= xFin) return; // no queda ancho para la raya en este tramo
+
+        const yRaya = y + alto / 2 - 1; // centrada con la etiqueta
+        ctx.save();
+        ctx.strokeStyle = COLOR_AVISO_CAMBIO.tempo; // mismo azul que ya identifica "tempo" en los avisos
+        ctx.globalAlpha = 0.8;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(xRayaIni, yRaya);
+        ctx.lineTo(xFin, yRaya);
+        ctx.stroke();
+        ctx.restore();
       });
     });
   }
@@ -1596,7 +1710,9 @@
         ctx.fillStyle = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
         ctx.fillRect(px - 2, py, anchoTexto + 4, alto);
         ctx.globalAlpha = 0.8;
-        ctx.fillStyle = '#000000';
+        // "privada" es un gris (no un color vivo como obra/parte) — le
+        // toca texto CLARO, igual criterio que el número de compás.
+        ctx.fillStyle = a.nivel === 'privada' ? TEXTO_SOBRE_GRIS : TEXTO_SOBRE_COLOR;
         ctx.fillText(etiqueta, px, py + 1);
         ctx.globalAlpha = 1;
         ultimasCajasAnotaciones.push({ x: px - 2, y: py, w: anchoTexto + 4, h: alto, anotacion: a });
@@ -2745,6 +2861,7 @@
       if (!cambiosPorCompas.has(c.compas)) cambiosPorCompas.set(c.compas, []);
       cambiosPorCompas.get(c.compas).push(c);
     });
+    rampasObra = data.rampas || [];
     reconstruirTiempos();
     // "Ejecutar con audio" pedido pero sin ningún ancla real (de la fuente
     // de temporización elegida) para el arranque de este rango — no se

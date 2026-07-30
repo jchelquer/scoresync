@@ -345,7 +345,7 @@ class EfectoTempo(models.Model):
 
     TIPOS = [
         ('accelerando', 'Accelerando'),
-        ('ritardando', 'Ritardando'),
+        ('ritardando', 'Rallentando'),
         ('calderon', 'Calderón'),
         ('pausa', 'Pausa'),
     ]

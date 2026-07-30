@@ -826,6 +826,7 @@ def _resolver_rampas(obra, notacion_por_compas):
             'compas_hasta': e.compas_hasta,
             'pulso_hasta': pulso_hasta_resuelto,
             'bpm_llegada': bpm_llegada,
+            'tipo': e.tipo,
             'tipo_display': e.get_tipo_display(),
             'total_pulsos': total,
         })
@@ -1226,7 +1227,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
       a nivel de pulso eso sale solo, en vez de tener que tratarlo como
       caso especial en la duración de "ese compás".
 
-    Devuelve (pulsos, completo, cambios): pulsos es la lista de dicts (uno
+    Devuelve (pulsos, completo, cambios, rampas): pulsos es la lista de dicts (uno
     por pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
     es_primer_pulso_compas/acento/indicacion_compas/bpm/
     variacion_tempo_display/bpm_llegada/descripcion/duracion/
@@ -1250,10 +1251,16 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     aviso visual del navegador (ver dibujarAvisosCambio en
     navegador_obra.html), no confundir con variacion_tempo_display/
     bpm_llegada (que son de un accelerando/ritardando en curso, pulso a
-    pulso — acá 'tempo' sólo marca una MarcaNotacion nueva de verdad)."""
+    pulso — acá 'tempo' sólo marca una MarcaNotacion nueva de verdad);
+    rampas es la salida de _resolver_rampas tal cual (uno por cada
+    EfectoTempo accelerando/ritardando de TODA la obra, no sólo del tramo
+    navegado — a diferencia de cambios, no se construye caminando el
+    rango, es un índice de posición ya resuelto) — pensada para dibujar
+    la raya de "hasta dónde llega" en el navegador (ver dibujarRampas en
+    navegador_obra.html), independiente de cambios."""
     navegables = segmentos_navegables(obra)
     if not navegables:
-        return [], True
+        return [], True, [], []
 
     # La "pasada" de cada ocurrencia de compás, la notación (compás/
     # armadura/tempo) resuelta compás a compás, y las marcas puntuales por
@@ -1472,7 +1479,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
             break
         pos = avanzar_compas(obra, seg, compas)
 
-    return pulsos, completo, cambios
+    return pulsos, completo, cambios, rampas
 
 
 def compases_desenrollados(obra):
@@ -1517,7 +1524,7 @@ def compases_desenrollados(obra):
     if not navegables:
         return [], True
 
-    pulsos, completo, _cambios = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios, _rampas = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     pasadas = _pasadas_por_compas(obra)
     marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
     valor_por_umbral = {p['compas_desde']: p['valor_segundos'] for p in indice_pausas(obra)}
