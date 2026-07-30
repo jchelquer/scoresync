@@ -1685,7 +1685,14 @@
         const corto = lineas.length > 1 || lineas[0].length > 40;
         const etiqueta = lineas[0].slice(0, 40) + (corto ? '…' : '');
         const anchoTexto = ctx.measureText(etiqueta).width;
-        const px = pxDerecha - anchoTexto;
+        // Acotado a los dos lados del canvas — un compás angosto (último de
+        // un sistema corto) con un texto largo podía empujar el borde
+        // izquierdo a negativo (fuera del canvas, invisible en silencio,
+        // sin ningún error) porque el ancho del texto (tamaño de fuente
+        // fijo, no escala con el zoom) puede superar el ancho disponible
+        // del compás. Mejor visible-y-superpuesto que invisible — mismo
+        // criterio que ya se aplicó para arriba/abajo.
+        const px = Math.max(2, Math.min(pxDerecha - anchoTexto, canvas.width - anchoTexto - 2));
         // DENTRO de la caja del compás (nunca afuera, ver más abajo), desde
         // el extremo correspondiente hacia el pentagrama — arriba arranca
         // pegada al borde superior y crece hacia abajo, abajo arranca
