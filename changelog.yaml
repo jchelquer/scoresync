@@ -1,6 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.23.0"
+  date: "2026-07-31"
+  changes:
+    - type: nuevo
+      text: "Nuevo botón \"📄 Exportar PDF\" en Practicar: descarga la parte que estás siguiendo como PDF, página completa (con título y pie, no sólo el pentagrama), con los números de compás/avisos/rampas de tempo/anotaciones que estén visibles en ese momento — sin el recuadro del compás en ejecución, que es sólo de la pantalla."
+    - type: mejorado
+      text: "El tamaño de los números de compás, avisos, rampas de tempo y anotaciones ahora acompaña el zoom (y la resolución del PDF exportado) en vez de quedar fijo en un tamaño de pantalla — antes se veían cada vez más chicos en proporción cuanto más se acercaba el zoom, o en el PDF."
 - version: "1.22.4"
   date: "2026-07-30"
   changes:

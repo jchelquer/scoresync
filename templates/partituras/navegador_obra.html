@@ -312,6 +312,7 @@
     <label class="form-check-label small ms-1" for="toggle-mostrar-anotaciones" style="color: var(--ss-text-muted);">{% translate "anotaciones" %}</label>
   </div>
   <button id="btn-anotar" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Anotar — clic sobre la partitura para dejar un cartel de texto en ese compás. Se queda activa hasta que la apagués de nuevo o apretés Esc.' %}">✏️ {% translate "Anotar" %}</button>
+  <button id="btn-exportar-pdf" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Exportar esta parte a PDF, con los números de compás/avisos/anotaciones que estén visibles ahora (sin el recuadro del compás en ejecución, eso es sólo de la pantalla).' %}">📄 {% translate "Exportar PDF" %}</button>
   {% endif %}
 </div>
 </div>
@@ -443,6 +444,7 @@
   const controlAvisosCambio = document.getElementById('control-avisos-cambio');
   const controlMostrarAnotaciones = document.getElementById('control-mostrar-anotaciones');
   const btnAnotar = document.getElementById('btn-anotar');
+  const btnExportarPdf = document.getElementById('btn-exportar-pdf');
   const audioNav = document.getElementById('nav-audio');
   const navCompas = document.getElementById('nav-compas');
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
@@ -486,6 +488,7 @@
     { el: controlAvisosCambio, destino: barraCompacta },
     { el: controlMostrarAnotaciones, destino: barraCompacta },
     { el: btnAnotar, destino: barraCompacta },
+    { el: btnExportarPdf, destino: barraCompacta },
     { el: btnModoScore, destino: barraCompacta },
     { el: btnAyudaNavegador, destino: barraCompacta },
     { el: linkVolverObra, destino: barraCompacta },
@@ -1245,6 +1248,101 @@
     });
   }
 
+  // ── Exportar a PDF (página COMPLETA, no el recorte de margen que usa
+  // la pantalla para navegar) ────────────────────────────────────────────
+  // Reusa el mismo dibujo de siempre (números/avisos/rampas/anotaciones)
+  // en vez de reimplementarlo en Python: por cada página se arma una
+  // "ventana" sintética que abarca TODOS los sistemas y se dibuja en un
+  // canvas invisible, a la resolución nativa de la imagen ya rasterizada
+  // (escalaRender=1 — ni de más ni de menos). `pagina.imagen_url` YA es
+  // la página entera (título, pie, todo) — el recorte a margen_x0..x1/
+  // margen_y0..y1 lo hacía esta misma función antes, sólo para la vista
+  // de pantalla; para exportar no conviene, se perdía lo que quedara
+  // fuera de esa caja de contenido real. Las cuatro funciones de dibujo
+  // calculan la posición horizontal restando pagina.margen_x0 (pensado
+  // para cuando SÍ hay recorte) — en vez de tocarlas, se les pasa una
+  // COPIA de la página con márgenes en [0,1] (resta/división no-op); lo
+  // vertical se resuelve aparte con ventana.top=0/bottom=1, que sí es un
+  // parámetro propio de la ventana.
+  function construirVentanaPaginaCompleta(pagina, img) {
+    const paginaSinRecorte = { ...pagina, margen_x0: 0, margen_x1: 1 };
+    return {
+      pagina: paginaSinRecorte, img,
+      sistemas: pagina.sistemas,
+      top: 0,
+      bottom: 1,
+      escalaRender: 1,
+    };
+  }
+
+  async function renderizarPaginaCompletaEnCanvas(pagina, canvas) {
+    const img = await obtenerImagen(pagina);
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    const ventana = construirVentanaPaginaCompleta(pagina, img);
+    dibujarNumerosCompas(ventana, canvas);
+    dibujarAvisosCambio(ventana, canvas);
+    dibujarRampas(ventana, canvas);
+    dibujarAnotaciones(ventana, canvas);
+  }
+
+  // Recorre TODAS las páginas de la parte que se está siguiendo, las
+  // dibuja de a una en un canvas invisible (mismo dibujo de siempre, ver
+  // arriba) y las manda al servidor para que arme un solo PDF (ver
+  // armar_pdf_desde_imagenes en pdf.py — no vuelve a dibujar nada ahí,
+  // sólo empaqueta). Muestra qué página está procesando por si tarda.
+  let exportandoPdf = false;
+  async function exportarPdf() {
+    if (exportandoPdf || !scoreGeometria || !btnExportarPdf) return;
+    const paginas = Object.values(scoreGeometria.porPagina).sort((a, b) => a.numero - b.numero);
+    if (!paginas.length) return;
+    exportandoPdf = true;
+    const textoOriginal = btnExportarPdf.textContent;
+    const canvasTmp = document.createElement('canvas');
+    try {
+      const form = new FormData();
+      for (let i = 0; i < paginas.length; i++) {
+        btnExportarPdf.disabled = true;
+        btnExportarPdf.textContent = '{% translate "Generando… página" %} ' + (i + 1) + '/' + paginas.length;
+        await renderizarPaginaCompletaEnCanvas(paginas[i], canvasTmp);
+        const blob = await new Promise((resolve) => canvasTmp.toBlob(resolve, 'image/png'));
+        form.append('paginas', blob, `pagina_${paginas[i].numero}.png`);
+        form.append('numeros', String(paginas[i].numero));
+      }
+      btnExportarPdf.textContent = '{% translate "Armando el PDF…" %}';
+      const parteVal = formRango ? new FormData(formRango).get('parte') : null;
+      const url = '{% url "partituras:exportar_pdf_partitura" obra.pk %}' + (parteVal ? '?parte=' + encodeURIComponent(parteVal) : '');
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        body: form,
+      });
+      if (!resp.ok) throw new Error('export failed');
+      const blobPdf = await resp.blob();
+      const enlace = document.createElement('a');
+      enlace.href = URL.createObjectURL(blobPdf);
+      const dispo = resp.headers.get('Content-Disposition') || '';
+      const coincide = dispo.match(/filename="?([^"]+)"?/);
+      enlace.download = coincide ? coincide[1] : 'partitura.pdf';
+      document.body.appendChild(enlace);
+      enlace.click();
+      enlace.remove();
+      URL.revokeObjectURL(enlace.href);
+    } catch (e) {
+      btnExportarPdf.textContent = '{% translate "No se pudo exportar" %}';
+      setTimeout(() => { btnExportarPdf.textContent = textoOriginal; }, 2500);
+      exportandoPdf = false;
+      btnExportarPdf.disabled = false;
+      return;
+    }
+    btnExportarPdf.textContent = textoOriginal;
+    btnExportarPdf.disabled = false;
+    exportandoPdf = false;
+  }
+
   // Click sobre la partitura → a qué número de compás corresponde ese
   // punto (o null si cayó fuera de cualquier caja) — inverso del mismo
   // transform que usa renderizarVentanaBase para dibujar el recorte.
@@ -1422,30 +1520,44 @@
   const TEXTO_SOBRE_COLOR = '#2b2b2b';
   const TEXTO_SOBRE_GRIS = '#e0e0e0';
 
+  // Todo lo que se dibuja ENCIMA de la partitura (número/avisos/rampas/
+  // anotaciones) estaba en píxeles de pantalla FIJOS (fuente, alto de
+  // caja, radio del marcador, ancho de línea) — no seguían ni el zoom ni
+  // la resolución nativa de exportar a PDF (mucho más alta), así que a
+  // más zoom, o en el PDF, quedaban cada vez más chicos en proporción a
+  // la partitura real. Se definen en cambio en píxeles NATURALES de la
+  // imagen (mismo criterio que ya usa toda la geometría — fracción de
+  // página × tamaño natural × escala) y se multiplican por `escala` al
+  // dibujar, así crecen/achican junto con el zoom o la resolución de
+  // exportación. FACTOR_OVERLAY_NATURAL es la única perilla para ajustar
+  // el tamaño relativo de todo el conjunto de una — valores de referencia
+  // (fuente, alto de caja, etc.) son los mismos de antes, sólo reescalados.
+  const FACTOR_OVERLAY_NATURAL = 2.64;
+
   // Número de cada compás visible en la ventana (todos, no sólo el
   // actual/siguiente) — toggleable (switch junto al zoom), para ubicarse
   // rápido en una ventana que puede mostrar varios sistemas a la vez.
   // Fondo oscuro semitransparente fijo detrás del número: el papel de la
   // partitura es claro, texto claro solo ahí se perdería.
-  function dibujarNumerosCompas(ventana) {
+  function dibujarNumerosCompas(ventana, canvas = scoreVentanaCanvas) {
     if (!toggleNumerosCompas || !toggleNumerosCompas.checked) return;
-    const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
     const img = ventana.img, pagina = ventana.pagina;
     const escala = ventana.escalaRender;
+    const f = escala * FACTOR_OVERLAY_NATURAL;
     const ordenes = new Set(ventana.sistemas.map(s => s.orden));
-    ctx.font = 'bold 11px sans-serif';
+    ctx.font = `bold ${Math.max(1, Math.round(11 * f))}px sans-serif`;
     ctx.textBaseline = 'top';
     pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
       const caja = calcularCaja({ numero: compas.numero }, pagina);
       if (!caja) return;
-      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3;
-      const py = (caja.top - ventana.top) * img.naturalHeight * escala + 2;
+      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3 * f;
+      const py = (caja.top - ventana.top) * img.naturalHeight * escala + 2 * f;
       const repeticiones = compas.repeticiones || 1;
       const etiqueta = repeticiones > 1 ? `${compas.numero}-${compas.numero + repeticiones - 1}` : String(compas.numero);
       const anchoTexto = ctx.measureText(etiqueta).width;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
+      ctx.fillRect(px - 2 * f, py - 1 * f, anchoTexto + 4 * f, 14 * f);
       ctx.fillStyle = TEXTO_SOBRE_GRIS;
       ctx.fillText(etiqueta, px, py);
     });
@@ -1462,22 +1574,22 @@
   const COLOR_AVISO_CAMBIO = { compas: '#c77d17', armadura: '#7c4dc4', tempo: '#2f6fb3' };
   const PREFIJO_AVISO_CAMBIO = { tempo: '♩=' };
 
-  function dibujarAvisosCambio(ventana) {
+  function dibujarAvisosCambio(ventana, canvas = scoreVentanaCanvas) {
     if (!toggleAvisosCambio || !toggleAvisosCambio.checked || !cambiosPorCompas.size) return;
-    const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
     const img = ventana.img, pagina = ventana.pagina;
     const escala = ventana.escalaRender;
+    const f = escala * FACTOR_OVERLAY_NATURAL;
     const ordenes = new Set(ventana.sistemas.map(s => s.orden));
-    ctx.font = 'bold 11px sans-serif';
+    ctx.font = `bold ${Math.max(1, Math.round(11 * f))}px sans-serif`;
     ctx.textBaseline = 'top';
     pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
       const cambios = cambiosPorCompas.get(compas.numero);
       if (!cambios || !cambios.length) return;
       const caja = calcularCaja({ numero: compas.numero }, pagina);
       if (!caja) return;
-      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3;
-      let py = (caja.top - ventana.top) * img.naturalHeight * escala + 16; // debajo del número de compás
+      const px = (caja.left - pagina.margen_x0) * img.naturalWidth * escala + 3 * f;
+      let py = (caja.top - ventana.top) * img.naturalHeight * escala + 16 * f; // debajo del número de compás
       cambios.forEach((c) => {
         // La armadura ya viene transportada para esta parte (ver plan_obra)
         // — puede dar '' (sin alteraciones, Do M/La m) para un instrumento
@@ -1488,12 +1600,12 @@
         const anchoTexto = ctx.measureText(etiqueta).width;
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = COLOR_AVISO_CAMBIO[c.tipo] || '#666666';
-        ctx.fillRect(px - 2, py - 1, anchoTexto + 4, 14);
+        ctx.fillRect(px - 2 * f, py - 1 * f, anchoTexto + 4 * f, 14 * f);
         ctx.globalAlpha = 0.8;
         ctx.fillStyle = TEXTO_SOBRE_COLOR;
         ctx.fillText(etiqueta, px, py);
         ctx.globalAlpha = 1;
-        py += 15;
+        py += 15 * f;
       });
     });
   }
@@ -1511,12 +1623,12 @@
   // distinta porque uno es puntual y el otro es un tramo).
   const ETIQUETA_RAMPA = { accelerando: 'accel.', ritardando: 'rall.' };
 
-  function dibujarRampas(ventana) {
+  function dibujarRampas(ventana, canvas = scoreVentanaCanvas) {
     if (!toggleAvisosCambio || !toggleAvisosCambio.checked || !rampasObra.length) return;
-    const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
     const img = ventana.img, pagina = ventana.pagina;
     const escala = ventana.escalaRender;
+    const f = escala * FACTOR_OVERLAY_NATURAL;
 
     ventana.sistemas.forEach((sistema) => {
       const compasesDelSistema = pagina.compases.filter(c => c.sistema_orden === sistema.orden);
@@ -1530,8 +1642,8 @@
       // misma franja donde ya arrancan los avisos de cambio (debajo del
       // número de compás) — no en caja.bottom (eso cae en el hueco ANTES
       // del PRÓXIMO sistema, tapando su número, error de la versión previa).
-      const y = (cajaSistema.top - ventana.top) * img.naturalHeight * escala + 16;
-      const alto = 14;
+      const y = (cajaSistema.top - ventana.top) * img.naturalHeight * escala + 16 * f;
+      const alto = 14 * f;
 
       rampasObra.forEach((r) => {
         if (r.compas_hasta < primerNum || r.compas_desde > ultimoNum) return; // no toca este sistema
@@ -1568,26 +1680,26 @@
         let xRayaIni = xIni;
         if (r.compas_desde >= primerNum) {
           const etiqueta = ETIQUETA_RAMPA[r.tipo] || r.tipo_display;
-          ctx.font = '11px sans-serif';
+          ctx.font = `${Math.max(1, Math.round(11 * f))}px sans-serif`;
           ctx.textBaseline = 'top';
           const anchoTexto = ctx.measureText(etiqueta).width;
           ctx.globalAlpha = 0.55;
           ctx.fillStyle = COLOR_AVISO_CAMBIO.tempo;
-          ctx.fillRect(xIni - 2, y - 1, anchoTexto + 4, alto);
+          ctx.fillRect(xIni - 2 * f, y - 1 * f, anchoTexto + 4 * f, alto);
           ctx.globalAlpha = 0.8;
           ctx.fillStyle = TEXTO_SOBRE_COLOR;
           ctx.fillText(etiqueta, xIni, y);
           ctx.globalAlpha = 1;
-          xRayaIni = xIni + anchoTexto + 6;
+          xRayaIni = xIni + anchoTexto + 6 * f;
         }
         if (xRayaIni >= xFin) return; // no queda ancho para la raya en este tramo
 
-        const yRaya = y + alto / 2 - 1; // centrada con la etiqueta
+        const yRaya = y + alto / 2 - 1 * f; // centrada con la etiqueta
         ctx.save();
         ctx.strokeStyle = COLOR_AVISO_CAMBIO.tempo; // mismo azul que ya identifica "tempo" en los avisos
         ctx.globalAlpha = 0.8;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 4]);
+        ctx.lineWidth = Math.max(1, 2 * f);
+        ctx.setLineDash([5 * f, 4 * f]);
         ctx.beginPath();
         ctx.moveTo(xRayaIni, yRaya);
         ctx.lineTo(xFin, yRaya);
@@ -1659,15 +1771,19 @@
   // hacia ARRIBA desde el borde superior del compás (posicion=arriba) o
   // hacia ABAJO desde su borde inferior (posicion=abajo), independientes
   // entre sí — así varias anotaciones en el mismo compás no se superponen.
-  function dibujarAnotaciones(ventana) {
-    ultimasCajasAnotaciones = [];
+  function dibujarAnotaciones(ventana, canvas = scoreVentanaCanvas) {
+    // ultimasCajasAnotaciones es el hit-test del canvas de PANTALLA (click/
+    // arrastre) — al exportar se dibuja esto mismo sobre un canvas invisible,
+    // aparte, así que no debe tocar ese estado ni pisarlo a mitad de camino.
+    const esPantalla = canvas === scoreVentanaCanvas;
+    if (esPantalla) ultimasCajasAnotaciones = [];
     if (!toggleMostrarAnotaciones || !toggleMostrarAnotaciones.checked || !anotacionesPorCompas.size) return;
-    const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
     const img = ventana.img, pagina = ventana.pagina;
     const escala = ventana.escalaRender;
+    const f = escala * FACTOR_OVERLAY_NATURAL;
     const ordenes = new Set(ventana.sistemas.map(s => s.orden));
-    ctx.font = '11px sans-serif';
+    ctx.font = `${Math.max(1, Math.round(11 * f))}px sans-serif`;
     ctx.textBaseline = 'top';
     pagina.compases.filter(c => ordenes.has(c.sistema_orden)).forEach((compas) => {
       const lista = anotacionesPorCompas.get(compas.numero);
@@ -1681,10 +1797,10 @@
       // pocos pulsos, caso raro (a diferencia del acumArriba/acumAbajo de
       // abajo, que sigue haciendo falta para VARIAS anotaciones juntas en
       // el mismo compás y lado).
-      const pxDerecha = (caja.right - pagina.margen_x0) * img.naturalWidth * escala - 3;
+      const pxDerecha = (caja.right - pagina.margen_x0) * img.naturalWidth * escala - 3 * f;
       const topPx = (caja.top - ventana.top) * img.naturalHeight * escala;
       const bottomPx = (caja.bottom - ventana.top) * img.naturalHeight * escala;
-      const alto = 14;
+      const alto = 14 * f;
       let acumArriba = 0;
       let acumAbajo = 0;
       lista.forEach((a) => {
@@ -1707,7 +1823,7 @@
           const colorNivel = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
 
           ctx.beginPath();
-          ctx.arc(puntoX, puntoY, 4, 0, Math.PI * 2);
+          ctx.arc(puntoX, puntoY, 4 * f, 0, Math.PI * 2);
           ctx.globalAlpha = 0.9;
           ctx.fillStyle = colorNivel;
           ctx.fill();
@@ -1715,27 +1831,27 @@
 
           // Mismo acotado a los bordes del canvas que el resto (ver más
           // abajo) — el texto arranca pegado al marcador, hacia la derecha.
-          const pxTexto = Math.max(2, Math.min(puntoX + 6, canvas.width - anchoTexto - 2));
+          const pxTexto = Math.max(2 * f, Math.min(puntoX + 6 * f, canvas.width - anchoTexto - 2 * f));
           const pyTexto = Math.max(0, Math.min(puntoY - alto / 2, canvas.height - alto));
           ctx.globalAlpha = 0.55;
           ctx.fillStyle = colorNivel;
-          ctx.fillRect(pxTexto - 2, pyTexto, anchoTexto + 4, alto);
+          ctx.fillRect(pxTexto - 2 * f, pyTexto, anchoTexto + 4 * f, alto);
           ctx.globalAlpha = 0.8;
           ctx.fillStyle = TEXTO_SOBRE_COLOR;
-          ctx.fillText(etiqueta, pxTexto, pyTexto + 1);
+          ctx.fillText(etiqueta, pxTexto, pyTexto + 1 * f);
           ctx.globalAlpha = 1;
-          ultimasCajasAnotaciones.push({ x: pxTexto - 2, y: pyTexto, w: anchoTexto + 4, h: alto, anotacion: a });
+          if (esPantalla) ultimasCajasAnotaciones.push({ x: pxTexto - 2 * f, y: pyTexto, w: anchoTexto + 4 * f, h: alto, anotacion: a });
           return;
         }
 
         // Acotado a los dos lados del canvas — un compás angosto (último de
         // un sistema corto) con un texto largo podía empujar el borde
         // izquierdo a negativo (fuera del canvas, invisible en silencio,
-        // sin ningún error) porque el ancho del texto (tamaño de fuente
-        // fijo, no escala con el zoom) puede superar el ancho disponible
-        // del compás. Mejor visible-y-superpuesto que invisible — mismo
+        // sin ningún error) porque el ancho del texto (tamaño de fuente ya
+        // escalado, ver arriba) puede superar el ancho disponible del
+        // compás igual. Mejor visible-y-superpuesto que invisible — mismo
         // criterio que ya se aplicó para arriba/abajo.
-        const px = Math.max(2, Math.min(pxDerecha - anchoTexto, canvas.width - anchoTexto - 2));
+        const px = Math.max(2 * f, Math.min(pxDerecha - anchoTexto, canvas.width - anchoTexto - 2 * f));
         // DENTRO de la caja del compás (nunca afuera, ver más abajo), desde
         // el extremo correspondiente hacia el pentagrama — arriba arranca
         // pegada al borde superior y crece hacia abajo, abajo arranca
@@ -1747,10 +1863,10 @@
         let py;
         if (a.posicion === 'abajo') {
           py = bottomPx - alto - acumAbajo;
-          acumAbajo += alto + 2;
+          acumAbajo += alto + 2 * f;
         } else {
           py = topPx + acumArriba;
-          acumArriba += alto + 2;
+          acumArriba += alto + 2 * f;
         }
         // Semitransparente — a pedido del usuario, para que se pueda leer
         // la notación de abajo (mismo espíritu que un resaltador de papel).
@@ -1758,15 +1874,15 @@
         // para que siga siendo legible.
         ctx.globalAlpha = 0.55;
         ctx.fillStyle = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
-        ctx.fillRect(px - 2, py, anchoTexto + 4, alto);
+        ctx.fillRect(px - 2 * f, py, anchoTexto + 4 * f, alto);
         ctx.globalAlpha = 0.8;
         // Los tres niveles son colores vivos (privada pasó de gris a
         // violeta — se leía mal el gris sobre el fondo verde del editor,
         // ver conversación) — todos con texto oscuro, igual que avisos.
         ctx.fillStyle = TEXTO_SOBRE_COLOR;
-        ctx.fillText(etiqueta, px, py + 1);
+        ctx.fillText(etiqueta, px, py + 1 * f);
         ctx.globalAlpha = 1;
-        ultimasCajasAnotaciones.push({ x: px - 2, y: py, w: anchoTexto + 4, h: alto, anotacion: a });
+        if (esPantalla) ultimasCajasAnotaciones.push({ x: px - 2 * f, y: py, w: anchoTexto + 4 * f, h: alto, anotacion: a });
       });
     });
   }
@@ -1781,18 +1897,24 @@
     if (!ghostAnotacion) return;
     const canvas = scoreVentanaCanvas;
     const ctx = canvas.getContext('2d');
+    // Sólo se dibuja durante un arrastre en pantalla — ventanaActiva es
+    // siempre la de pantalla en ese momento, así que su escalaRender sirve
+    // para el mismo escalado que ya usa dibujarAnotaciones (si no, el
+    // fantasma quedaba con un tamaño fijo, distinto del cartel real al
+    // hacer zoom).
+    const f = (ventanaActiva ? ventanaActiva.escalaRender : 1) * FACTOR_OVERLAY_NATURAL;
     const lineas = ghostAnotacion.texto.split('\n');
     const corto = lineas.length > 1 || lineas[0].length > 40;
     const etiqueta = lineas[0].slice(0, 40) + (corto ? '…' : '');
-    ctx.font = '11px sans-serif';
+    ctx.font = `${Math.max(1, Math.round(11 * f))}px sans-serif`;
     ctx.textBaseline = 'top';
     const anchoTexto = ctx.measureText(etiqueta).width;
-    const alto = 14;
+    const alto = 14 * f;
     ctx.globalAlpha = 0.55;
     ctx.fillStyle = COLOR_NIVEL_ANOTACION[ghostAnotacion.nivel] || '#666666';
-    ctx.fillRect(ghostAnotacion.x - anchoTexto / 2 - 2, ghostAnotacion.y - alto / 2, anchoTexto + 4, alto);
+    ctx.fillRect(ghostAnotacion.x - anchoTexto / 2 - 2 * f, ghostAnotacion.y - alto / 2, anchoTexto + 4 * f, alto);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(etiqueta, ghostAnotacion.x - anchoTexto / 2, ghostAnotacion.y - alto / 2 + 1);
+    ctx.fillText(etiqueta, ghostAnotacion.x - anchoTexto / 2, ghostAnotacion.y - alto / 2 + 1 * f);
     ctx.globalAlpha = 1;
   }
 
@@ -2033,6 +2155,8 @@
       if (e.key === 'Escape' && herramientaAnotando) salirModoAnotar();
     });
   }
+
+  if (btnExportarPdf) btnExportarPdf.addEventListener('click', exportarPdf);
 
   // Fondo de color sobre el PENÚLTIMO sistema de la ventana (nunca el
   // último, que es el que se está leyendo en este momento) con un recorte

@@ -751,6 +751,27 @@ msgstr "Send"
 msgid "Enviar comentario"
 msgstr "Send feedback"
 
+msgid "Exportar PDF"
+msgstr "Export PDF"
+
+msgid ""
+"Exportar esta parte a PDF, con los números de compás/avisos/anotaciones "
+"que estén visibles ahora (sin el recuadro del compás en ejecución, eso es "
+"sólo de la pantalla)."
+msgstr ""
+"Export this part to PDF, with whatever measure numbers/notices/"
+"annotations are currently visible (without the current-measure highlight "
+"box — that's only for the on-screen view)."
+
+msgid "Generando… página"
+msgstr "Generating… page"
+
+msgid "Armando el PDF…"
+msgstr "Building the PDF…"
+
+msgid "No se pudo exportar"
+msgstr "Couldn't export"
+
 msgid "Enviar enlace"
 msgstr "Send link"
 

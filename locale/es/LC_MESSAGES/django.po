@@ -757,6 +757,27 @@ msgstr "Enviar"
 msgid "Enviar comentario"
 msgstr "Enviar comentario"
 
+msgid "Exportar PDF"
+msgstr "Exportar PDF"
+
+msgid ""
+"Exportar esta parte a PDF, con los números de compás/avisos/anotaciones "
+"que estén visibles ahora (sin el recuadro del compás en ejecución, eso es "
+"sólo de la pantalla)."
+msgstr ""
+"Exportar esta parte a PDF, con los números de compás/avisos/anotaciones "
+"que estén visibles ahora (sin el recuadro del compás en ejecución, eso es "
+"sólo de la pantalla)."
+
+msgid "Generando… página"
+msgstr "Generando… página"
+
+msgid "Armando el PDF…"
+msgstr "Armando el PDF…"
+
+msgid "No se pudo exportar"
+msgstr "No se pudo exportar"
+
 msgid "Enviar enlace"
 msgstr "Enviar enlace"
 

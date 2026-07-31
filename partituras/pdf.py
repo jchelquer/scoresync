@@ -13,6 +13,25 @@ def contar_paginas(pdf_path):
         doc.close()
 
 
+def armar_pdf_desde_imagenes(imagenes):
+    """Arma un único PDF a partir de una lista de imágenes (bytes PNG, una
+    por página, YA en el orden final) — usado para exportar una parte con
+    las marcas (números/avisos/rampas/anotaciones) ya dibujadas del lado
+    del cliente sobre cada página completa (ver exportarPdf en
+    navegador_obra.html y exportar_pdf_partitura en views.py). No vuelve a
+    dibujar nada — el dibujo real vive sólo en el canvas/JS, esto sólo
+    empaqueta lo que ya llegó armado en un solo archivo."""
+    doc = fitz.open()
+    try:
+        for datos in imagenes:
+            pix = fitz.Pixmap(datos)
+            pagina = doc.new_page(width=pix.width, height=pix.height)
+            pagina.insert_image(pagina.rect, stream=datos)
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
 def rasterizar_pagina(pdf_path, numero_pagina, dpi=300):
     """
     Devuelve la página `numero_pagina` (1-indexada) como array numpy BGR,

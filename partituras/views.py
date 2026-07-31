@@ -25,7 +25,7 @@ from .models import (
     Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
-from .pdf import contar_paginas, rasterizar_pagina
+from .pdf import armar_pdf_desde_imagenes, contar_paginas, rasterizar_pagina
 from .services import (
     armadura_transportada, avanzar_compas, borrar_marcas_compas, buscar_posicion, compases_desenrollados,
     construir_plan, desplazar_marcas_compas, geometria_partitura, guardar_compases_pagina,
@@ -1351,6 +1351,44 @@ def score_geometria_obra(request, pk):
         "partitura": {"id": partitura.pk, "titulo": partitura.titulo, "parte": partitura.nombre_parte},
         "paginas": paginas,
     })
+
+
+@login_required
+@require_POST
+def exportar_pdf_partitura(request, pk):
+    """Arma un PDF de la parte que se está siguiendo (?parte=, mismo
+    criterio que score_geometria_obra) a partir de imágenes YA dibujadas
+    del lado del cliente — una por página, con lo que esté visible en ese
+    momento (números/avisos/rampas/anotaciones, ver exportarPdf en
+    navegador_obra.html). Esta vista no dibuja nada, sólo arma el archivo
+    final (ver armar_pdf_desde_imagenes) — evita reimplementar en Python
+    el mismo dibujo que ya vive (y se sigue ajustando) del lado del JS.
+    "paginas" (POST, archivos) y "numeros" (POST, uno por archivo, mismo
+    orden) — se reordena por número acá, no se confía en el orden de
+    subida."""
+    obra = get_object_or_404(Obra, pk=pk)
+    partitura = _partitura_seguida(obra, request)
+    if not partitura or not _puede_ver_partitura(request.user, partitura, obra=obra):
+        return HttpResponseForbidden()
+
+    archivos = request.FILES.getlist("paginas")
+    numeros_raw = request.POST.getlist("numeros")
+    if not archivos or len(archivos) != len(numeros_raw):
+        return JsonResponse({"ok": False, "error": "faltan páginas o no coinciden con los números"}, status=400)
+    try:
+        numeros = [int(n) for n in numeros_raw]
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "número de página inválido"}, status=400)
+
+    pares = sorted(zip(numeros, archivos), key=lambda par: par[0])
+    pdf_bytes = armar_pdf_desde_imagenes([archivo.read() for _numero, archivo in pares])
+
+    partes_nombre = [obra.titulo, partitura.nombre_parte or partitura.titulo]
+    nombre = "-".join(p for p in partes_nombre if p) + ".pdf"
+    nombre = nombre.replace("/", "-")
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return response
 
 
 @login_required

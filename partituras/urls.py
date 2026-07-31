@@ -33,6 +33,7 @@ urlpatterns = [
     path('obras/<int:pk>/preferencias/', views.guardar_preferencias_obra, name='guardar_preferencias_obra'),
     path('obras/<int:pk>/plan/', views.plan_obra, name='plan_obra'),
     path('obras/<int:pk>/score-geometria/', views.score_geometria_obra, name='score_geometria_obra'),
+    path('obras/<int:pk>/exportar-pdf/', views.exportar_pdf_partitura, name='exportar_pdf_partitura'),
     path('obras/<int:pk>/anotaciones/', views.anotaciones_obra, name='anotaciones_obra'),
     path('obras/<int:pk>/anotaciones/guardar/', views.guardar_anotacion, name='guardar_anotacion'),
     path('obras/<int:pk>/anotaciones/borrar/', views.borrar_anotacion, name='borrar_anotacion'),
