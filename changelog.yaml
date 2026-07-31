@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.23.1"
+  date: "2026-07-31"
+  changes:
+    - type: mejorado
+      text: "El fondo de color de los avisos de cambio y las anotaciones ahora es más claro (más pastel), para que se lean mejor sobre la partitura."
+    - type: mejorado
+      text: "Al hacer clic en un número de compás para editarlo (en Ajuste de barras), la cajita de edición ahora muestra primero las repeticiones (lo que se edita con más frecuencia) y después el número de compás, con las repeticiones ya seleccionadas para escribir directo."
+    - type: mejorado
+      text: "El botón \"Practicar\" en la pantalla de una parte ahora está destacado arriba de todo, igual que en la pantalla de la obra."
 - version: "1.23.0"
   date: "2026-07-31"
   changes:

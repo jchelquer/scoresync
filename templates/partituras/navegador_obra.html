@@ -1572,6 +1572,12 @@
   // está tocando el sistema anterior) sin tener que calcular nada de eso
   // acá. Un color distinto por tipo, apilados debajo del número de compás.
   const COLOR_AVISO_CAMBIO = { compas: '#c77d17', armadura: '#7c4dc4', tempo: '#2f6fb3' };
+  // Mismos tonos pero aclarados (mezclados con blanco) — pedido del usuario
+  // para que el FONDO de la cajita se vea más suave; el color "de identidad"
+  // de arriba se sigue usando tal cual para la raya de rampas (más fina,
+  // necesita más contraste). La transparencia (globalAlpha en los fillRect)
+  // queda igual por ahora, es un ajuste aparte a considerar después.
+  const COLOR_AVISO_CAMBIO_CLARO = { compas: '#e6c597', armadura: '#c4afe4', tempo: '#a1bedd' };
   const PREFIJO_AVISO_CAMBIO = { tempo: '♩=' };
 
   function dibujarAvisosCambio(ventana, canvas = scoreVentanaCanvas) {
@@ -1599,7 +1605,7 @@
         const etiqueta = (PREFIJO_AVISO_CAMBIO[c.tipo] || '') + valor;
         const anchoTexto = ctx.measureText(etiqueta).width;
         ctx.globalAlpha = 0.55;
-        ctx.fillStyle = COLOR_AVISO_CAMBIO[c.tipo] || '#666666';
+        ctx.fillStyle = COLOR_AVISO_CAMBIO_CLARO[c.tipo] || '#999999';
         ctx.fillRect(px - 2 * f, py - 1 * f, anchoTexto + 4 * f, 14 * f);
         ctx.globalAlpha = 0.8;
         ctx.fillStyle = TEXTO_SOBRE_COLOR;
@@ -1684,7 +1690,7 @@
           ctx.textBaseline = 'top';
           const anchoTexto = ctx.measureText(etiqueta).width;
           ctx.globalAlpha = 0.55;
-          ctx.fillStyle = COLOR_AVISO_CAMBIO.tempo;
+          ctx.fillStyle = COLOR_AVISO_CAMBIO_CLARO.tempo;
           ctx.fillRect(xIni - 2 * f, y - 1 * f, anchoTexto + 4 * f, alto);
           ctx.globalAlpha = 0.8;
           ctx.fillStyle = TEXTO_SOBRE_COLOR;
@@ -1716,6 +1722,10 @@
   // (Obra.owner/Partitura.owner) o de "soy yo" para las privadas, nunca
   // un concepto de permiso nuevo.
   const COLOR_NIVEL_ANOTACION = { obra: '#2f8f4e', parte: '#c77d17', privada: '#8e44ad' };
+  // Aclarados (ver COLOR_AVISO_CAMBIO_CLARO) — sólo para el FONDO de la
+  // cajita del texto; el marcador puntual (candado) y la etiqueta de nivel
+  // en el editor siguen usando el color de identidad de arriba, sin aclarar.
+  const COLOR_NIVEL_ANOTACION_CLARO = { obra: '#a1cdaf', parte: '#e6c597', privada: '#ccabda' };
   const ETIQUETA_NIVEL_ANOTACION = {
     obra: '{% translate "De obra" %}', parte: '{% translate "De parte" %}', privada: '{% translate "Privada" %}',
   };
@@ -1834,7 +1844,7 @@
           const pxTexto = Math.max(2 * f, Math.min(puntoX + 6 * f, canvas.width - anchoTexto - 2 * f));
           const pyTexto = Math.max(0, Math.min(puntoY - alto / 2, canvas.height - alto));
           ctx.globalAlpha = 0.55;
-          ctx.fillStyle = colorNivel;
+          ctx.fillStyle = COLOR_NIVEL_ANOTACION_CLARO[a.nivel] || '#999999';
           ctx.fillRect(pxTexto - 2 * f, pyTexto, anchoTexto + 4 * f, alto);
           ctx.globalAlpha = 0.8;
           ctx.fillStyle = TEXTO_SOBRE_COLOR;
@@ -1873,7 +1883,7 @@
         // Sólo el fondo lleva alpha: el texto se dibuja después, opaco,
         // para que siga siendo legible.
         ctx.globalAlpha = 0.55;
-        ctx.fillStyle = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
+        ctx.fillStyle = COLOR_NIVEL_ANOTACION_CLARO[a.nivel] || '#999999';
         ctx.fillRect(px - 2 * f, py, anchoTexto + 4 * f, alto);
         ctx.globalAlpha = 0.8;
         // Los tres niveles son colores vivos (privada pasó de gris a
@@ -1911,7 +1921,7 @@
     const anchoTexto = ctx.measureText(etiqueta).width;
     const alto = 14 * f;
     ctx.globalAlpha = 0.55;
-    ctx.fillStyle = COLOR_NIVEL_ANOTACION[ghostAnotacion.nivel] || '#666666';
+    ctx.fillStyle = COLOR_NIVEL_ANOTACION_CLARO[ghostAnotacion.nivel] || '#999999';
     ctx.fillRect(ghostAnotacion.x - anchoTexto / 2 - 2 * f, ghostAnotacion.y - alto / 2, anchoTexto + 4 * f, alto);
     ctx.fillStyle = '#ffffff';
     ctx.fillText(etiqueta, ghostAnotacion.x - anchoTexto / 2, ghostAnotacion.y - alto / 2 + 1 * f);

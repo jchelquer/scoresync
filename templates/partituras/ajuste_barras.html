@@ -586,23 +586,17 @@ function render() {
   actualizarBotonSeleccion();
 }
 
-// Dos cajitas: el número absoluto de este compás (como antes) y cuántos
-// compases vale (repeticiones — 1 en el caso normal). Completar cualquiera
-// de las dos alcanza: si sabés el número impreso del compás siguiente,
-// usás la absoluta; si lo que ves es la cantidad de un silencio de varios
-// compases, usás la de repeticiones y el resto se acomoda solo.
+// Dos cajitas: cuántos compases vale este compás (repeticiones — 1 en el
+// caso normal) y el número absoluto (como antes). Van en ese orden porque
+// un clic sobre el número casi siempre es para corregir un silencio de
+// varios compases, no para forzar el número — así el campo que se toca más
+// seguido queda primero y con foco. Completar cualquiera de las dos
+// alcanza: si lo que ves es la cantidad de un silencio de varios compases,
+// usás la de repeticiones y el resto se acomoda solo; si sabés el número
+// impreso del compás siguiente, usás la absoluta.
 function activarEdicionNumero(elemento, compas) {
   elemento.innerHTML = '';
   elemento.classList.add('editando');
-
-  const inputNumero = document.createElement('input');
-  inputNumero.type = 'number';
-  inputNumero.value = compas.numero;
-  inputNumero.title = '{% translate "Número de este compás" %}';
-
-  const separador = document.createElement('span');
-  separador.className = 'separador-edicion';
-  separador.textContent = '×';
 
   const inputRepeticiones = document.createElement('input');
   inputRepeticiones.type = 'number';
@@ -611,9 +605,18 @@ function activarEdicionNumero(elemento, compas) {
   inputRepeticiones.className = 'input-repeticiones';
   inputRepeticiones.title = '{% translate "Cuántos compases vale (silencio de varios compases)" %}';
 
-  elemento.appendChild(inputNumero);
-  elemento.appendChild(separador);
+  const separador = document.createElement('span');
+  separador.className = 'separador-edicion';
+  separador.textContent = '×';
+
+  const inputNumero = document.createElement('input');
+  inputNumero.type = 'number';
+  inputNumero.value = compas.numero;
+  inputNumero.title = '{% translate "Número de este compás" %}';
+
   elemento.appendChild(inputRepeticiones);
+  elemento.appendChild(separador);
+  elemento.appendChild(inputNumero);
 
   // Selecciona todo el contenido al enfocar (por Tab o por clic) para que
   // escribir directamente lo reemplace — un clic del mouse por sí solo sólo
@@ -624,7 +627,7 @@ function activarEdicionNumero(elemento, compas) {
     input.addEventListener('mouseup', e => e.preventDefault());
   });
 
-  inputNumero.focus();
+  inputRepeticiones.focus();
 
   let resuelto = false;
   function confirmar() {
