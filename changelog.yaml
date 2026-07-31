@@ -5,6 +5,11 @@
   date: "2026-07-31"
   changes:
     - type: nuevo
+      text: "Transferir ownership + admin con acceso total + fix de invalidaciÃ³n de ancla"
+- version: "1.26.0"
+  date: "2026-07-31"
+  changes:
+    - type: nuevo
       text: "Transferir ownership: el dueño de una obra o parte (o un admin) puede entregársela a otro usuario desde su propia ficha, con confirmación explícita. El nombre del propietario actual ahora se ve siempre ahí (\"Temporización\"/\"Preparación\"), y también en el selector de partes y junto al título en Practicar."
     - type: corregido
       text: "Un admin ya puede editar, transferir o borrar cualquier obra o parte aunque no sea su dueño, en toda la app (antes varias pantallas del pipeline de edición sólo dejaban entrar al dueño exacto)."

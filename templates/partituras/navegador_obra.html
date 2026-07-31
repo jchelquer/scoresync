@@ -1317,8 +1317,12 @@
         btnExportarPdf.disabled = true;
         btnExportarPdf.textContent = '{% translate "Generando… página" %} ' + (i + 1) + '/' + paginas.length;
         await renderizarPaginaCompletaEnCanvas(paginas[i], canvasTmp);
-        const blob = await new Promise((resolve) => canvasTmp.toBlob(resolve, 'image/png'));
-        form.append('paginas', blob, `pagina_${paginas[i].numero}.png`);
+        // JPEG en vez de PNG: la página completa (scan + marcas superpuestas
+        // con antialiasing) comprime pésimo sin pérdida — con calidad 0.85 el
+        // archivo queda una fracción del tamaño y sigue en color (a diferencia
+        // de una conversión a escala de grises, que perdería las marcas de color).
+        const blob = await new Promise((resolve) => canvasTmp.toBlob(resolve, 'image/jpeg', 0.85));
+        form.append('paginas', blob, `pagina_${paginas[i].numero}.jpg`);
         form.append('numeros', String(paginas[i].numero));
       }
       btnExportarPdf.textContent = '{% translate "Armando el PDF…" %}';
