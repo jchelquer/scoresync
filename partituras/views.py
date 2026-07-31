@@ -335,7 +335,7 @@ def _obra_completa(obra):
     navegables = segmentos_navegables(obra)
     if not navegables:
         return False
-    pulsos, completo, _cambios, _rampas = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios, _rampas, _saltos = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     if not completo or not pulsos:
         return False
     return not any(p['duracion_compases'] is None for p in pulsos)
@@ -1291,7 +1291,7 @@ def plan_obra(request, pk):
         hasta_compas, hasta_pulso = None, None
     hasta_pasada = _leer_entero(request.GET.get("hasta_pasada"), 1)
 
-    pulsos, completo, cambios, rampas = construir_plan(
+    pulsos, completo, cambios, rampas, saltos = construir_plan(
         obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
         desde_pulso=desde_pulso, hasta_pulso=hasta_pulso,
     )
@@ -1326,6 +1326,7 @@ def plan_obra(request, pk):
         "completo": completo,
         "cambios": cambios,
         "rampas": rampas,
+        "saltos": saltos,
         "primer_pulso_tiempo_real": primer_pulso_tiempo_real,
     })
 
@@ -1359,7 +1360,7 @@ def exportar_pdf_partitura(request, pk):
     """Arma un PDF de la parte que se está siguiendo (?parte=, mismo
     criterio que score_geometria_obra) a partir de imágenes YA dibujadas
     del lado del cliente — una por página, con lo que esté visible en ese
-    momento (números/avisos/rampas/anotaciones, ver exportarPdf en
+    momento (números/avisos/rampas/saltos/anotaciones, ver exportarPdf en
     navegador_obra.html). Esta vista no dibuja nada, sólo arma el archivo
     final (ver armar_pdf_desde_imagenes) — evita reimplementar en Python
     el mismo dibujo que ya vive (y se sigue ajustando) del lado del JS.

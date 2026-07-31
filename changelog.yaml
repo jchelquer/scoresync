@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.25.0"
+  date: "2026-07-31"
+  changes:
+    - type: nuevo
+      text: "Se ven en Practicar los saltos del itinerario (repetición, D.C./D.S., lo que sea): una marca de color sobre la barra de compás en el punto de partida y otra, del mismo color más claro, en el de llegada. Mismo toggle que los avisos, y se incluyen en Exportar PDF."
 - version: "1.24.0"
   date: "2026-07-31"
   changes:

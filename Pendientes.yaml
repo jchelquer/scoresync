@@ -24,23 +24,27 @@
 #Accel. y rall.: en el itinerario, marcar dónde empieza o termina (pulso). En el desenrrollado, filas que terminan en un lugar y siguen a continuación en el mismo compás) se desenrrollan como un único compás
 
 #Advertencias: se podría implementar advertencias para cambios de compás, de tempo, de armadura de clave.
-Pasajes difíciles: pensar en que se pueda marcar pasajes difíciles y después buscarlos para practicarlos.
+#Pasajes difíciles: DECIDIDO 31/07, no hace falta nada nuevo — alcanza con que cada uno se haga una anotación privada en ese compás.
 
 #Movimientos con pausas reales entre sí: CONSTRUIDO 30/07 (sin deployar todavía) — tipo "pausa" en EfectoTempo (Notación, con duración estimada), fila de cierre interna en el Itinerario (tiempo real tapeado), freno de renumeración en el umbral (ajuste_barras + guardar_compases_pagina — de paso corrigió un bug real de renumeración que ya existía), salto anticipado de vista en Sincronizar compases. Quedó pendiente (deliberadamente, por riesgo de tocar sin poder probar en navegador real): el mismo salto de vista en el Navegador de ejecución en vivo, y que la cuenta "compases al aire" se dispare también antes de que termine una pausa.
 
 #Creo Partes con tacet: una parte puede no tener un movimiento entero. Probé simular con un compás de multirest grande pero no quedó bien — pensar una solución mejor.
 
-Entender cuándo se recalcula el plan de tiempos: no tengo claro cuándo se reenvía/recalcula el plan de ejecución (plan_obra/construir_plan) — a veces siento que compases bien temporizados "se corren" solos. No necesariamente es un bug, puede ser que sólo falte que se entienda el ciclo.
+#Entender cuándo se recalcula el plan de tiempos: no tengo claro cuándo se reenvía/recalcula el plan de ejecución (plan_obra/construir_plan) — a veces siento que compases bien temporizados "se corren" solos. No necesariamente es un bug, puede ser que sólo falte que se entienda el ciclo.
 
 Compás estirado por salto espacial (sin pausa real): cuando hay un salto espacial dentro de lo que debería ser el mismo sistema, sin que haya un corte real en la ejecución, uno de los dos compases queda dibujado artificialmente largo — sólo afecta dónde se dibujan los pulsos, no es grave. Hace falta un caso concreto (imagen real) para diagnosticarlo bien.
 
-Plica/ledger-line como falso positivo en detección de Vebarras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
+Plica/ledger-line como falso positivo en detección de barras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
 
-Anacrusis (compás de arranque sin numerar): hoy todo compás recibe un número real correlativo — falta poder tener un compás de anacrusis al principio de la obra (o de un movimiento) que no consuma ni corra la numeración normal. Sólo una idea anotada, no arrancar sin pedirlo de nuevo.
+#Anacrusis: DECIDIDO 31/07, no hace falta cambiar nada — alcanza con poner un número de compás que no esté impreso en la partitura (p.ej. 0) con la duración que corresponda, directamente en Itinerario y Notación, como cualquier otro compás.
 
 #Layout alternativo con panel de control a la izquierda: como alternativa a la barra compacta de arriba en "modo partitura". Quedó como charla pausada a mitad camino, sin decidir nada.
 
 #Indicaciones de obra: indicaciones switcheables que pueda preparar el que pueda editar una obra, asociadas a un compás.
 #Indicaciones de parte: indicaciones switcheables que pueda preparar el que tiene acceso a la parte.
 #Desorden en sincronización: si hay marcas desordenadas, detectarlo al interpolar. Agregar un seleccionar todo par ainterpolar todo fácilmente y que de paso funcione como control global.
-Impresión de partes: sería bueno poder convertir en pdf una parte con todos los elementos agregados que estén a la vista (número de compás, avisos, anotaciones...)h|
+#Impresión de partes: sería bueno poder convertir en pdf una parte con todos los elementos agregados que estén a la vista (número de compás, avisos, anotaciones...)
+#Margen izquierdo: al marcar compases, poder poner un margen izquierdo para salvar todas las claves de sol y similares. El ajuste después se puede hacer a mano.
+#Saltos coloreados: agregar marcas de saltos con colores por pares. En cada uno, la partida es oscura y la llegada clara.
+Entregar ownership: que el owner (de obra o parte) o el admin puedan entregar el ownership de la obra o parte a otro usuario.
+Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.

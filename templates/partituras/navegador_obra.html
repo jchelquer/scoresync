@@ -305,14 +305,14 @@
   </div>
   <div class="form-check form-switch d-flex align-items-center" id="control-avisos-cambio">
     <input class="form-check-input" type="checkbox" id="toggle-avisos-cambio" checked>
-    <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás superpuestos a la partitura' %}">{% translate "avisos" %}</label>
+    <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás, rampas de accelerando/rallentando y saltos del itinerario, superpuestos a la partitura' %}">{% translate "avisos" %}</label>
   </div>
   <div class="form-check form-switch d-flex align-items-center" id="control-mostrar-anotaciones">
     <input class="form-check-input" type="checkbox" id="toggle-mostrar-anotaciones" checked>
     <label class="form-check-label small ms-1" for="toggle-mostrar-anotaciones" style="color: var(--ss-text-muted);">{% translate "anotaciones" %}</label>
   </div>
   <button id="btn-anotar" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Anotar — clic sobre la partitura para dejar un cartel de texto en ese compás. Se queda activa hasta que la apagués de nuevo o apretés Esc.' %}">✏️ {% translate "Anotar" %}</button>
-  <button id="btn-exportar-pdf" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Exportar esta parte a PDF, con los números de compás/avisos/anotaciones que estén visibles ahora (sin el recuadro del compás en ejecución, eso es sólo de la pantalla).' %}">📄 {% translate "Exportar PDF" %}</button>
+  <button id="btn-exportar-pdf" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Exportar esta parte a PDF, con los números de compás/avisos/rampas/saltos/anotaciones que estén visibles ahora (sin el recuadro del compás en ejecución, eso es sólo de la pantalla).' %}">📄 {% translate "Exportar PDF" %}</button>
   {% endif %}
 </div>
 </div>
@@ -687,6 +687,12 @@
   // reindexa por compás: dibujarRampas recorre esta lista entera en cada
   // repintado y decide sola qué tramo cae en la ventana actual.
   let rampasObra = [];
+  // Puntos de salto del itinerario, TODA la obra (ver _resolver_saltos/
+  // construir_plan) — un par (compas_desde, compas_hasta) por cada lugar
+  // donde el itinerario no sigue derecho (repetición, D.C./D.S., lo que
+  // sea). Mismo criterio que rampasObra: lista entera, dibujarSaltos
+  // decide sola qué marca cae en la ventana actual.
+  let saltosObra = [];
   // Contraparte de acumulados/totalDuracion pero con duracion_compases (ver
   // construir_plan) en vez de la calculada pura — nunca se le aplica
   // velocidad (un tiempo real capturado no es algo que se pueda
@@ -1172,6 +1178,7 @@
         cambiosPorCompas.get(c.compas).push(c);
       });
       rampasObra = data.rampas || [];
+      saltosObra = data.saltos || [];
       if (ventanaActiva) repintarScore();
     } catch (e) {
       // silencioso a propósito, ver comentario de arriba
@@ -1250,7 +1257,7 @@
 
   // ── Exportar a PDF (página COMPLETA, no el recorte de margen que usa
   // la pantalla para navegar) ────────────────────────────────────────────
-  // Reusa el mismo dibujo de siempre (números/avisos/rampas/anotaciones)
+  // Reusa el mismo dibujo de siempre (números/avisos/rampas/saltos/anotaciones)
   // en vez de reimplementarlo en Python: por cada página se arma una
   // "ventana" sintética que abarca TODOS los sistemas y se dibuja en un
   // canvas invisible, a la resolución nativa de la imagen ya rasterizada
@@ -1286,6 +1293,7 @@
     dibujarNumerosCompas(ventana, canvas);
     dibujarAvisosCambio(ventana, canvas);
     dibujarRampas(ventana, canvas);
+    dibujarSaltos(ventana, canvas);
     dibujarAnotaciones(ventana, canvas);
   }
 
@@ -1509,6 +1517,7 @@
     dibujarNumerosCompas(ventana);
     dibujarAvisosCambio(ventana);
     dibujarRampas(ventana);
+    dibujarSaltos(ventana);
     dibujarAnotaciones(ventana);
   }
 
@@ -1521,7 +1530,7 @@
   const TEXTO_SOBRE_GRIS = '#e0e0e0';
 
   // Todo lo que se dibuja ENCIMA de la partitura (número/avisos/rampas/
-  // anotaciones) estaba en píxeles de pantalla FIJOS (fuente, alto de
+  // saltos/anotaciones) estaba en píxeles de pantalla FIJOS (fuente, alto de
   // caja, radio del marcador, ancho de línea) — no seguían ni el zoom ni
   // la resolución nativa de exportar a PDF (mucho más alta), así que a
   // más zoom, o en el PDF, quedaban cada vez más chicos en proporción a
@@ -1712,6 +1721,73 @@
         ctx.stroke();
         ctx.restore();
       });
+    });
+  }
+
+  // Marca de partida/llegada de un salto del itinerario (ver saltosObra/
+  // _resolver_saltos) — a diferencia de avisos/rampas (hechos de tempo),
+  // esto es puramente estructural: dónde el itinerario deja de seguir
+  // derecho. Se pinta sobre la barra misma (borde del compás), no como
+  // texto — es un punto, no necesita cartel. Mismo toggle que avisos
+  // (charla de diseño: "es el mismo tipo de información" ya se aplicó a
+  // rampas, vale igual acá).
+  //
+  // Color: un mismo matiz para partida y llegada de un MISMO salto (más
+  // oscuro en la partida, más claro en la llegada, a pedido del usuario
+  // para distinguir de un vistazo cuál es cuál). Asignación SECUENCIAL, no
+  // hash: el primer salto que aparece en saltosObra (que ya viene en orden
+  // de itinerario, ver _resolver_saltos) se lleva el color 0, el segundo el
+  // 1, etc. — con hash, dos saltos cualquiera ya tenían ~17% de chance de
+  // compartir color aunque hubiera sólo 2 en toda la obra (caso real:
+  // "Convergence"); con orden de aparición no hay choque hasta que haya
+  // MÁS de 6 saltos distintos. Costo del cambio, real pero infrecuente: si
+  // se agrega o saca un salto ANTES de otro en el itinerario, los que
+  // venían después corren de color (no pasa por tocar cualquier otra cosa,
+  // sólo por editar la estructura de saltos en sí).
+  const PALETA_SALTOS_HUE = [0, 220, 35, 140, 310, 190]; // rojo, azul, naranja, verde, magenta, cian — alternados cálido/frío entre vecinos
+
+  function dibujarSaltos(ventana, canvas = scoreVentanaCanvas) {
+    if (!toggleAvisosCambio || !toggleAvisosCambio.checked || !saltosObra.length) return;
+    const ctx = canvas.getContext('2d');
+    const img = ventana.img, pagina = ventana.pagina;
+    const escala = ventana.escalaRender;
+    const f = escala * FACTOR_OVERLAY_NATURAL;
+    const anchoBarra = Math.max(1, 9 * f);
+    const ordenes = new Set(ventana.sistemas.map(s => s.orden));
+    const compasesVentana = pagina.compases.filter(c => ordenes.has(c.sistema_orden));
+
+    // ladoDerecho: true = borde de SALIDA de este compás (partida, la
+    // barra que lo cierra), false = borde de ENTRADA (llegada, la barra
+    // que lo abre) — numero puede caer dentro del rango de un silencio de
+    // varios compases (repeticiones > 1), no sólo coincidir con el número
+    // impreso de la caja (mismo criterio de búsqueda que dibujarRampas).
+    //
+    // Alto: el pentagrama real (sistema.y/height), NO caja.top/bottom —
+    // esa caja se extiende a mitad de camino hacia el sistema vecino (para
+    // que un clic cerca del borde igual resuelva a este compás, ver
+    // calcularCaja) y una marca de ese alto quedaba larga, metida en el
+    // hueco en blanco entre sistemas en vez de calzar sobre la barra real.
+    function dibujarMarca(numero, ladoDerecho, hue, luminosidad) {
+      const fila = compasesVentana.find(c => numero >= c.numero && numero < c.numero + (c.repeticiones || 1));
+      if (!fila) return;
+      const caja = calcularCaja({ numero: fila.numero }, pagina);
+      if (!caja) return;
+      const sistema = pagina.sistemas.find(s => s.orden === fila.sistema_orden);
+      if (!sistema) return;
+      const xFrac = ladoDerecho ? caja.right : caja.left;
+      const px = (xFrac - pagina.margen_x0) * img.naturalWidth * escala;
+      const yTop = (sistema.y - ventana.top) * img.naturalHeight * escala;
+      const yBottom = (sistema.y + sistema.height - ventana.top) * img.naturalHeight * escala;
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = `hsl(${hue}, 70%, ${luminosidad}%)`;
+      ctx.fillRect(px - anchoBarra / 2, yTop, anchoBarra, yBottom - yTop);
+      ctx.globalAlpha = 1;
+    }
+
+    saltosObra.forEach((s, indice) => {
+      const hue = PALETA_SALTOS_HUE[indice % PALETA_SALTOS_HUE.length];
+      dibujarMarca(s.compas_desde, true, hue, 40);
+      dibujarMarca(s.compas_hasta, false, hue, 68);
     });
   }
 
@@ -3132,6 +3208,7 @@
       cambiosPorCompas.get(c.compas).push(c);
     });
     rampasObra = data.rampas || [];
+    saltosObra = data.saltos || [];
     reconstruirTiempos();
     // "Ejecutar con audio" pedido pero sin ningún ancla real (de la fuente
     // de temporización elegida) para el arranque de este rango — no se

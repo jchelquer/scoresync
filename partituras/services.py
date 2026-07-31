@@ -834,6 +834,46 @@ def _resolver_rampas(obra, notacion_por_compas):
     return rampas
 
 
+def _resolver_saltos(obra):
+    """Puntos de salto del itinerario: donde una fila de Segmento no
+    continúa exactamente donde terminó la anterior (ver Segmento.__doc__)
+    — repetición, D.C./D.S., al Coda, lo que sea; no importa el motivo,
+    sólo el hueco real entre el fin de una fila y el arranque de la
+    siguiente. Reutiliza el mismo criterio de continuidad a mitad de
+    compás que _pasadas_por_compas (continua_mismo_compas más abajo) para
+    no confundir un corte de fila por motivos internos con un salto real.
+
+    Uno por cada PAR distinto (compas_desde, compas_hasta) — aunque el
+    itinerario pase por el mismo salto más de una vez (p.ej. una
+    repetición visitada varias veces en un rondó), es el mismo lugar de la
+    partitura y no tiene sentido marcarlo dos veces. Pensada para el
+    dibujo de partida/llegada en el navegador (ver dibujarSaltos en
+    navegador_obra.html), independiente de cambios/rampas."""
+    navegables = segmentos_navegables(obra)
+    vistos = set()
+    saltos = []
+    anterior = None
+    for seg in navegables:
+        if anterior is not None:
+            continua_mismo_compas = (
+                anterior.compas_hasta == seg.compas_desde
+                and anterior.pulso_hasta is not None
+                and seg.pulso_desde is not None and seg.pulso_desde > 1
+            )
+            continua_siguiente_compas = (
+                seg.compas_desde == anterior.compas_hasta + 1
+                and anterior.pulso_hasta is None
+                and (seg.pulso_desde is None or seg.pulso_desde <= 1)
+            )
+            if not (continua_mismo_compas or continua_siguiente_compas):
+                par = (anterior.compas_hasta, seg.compas_desde)
+                if par not in vistos:
+                    vistos.add(par)
+                    saltos.append({'compas_desde': par[0], 'compas_hasta': par[1]})
+        anterior = seg
+    return saltos
+
+
 def _indice_calderones(obra):
     """{(compas, pulso_entero): factor} de los EfectoTempo tipo calderón —
     ver _resolver_bpm_por_pulso."""
@@ -1227,7 +1267,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
       a nivel de pulso eso sale solo, en vez de tener que tratarlo como
       caso especial en la duración de "ese compás".
 
-    Devuelve (pulsos, completo, cambios, rampas): pulsos es la lista de dicts (uno
+    Devuelve (pulsos, completo, cambios, rampas, saltos): pulsos es la lista de dicts (uno
     por pulso, en orden) con segmento_id/compas/pulso/pulsos_por_compas/
     es_primer_pulso_compas/acento/indicacion_compas/bpm/
     variacion_tempo_display/bpm_llegada/descripcion/duracion/
@@ -1257,10 +1297,14 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     navegado — a diferencia de cambios, no se construye caminando el
     rango, es un índice de posición ya resuelto) — pensada para dibujar
     la raya de "hasta dónde llega" en el navegador (ver dibujarRampas en
-    navegador_obra.html), independiente de cambios."""
+    navegador_obra.html), independiente de cambios; saltos es la salida de
+    _resolver_saltos tal cual (uno por cada punto distinto de la obra
+    ENTERA donde el itinerario no sigue derecho, no sólo del tramo
+    navegado — mismo criterio que rampas), pensada para marcar partida/
+    llegada en el navegador (ver dibujarSaltos)."""
     navegables = segmentos_navegables(obra)
     if not navegables:
-        return [], True, [], []
+        return [], True, [], [], []
 
     # La "pasada" de cada ocurrencia de compás, la notación (compás/
     # armadura/tempo) resuelta compás a compás, y las marcas puntuales por
@@ -1278,6 +1322,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
     marcas_pulso_por_compas_pasada = _indice_marcas_pulso(obra)
     pausas = indice_pausas(obra)
     rampas = _resolver_rampas(obra, notacion_por_compas)
+    saltos = _resolver_saltos(obra)
     calderones = _indice_calderones(obra)
     bpm_por_pulso, factor_por_pulso, variacion_por_pulso = _resolver_bpm_por_pulso(
         obra, navegables, notacion_por_compas, pasadas_por_compas, indice, rampas, calderones,
@@ -1479,7 +1524,7 @@ def construir_plan(obra, desde_compas, desde_pasada, hasta_compas, hasta_pasada,
             break
         pos = avanzar_compas(obra, seg, compas)
 
-    return pulsos, completo, cambios, rampas
+    return pulsos, completo, cambios, rampas, saltos
 
 
 def compases_desenrollados(obra):
@@ -1524,7 +1569,7 @@ def compases_desenrollados(obra):
     if not navegables:
         return [], True
 
-    pulsos, completo, _cambios, _rampas = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+    pulsos, completo, _cambios, _rampas, _saltos = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
     pasadas = _pasadas_por_compas(obra)
     marcas = {(m.compas, m.pasada): m for m in obra.marcas_tiempo_compas.all()}
     valor_por_umbral = {p['compas_desde']: p['valor_segundos'] for p in indice_pausas(obra)}
