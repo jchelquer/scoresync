@@ -87,6 +87,13 @@ class SistemaAdmin(admin.ModelAdmin):
 class CompasAdmin(admin.ModelAdmin):
     list_display = ('sistema', 'numero', 'x', 'y', 'width', 'height', 'origen', 'confirmado')
     list_filter = ('origen', 'confirmado')
+    ordering = (
+        'sistema__pagina__partitura__obra__titulo',
+        'sistema__pagina__partitura',
+        'sistema__pagina__numero',
+        'sistema__orden',
+        'x',
+    )
 
 
 @admin.register(PreferenciaObra)

@@ -1,11 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
-- version: "1.26.0"
+- version: "1.26.1"
   date: "2026-07-31"
   changes:
-    - type: nuevo
-      text: "Transferir ownership + admin con acceso total + fix de invalidaciÃ³n de ancla"
+    - type: mejorado
+      text: "Exportar PDF genera un archivo mucho más liviano (y más rápido) — las páginas se comprimen como JPEG en vez de PNG sin pérdida, manteniendo el color de las marcas y anotaciones."
 - version: "1.26.0"
   date: "2026-07-31"
   changes:
