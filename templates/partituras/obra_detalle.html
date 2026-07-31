@@ -46,6 +46,36 @@
       {% endif %}
     </form>
     {% endif %}
+    <p class="small mb-2" style="color: var(--ss-text-muted)">
+      {% translate "Temporización" %}: <strong>{{ obra.owner.get_full_name|default:obra.owner.username }}</strong>
+    </p>
+    {% if es_dueño or es_admin %}
+    <form method="post" action="{% url 'partituras:transferir_ownership_obra' obra.pk %}" class="d-flex align-items-center gap-2 mb-3" id="form-transferir-obra">
+      {% csrf_token %}
+      <select name="nuevo_owner" class="form-select form-select-sm" style="width: auto;" required>
+        <option value="" disabled selected>{% translate "Transferir a…" %}</option>
+        {% for u in usuarios_transferibles %}
+        {% if u.pk != obra.owner_id %}
+        <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-outline-light btn-sm">{% translate "Transferir" %}</button>
+    </form>
+    <script>
+      (function () {
+        const form = document.getElementById('form-transferir-obra');
+        if (!form) return;
+        form.addEventListener('submit', (e) => {
+          const select = form.querySelector('select[name="nuevo_owner"]');
+          const texto = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : '';
+          if (!confirm('{% translate "¿Transferir esta obra a" %} ' + texto + '?')) {
+            e.preventDefault();
+          }
+        });
+      })();
+    </script>
+    {% endif %}
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
         <p class="small mb-3" style="color: var(--ss-text-muted)">
@@ -59,10 +89,10 @@
         <audio controls src="{{ obra.audio.url }}" class="w-100 mb-2" style="height: 2.5rem;"></audio>
         {% else %}
         <p class="small mb-2" style="color: var(--ss-text-muted)">
-          {% translate "Sin audio todavía." %}{% if es_dueño %} {% translate "Subí una grabación de referencia para poder sincronizar el itinerario con el tiempo real." %}{% endif %}
+          {% translate "Sin audio todavía." %}{% if es_dueño or es_admin %} {% translate "Subí una grabación de referencia para poder sincronizar el itinerario con el tiempo real." %}{% endif %}
         </p>
         {% endif %}
-        {% if es_dueño %}
+        {% if es_dueño or es_admin %}
         <form method="post" enctype="multipart/form-data" class="d-flex gap-2 align-items-center mb-3">
           {% csrf_token %}
           <label for="input-audio" class="btn btn-outline-light btn-sm mb-0">
@@ -86,18 +116,18 @@
         {% endif %}
 
         <div class="d-flex gap-2 flex-wrap">
-          {% if es_dueño %}
+          {% if es_dueño or es_admin %}
           <a href="{% url 'partituras:itinerario_obra' obra.pk %}" class="btn btn-ss">
             <i class="bi bi-list-ol me-1"></i>{% translate "Itinerario de ejecución" %}
           </a>
           <a href="{% url 'partituras:notacion_obra' obra.pk %}" class="btn btn-outline-light">
             <i class="bi bi-music-note-list me-1"></i>{% translate "Notación" %}
           </a>
-          {% endif %}
-          {% if es_dueño and obra.audio and obra.segmentos.exists %}
+          {% if obra.audio and obra.segmentos.exists %}
           <a href="{% url 'partituras:sincronizar_compases' obra.pk %}" class="btn btn-outline-light">
             <i class="bi bi-soundwave me-1"></i>{% translate "Sincronizar compases" %}
           </a>
+          {% endif %}
           {% endif %}
         </div>
 
@@ -110,7 +140,7 @@
               <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.nombre_parte|default:p.titulo }}
               {% if not p.publicada %}<span class="badge bg-secondary ms-1">{% translate "Despublicada" %}</span>{% endif %}
             </a>
-            {% if p.owner_id == request.user.id %}
+            {% if p.owner_id == request.user.id or es_admin %}
             <div class="d-flex gap-2">
               <a href="{% url 'partituras:editar_partitura' p.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Editar' %}">
                 <i class="bi bi-pencil"></i>
@@ -152,7 +182,7 @@
           {% endif %}
         </div>
 
-        {% if es_dueño %}
+        {% if es_dueño or es_admin %}
         <form method="post" action="{% url 'partituras:borrar_obra' obra.pk %}" class="mt-3 pt-3" id="form-borrar-obra"
               style="border-top: 1px solid #2a4a47;" data-confirmacion="borrar {{ obra.titulo }}">
           {% csrf_token %}

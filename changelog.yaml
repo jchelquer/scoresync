@@ -1,9 +1,17 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
-- version: "1.25.0"
+- version: "1.26.0"
   date: "2026-07-31"
   changes:
+    - type: nuevo
+      text: "Transferir ownership: el dueño de una obra o parte (o un admin) puede entregársela a otro usuario desde su propia ficha, con confirmación explícita. El nombre del propietario actual ahora se ve siempre ahí (\"Temporización\"/\"Preparación\"), y también en el selector de partes y junto al título en Practicar."
+    - type: corregido
+      text: "Un admin ya puede editar, transferir o borrar cualquier obra o parte aunque no sea su dueño, en toda la app (antes varias pantallas del pipeline de edición sólo dejaban entrar al dueño exacto)."
+    - type: corregido
+      text: "En Ajuste de ancla, la acción \"Buscar\" podía dejar las barras y compases de esa página marcados como confirmados con datos viejos (calculados contra el ancla anterior) — ahora se invalidan correctamente, igual que ya hacían \"Confirmar\" y \"Volver a detectar\"."
+    - type: mejorado
+      text: "El nombre de la parte (instrumento/parte) pasó a ser un subtítulo grande debajo del título, en vez de texto chico dentro de la ficha."
     - type: nuevo
       text: "Se ven en Practicar los saltos del itinerario (repetición, D.C./D.S., lo que sea): una marca de color sobre la barra de compás en el punto de partida y otra, del mismo color más claro, en el de llegada. Mismo toggle que los avisos, y se incluyen en Exportar PDF."
 - version: "1.24.0"

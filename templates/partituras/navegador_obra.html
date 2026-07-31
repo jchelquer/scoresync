@@ -157,6 +157,7 @@
 <div class="d-flex justify-content-between align-items-center mb-3" id="header-normal">
   <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
     {{ obra.titulo }}
+    <small style="font-size: 0.55em; color: var(--ss-text-muted); font-weight: normal;">{% translate "Temporizador" %}: {{ obra.owner.get_full_name|default:obra.owner.username }}</small>
   </h5>
   <div class="d-flex gap-2">
     {% if tiene_score %}
@@ -333,7 +334,7 @@
           <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
             {% for p in partes_disponibles %}
             <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
-              {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
+              {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% else %} ({{ p.owner.get_full_name|default:p.owner.username }}){% endif %}
             </option>
             {% endfor %}
           </select>

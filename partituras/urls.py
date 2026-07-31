@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/editar/', views.editar_partitura, name='editar_partitura'),
     path('<int:pk>/borrar/', views.borrar_partitura, name='borrar_partitura'),
     path('<int:pk>/publicar/', views.alternar_publicacion_partitura, name='alternar_publicacion_partitura'),
+    path('<int:pk>/transferir/', views.transferir_ownership_partitura, name='transferir_ownership_partitura'),
     path('<int:pk>/estado/', views.estado, name='estado'),
     path('<int:pk>/obra/', views.gestionar_obra, name='gestionar_obra'),
 
@@ -22,6 +23,7 @@ urlpatterns = [
     path('obras/<int:pk>/editar/', views.editar_obra, name='editar_obra'),
     path('obras/<int:pk>/borrar/', views.borrar_obra, name='borrar_obra'),
     path('obras/<int:pk>/publicar/', views.alternar_publicacion_obra, name='alternar_publicacion_obra'),
+    path('obras/<int:pk>/transferir/', views.transferir_ownership_obra, name='transferir_ownership_obra'),
     path('obras/<int:pk>/subir/', views.subir, name='subir'),
     path('obras/<int:pk>/adjuntar/', views.adjuntar_a_obra, name='adjuntar_a_obra'),
     path('obras/<int:pk>/itinerario/', views.itinerario_obra, name='itinerario_obra'),

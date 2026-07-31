@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models import Q
@@ -127,8 +128,11 @@ def borrar_partitura(request, pk):
     """Borra una partitura y todo lo que cuelga de ella (páginas, sistemas,
     barras, compases — todo en cascada por FK); los archivos se limpian
     solos vía señal post_delete (ver signals.py), no hace falta acá.
-    Vuelve a la ficha de la obra si estaba adjunta, o a partes sueltas si no."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    Vuelve a la ficha de la obra si estaba adjunta, o a partes sueltas si no.
+    Del dueño o de un admin (mismo criterio que el resto del pipeline)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     titulo = str(partitura)
     obra_id = partitura.obra_id
     partitura.delete()
@@ -157,11 +161,37 @@ def alternar_publicacion_partitura(request, pk):
 
 
 @login_required
+@require_POST
+def transferir_ownership_partitura(request, pk):
+    """Análogo a transferir_ownership_obra, para una parte — mismo criterio
+    de permiso que alternar_publicacion_partitura (dueño de la parte, dueño
+    de la obra a la que está adjunta, o admin)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
+    es_dueño_parte = partitura.owner_id == request.user.id
+    es_dueño_obra = bool(partitura.obra_id and partitura.obra.owner_id == request.user.id)
+    if not (es_dueño_parte or es_dueño_obra or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    nuevo_owner = _usuarios_transferibles(request.user).filter(pk=request.POST.get("nuevo_owner")).first()
+    if not nuevo_owner:
+        messages.error(request, _("Usuario inválido."))
+        return redirect("partituras:estado", pk=pk)
+    partitura.owner = nuevo_owner
+    partitura.save(update_fields=["owner"])
+    messages.success(request, _('Se transfirió "%(parte)s" a %(usuario)s.') % {
+        "parte": partitura, "usuario": nuevo_owner.get_full_name() or nuevo_owner.username,
+    })
+    return redirect("partituras:estado", pk=pk)
+
+
+@login_required
 def editar_partitura(request, pk):
     """Corrige instrumento/parte de una partitura ya subida (y el título,
     sólo si es una parte suelta — si ya pertenece a una obra, el título es
-    el de la obra y no se toca acá) — no el archivo (ver PartituraEditForm)."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    el de la obra y no se toca acá) — no el archivo (ver PartituraEditForm).
+    Del dueño o de un admin (mismo criterio que el resto del pipeline)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if request.method == "POST":
         form = PartituraEditForm(request.POST, instance=partitura)
         if partitura.obra_id:
@@ -206,11 +236,15 @@ def subir(request, pk):
 
 
 def _contexto_estado(request, partitura):
+    es_dueño = partitura.owner_id == request.user.id
+    es_dueño_obra = bool(partitura.obra_id and partitura.obra.owner_id == request.user.id)
+    es_admin = _es_admin(request.user)
     return {
         "partitura": partitura,
-        "es_dueño": partitura.owner_id == request.user.id,
-        "es_dueño_obra": bool(partitura.obra_id and partitura.obra.owner_id == request.user.id),
-        "es_admin": _es_admin(request.user),
+        "es_dueño": es_dueño,
+        "es_dueño_obra": es_dueño_obra,
+        "es_admin": es_admin,
+        "usuarios_transferibles": _usuarios_transferibles(request.user) if (es_dueño or es_dueño_obra or es_admin) else None,
         "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
         "pagina_sistemas": _primera_pendiente_sistemas(partitura),
         "pagina_ancla": _primera_pendiente(partitura, "ancla_confirmada"),
@@ -224,8 +258,13 @@ def _contexto_estado(request, partitura):
 def detalle(request, pk):
     """Punto de entrada "inteligente": si hay algo pendiente, te lleva
     directo ahí — nunca hace falta pasar por el menú a propósito. Si no hay
-    nada pendiente (o todavía no arrancó nada), muestra el panel de estado."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    nada pendiente (o todavía no arrancó nada), muestra el panel de estado.
+    Del dueño o de un admin (mismo criterio que el resto del pipeline) — para
+    cualquier otro, ver `estado`, que sí es público para ver (sin el salto
+    automático ni el panel de edición del pipeline)."""
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     paso = _proximo_paso(partitura)
     if paso:
         url_name, numero = paso
@@ -257,6 +296,28 @@ def _es_admin(user):
     """Mismo criterio ya usado en el resto del proyecto (usuarios/sc_versiones,
     ver base.html) — se reusa acá tal cual, no es un mecanismo nuevo."""
     return user.es_admin or user.is_staff
+
+
+def _usuarios_transferibles(user):
+    """Candidatos para recibir una obra/parte transferida (ver
+    transferir_ownership_obra/transferir_ownership_partitura). Usuario es una
+    tabla COMPARTIDA entre cuatro apps del mismo Postgres (afinacion/ensayos/
+    tempo/scoresync — ver usuarios/models.py), sin ningún campo que diga
+    "usa ScoreSync" — un desplegable sin filtro le mostraría a cualquier
+    dueño el directorio entero del ecosistema. Un admin sí lo ve sin filtro
+    (ya puede reasignar owner sin restricción desde el admin de Django; esto
+    sólo lo formaliza acá); cualquier otro sólo ve usuarios que YA tienen
+    algo propio en ScoreSync (dueños de alguna obra o parte) — alcanza para
+    el caso típico ("se lo paso a otro que ya viene usando la herramienta").
+    Se usa tanto para pintar el desplegable como para VALIDAR el POST del
+    lado del servidor — nunca se confía en el id que mandó el cliente sin
+    filtrarlo de nuevo por este mismo queryset."""
+    User = get_user_model()
+    if _es_admin(user):
+        return User.objects.order_by('first_name', 'last_name', 'username')
+    return User.objects.filter(
+        Q(obras__isnull=False) | Q(partituras__isnull=False)
+    ).distinct().order_by('first_name', 'last_name', 'username')
 
 
 def _puede_ver_partitura(user, partitura, obra=None):
@@ -433,6 +494,7 @@ def obra_detalle(request, pk):
         "obra": obra,
         "es_dueño": es_dueño,
         "es_admin": es_admin,
+        "usuarios_transferibles": _usuarios_transferibles(request.user) if (es_dueño or es_admin) else None,
         "obra_completa": _obra_completa(obra),
         "partituras": sorted(
             (p for p in obra.partituras.all() if _puede_ver_partitura(request.user, p, obra=obra)),
@@ -491,6 +553,30 @@ def alternar_publicacion_obra(request, pk):
 
 @login_required
 @require_POST
+def transferir_ownership_obra(request, pk):
+    """Entregar la obra a otro usuario — del dueño actual o de un admin
+    (mismo criterio que editar_obra/alternar_publicacion_obra). El nuevo
+    dueño tiene que salir del mismo queryset que se le mostró a quien pidió
+    la transferencia (ver _usuarios_transferibles) — nunca se confía en el
+    id que mandó el POST sin filtrarlo nuevo por ESE mismo conjunto, así un
+    dueño no-admin no puede forzar a mano un id fuera de su desplegable."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    nuevo_owner = _usuarios_transferibles(request.user).filter(pk=request.POST.get("nuevo_owner")).first()
+    if not nuevo_owner:
+        messages.error(request, _("Usuario inválido."))
+        return redirect("partituras:obra_detalle", pk=pk)
+    obra.owner = nuevo_owner
+    obra.save(update_fields=["owner"])
+    messages.success(request, _('Se transfirió "%(obra)s" a %(usuario)s.') % {
+        "obra": obra, "usuario": nuevo_owner.get_full_name() or nuevo_owner.username,
+    })
+    return redirect("partituras:obra_detalle", pk=pk)
+
+
+@login_required
+@require_POST
 def borrar_obra(request, pk):
     """Borra la obra Y todas sus partes DE VERDAD (no sólo las desvincula
     como separar/gestionar_obra — Partitura.obra es SET_NULL ahí a
@@ -498,8 +584,11 @@ def borrar_obra(request, pk):
     obra.delete() sólo las desvincularía). Los archivos (de cada partitura
     y el audio de la obra) se limpian solos vía señal post_delete (ver
     signals.py). La confirmación de este botón (ver obra_detalle.html) ya
-    le avisa al usuario cuántas partes se van a perder antes de llegar acá."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    le avisa al usuario cuántas partes se van a perder antes de llegar acá.
+    Del dueño o de un admin (mismo criterio que el resto del pipeline)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     titulo = str(obra)
     for partitura in obra.partituras.all():
         partitura.delete()
@@ -514,8 +603,11 @@ def marcar_tiempo_segmento(request, pk):
     """Guarda (o borra) el tiempo_inicio REAL de una fila puntual — hoy sólo
     se usa para la fila de cierre (marca el fin real de la obra), tocando su
     tiempo en la lista de sincronizar_compases.html (fetch() en cada marca/
-    deshacer, no hay pantalla ni redirect asociado)."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    deshacer, no hay pantalla ni redirect asociado). Del dueño o de un admin
+    (mismo criterio que el resto del pipeline)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     segmento = get_object_or_404(Segmento, pk=request.POST.get("segmento_id"), obra=obra)
 
     segundos_raw = request.POST.get("segundos")
@@ -540,8 +632,11 @@ def marcar_tiempo_segmento(request, pk):
 def sincronizar_compases(request, pk):
     """Pantalla de sincronización FINA: tap compás a compás (cada ocurrencia,
     repeticiones incluidas — ver MarcaTiempoCompas), más la fila de cierre
-    (Segmento.tiempo_inicio) para marcar dónde termina la obra de verdad."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    (Segmento.tiempo_inicio) para marcar dónde termina la obra de verdad.
+    Del dueño o de un admin (mismo criterio que el resto del pipeline)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if not obra.audio:
         messages.warning(request, 'Esta obra todavía no tiene un audio de referencia cargado.')
         return redirect("partituras:obra_detalle", pk=pk)
@@ -616,7 +711,9 @@ def marcar_tiempo_compas(request, pk):
     (compas+pasada) — se llama por fetch() desde sincronizar_compases.html
     en cada marca/deshacer/edición manual, no hay pantalla ni redirect
     asociado (mismo criterio que marcar_tiempo_segmento)."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         compas = int(request.POST.get("compas"))
         pasada = int(request.POST.get("pasada"))
@@ -654,7 +751,9 @@ def marcar_tiempo_pulso(request, pk):
     services._anclas_globales). Se llama por fetch() desde el arrastre de
     pulsos en sincronizar_compases.html, mismo criterio que
     marcar_tiempo_compas: sin pantalla ni redirect asociado."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         compas = int(request.POST.get("compas"))
         pasada = int(request.POST.get("pasada"))
@@ -688,7 +787,9 @@ def pulsos_compas_actual(request, pk):
     arrastrables al abrir el panel de "ajustar pulsos" en
     sincronizar_compases.html, antes de que el usuario corrija nada.
     GET segmento/compas/pasada."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         segmento_id = int(request.GET.get("segmento"))
         compas = int(request.GET.get("compas"))
@@ -733,7 +834,9 @@ def desplazar_tiempos_compases(request, pk):
     desplazar_marcas_compas. "compases" (POST, opcional) es una lista
     "compas:pasada,compas:pasada,..." — la selección múltiple hecha en
     sincronizar_compases.html; sin ese parámetro, se corren TODAS."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         delta = float(request.POST.get("delta_segundos"))
     except (TypeError, ValueError):
@@ -762,7 +865,9 @@ def interpolar_tiempos_compases(request, pk):
     ancla, y los que tenían las dos anclas pero en el orden real
     equivocado (tapeo contradictorio, ver invertidos en
     interpolar_marcas_compas)."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         objetivos = _parsear_compas_pasada_lista(request.POST.get("compases", ""))
     except ValueError:
@@ -789,7 +894,9 @@ def borrar_tiempos_compases(request, pk):
     """Borra en lote (explícitas y no-explícitas) las MarcaTiempoCompas de la
     selección — ver borrar_marcas_compas. "compases" (POST) es la misma
     lista "compas:pasada,..." que usan los otros endpoints de selección."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     try:
         objetivos = _parsear_compas_pasada_lista(request.POST.get("compases", ""))
     except ValueError:
@@ -806,7 +913,9 @@ def itinerario_obra(request, pk):
     tramo de compases que se toca de corrido (ver Segmento). Usa un
     formset de Django en vez de JS a medida — es justo lo que hace falta
     para "llenar una tabla", nada más."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     queryset = Segmento.objects.filter(obra=obra).order_by("orden")
 
     if request.method == "POST":
@@ -955,7 +1064,9 @@ def notacion_obra(request, pk):
     (compás[,pulso]), no del itinerario. Mismo patrón que itinerario_obra:
     formsets de Django para "llenar una tabla", sin orden propio que
     renumerar."""
-    obra = get_object_or_404(Obra, pk=pk, owner=request.user)
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     queryset_notacion = MarcaNotacion.objects.filter(obra=obra).order_by("tipo", "compas", "pasada")
     queryset_efectos = EfectoTempo.objects.filter(obra=obra).order_by("compas_desde", "pulso_desde")
 
@@ -1014,7 +1125,7 @@ def _partes_disponibles(obra, user):
     por el campo 'parte' en crudo — está vacío en varias partes, y ordenar
     por ahí las agrupa todas al principio en vez de por el instrumento que
     se termina mostrando)."""
-    partituras = sorted(obra.partituras.all(), key=lambda p: p.nombre_parte.lower())
+    partituras = sorted(obra.partituras.select_related('owner').all(), key=lambda p: p.nombre_parte.lower())
     return [
         p for p in partituras
         if p.paginas.filter(compases_confirmados=True).exists() and _puede_ver_partitura(user, p, obra=obra)
@@ -1576,7 +1687,9 @@ def gestionar_obra(request, pk):
     """Adjunta o separa esta partitura de una obra — de cualquier obra, no
     sólo las propias (no hace falta aprobación del dueño para sumar una
     parte propia a una obra ajena, ver obra_detalle/adjuntar_a_obra)."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if request.method != "POST":
         return redirect("partituras:estado", pk=pk)
     accion = request.POST.get("accion")
@@ -1611,7 +1724,9 @@ def iniciar_normalizacion(request, pk):
     del propio request síncrono — con muchas páginas puede tardar mucho o
     directamente dar timeout, y no es grave si el usuario prefiere ajustar
     todo a mano desde cero."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if request.method != "POST":
         return redirect("partituras:detalle", pk=pk)
 
@@ -1710,7 +1825,9 @@ def pagina_imagen_normalizada(request, pk, numero):
 
 @login_required
 def ajuste_orientacion(request, pk, numero):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if partitura.estado_normalizacion == "pendiente":
         return redirect("partituras:detalle", pk=pk)  # todavía no se corrió "Enderezar PDF"
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
@@ -1779,7 +1896,9 @@ def _detectar_margenes_pagina(pagina):
 
 @login_required
 def ajuste_margenes(request, pk, numero):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if partitura.estado_normalizacion != "confirmada":
         return redirect("partituras:detalle", pk=pk)  # falta terminar orientación
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
@@ -1863,7 +1982,9 @@ def _detectar_sistemas_pagina(partitura, pagina):
 
 @login_required
 def ajuste_sistemas(request, pk, numero):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if not partitura.margenes_completos:
         return redirect("partituras:detalle", pk=pk)  # falta terminar márgenes
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
@@ -2013,7 +2134,9 @@ def _detectar_ancla_pagina(partitura, pagina):
 
 @login_required
 def ajuste_ancla(request, pk, numero):
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if not partitura.sistemas_completos:
         return redirect("partituras:detalle", pk=pk)  # falta terminar sistemas
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)
@@ -2067,6 +2190,14 @@ def ajuste_ancla(request, pk, numero):
             else:
                 pagina.ancla_x0, pagina.ancla_y0, pagina.ancla_x1, pagina.ancla_y1 = rx0, ry0, rx1, ry1
                 pagina.ancla_linea_x = pagina.ancla_linea_y0 = pagina.ancla_linea_y1 = None
+            if ya_estaba_confirmada:
+                # Mismo motivo que en "confirmar"/"redetectar": las barras de
+                # esta página se detectaron con la referencia de escala del
+                # ancla vieja — bug real (2026-07-31): "Buscar" desconfirmaba
+                # el ancla pero se olvidaba de invalidar lo que cuelga de
+                # ella, dejando barras_confirmadas/compases_confirmados en
+                # True (con Compas/Barra viejos) contra un ancla ya distinta.
+                invalidar_desde_ancla(pagina)
             pagina.ancla_confirmada = False  # volver a buscar implica que lo confirmado anterior ya no vale tal cual
             pagina.save(update_fields=[
                 "ancla_x0", "ancla_y0", "ancla_x1", "ancla_y1",
@@ -2187,7 +2318,9 @@ def ajuste_barras(request, pk, numero):
     """Pantalla fusionada: ajustar barras (aceptadas/dudosas, agregar/borrar)
     Y numerar los compases que resultan de ellas, en un solo lugar — separarlas
     obligaba a ir y volver cada vez que numerar hacía notar un error de barra."""
-    partitura = get_object_or_404(Partitura, pk=pk, owner=request.user)
+    partitura = get_object_or_404(Partitura, pk=pk)
+    if not (partitura.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
     if not partitura.ancla_completa:
         return redirect("partituras:detalle", pk=pk)  # falta terminar el ancla
     pagina = get_object_or_404(Pagina, partitura=partitura, numero=numero)

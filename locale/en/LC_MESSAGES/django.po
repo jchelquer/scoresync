@@ -1240,6 +1240,9 @@ msgstr ""
 "above shows which ones are already done (✓ green) and which are still "
 "missing (red)."
 
+msgid "Preparación"
+msgstr "Prepared by"
+
 msgid "Publicada"
 msgstr "Published"
 
@@ -1360,6 +1363,12 @@ msgstr ""
 "Second step: mark where the page's REAL content starts and ends, so scan "
 "margins (edges, binding shadow) don't get mistaken for music."
 
+msgid "Se transfirió \"%(obra)s\" a %(usuario)s."
+msgstr "\"%(obra)s\" was transferred to %(usuario)s."
+
+msgid "Se transfirió \"%(parte)s\" a %(usuario)s."
+msgstr "\"%(parte)s\" was transferred to %(usuario)s."
+
 msgid "Separar"
 msgstr "Detach"
 
@@ -1439,6 +1448,12 @@ msgstr "Yes"
 msgid "Sólo quien la subió puede editar el procesamiento de esta parte."
 msgstr "Only whoever uploaded it can edit this part's processing."
 
+msgid "Temporizador"
+msgstr "Timer"
+
+msgid "Temporización"
+msgstr "Timing"
+
 msgid ""
 "Tercer paso: marcar la franja de cada sistema (línea de pentagramas) de la "
 "página, para que las etapas siguientes (ancla, barras) sepan dónde buscar."
@@ -1489,8 +1504,20 @@ msgstr "It doesn't have any part attached yet."
 msgid "Todos"
 msgstr "All"
 
+msgid "Transferir"
+msgstr "Transfer"
+
+msgid "Transferir a…"
+msgstr "Transfer to…"
+
 msgid "Trazar línea horizontal"
 msgstr "Trace horizontal line"
+
+msgid "¿Transferir esta obra a"
+msgstr "Transfer this piece to"
+
+msgid "¿Transferir esta parte a"
+msgstr "Transfer this part to"
 
 msgid "Título"
 msgstr "Title"
@@ -1509,6 +1536,9 @@ msgstr "System separation threshold"
 
 msgid "Umbral de separación entre sistemas (%)"
 msgstr "System separation threshold (%)"
+
+msgid "Usuario inválido."
+msgstr "Invalid user."
 
 msgid ""
 "Un click en cualquier compás (de la lista o de la partitura) lo elige para "
