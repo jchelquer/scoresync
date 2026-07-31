@@ -187,6 +187,20 @@
         <i class="bi bi-trash"></i> {% translate "Borrar seleccionadas" %}
       </button>
       <hr style="border-color: #2a4a47;">
+      <div class="mb-2">
+        <label for="input-margen-sistemas" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
+          {% translate "Margen izquierdo de contenido (todos los sistemas)" %}
+        </label>
+        <div class="d-flex align-items-center gap-2">
+          <input type="range" id="input-margen-sistemas" class="form-range"
+                 min="0" max="0.20" step="0.001" value="0">
+          <span id="valor-margen-sistemas" class="small" style="color: var(--ss-text-muted); min-width: 3rem;">0.0%</span>
+        </div>
+        <p class="small mb-0" style="color: var(--ss-text-muted)">
+          {% translate "Empuja de un saque el arranque del primer compás de cada sistema de esta página (para dejar afuera clave/armadura). Después se puede seguir corrigiendo sistema por sistema como siempre." %}
+        </p>
+      </div>
+      <hr style="border-color: #2a4a47;">
       <form method="post" class="mb-2">
         {% csrf_token %}
         <label for="input-umbral-contenido" class="small mb-1 d-block" style="color: var(--ss-text-muted)">
@@ -684,6 +698,27 @@ document.getElementById('form-barras').addEventListener('submit', () => {
 
 imagen.addEventListener('load', render);
 if (imagen.complete) render();
+
+// Corrección de un saque para TODOS los sistemas de la página (ver
+// Sistema.contenido_x0): en vez de reubicar la zona muerta sistema por
+// sistema (ver banda.addEventListener('click', ...) más arriba), este
+// slider PISA el contenido_x0 de todos con el mismo valor — a pedido del
+// usuario, para el caso típico de que la clave/armadura ocupe más o menos
+// el mismo ancho en toda la página. Las correcciones locales de ahí en más
+// siguen funcionando exactamente igual (clic reubica, clic en la línea
+// descarta), sistema por sistema, sin que este slider vuelva a pisarlas
+// hasta que se lo mueva de nuevo.
+const inputMargenSistemas = document.getElementById('input-margen-sistemas');
+const valorMargenSistemas = document.getElementById('valor-margen-sistemas');
+if (inputMargenSistemas && valorMargenSistemas) {
+  inputMargenSistemas.addEventListener('input', () => {
+    const frac = parseFloat(inputMargenSistemas.value);
+    valorMargenSistemas.textContent = (frac * 100).toFixed(1) + '%';
+    sistemas.forEach(s => { s.contenido_x0 = frac; });
+    marcarSucio();
+    render();
+  });
+}
 
 // ── Zoom flotante (ver ajuste_ancla.html para la explicación completa) ─────
 const lienzoWrapper = document.getElementById('lienzo-wrapper');

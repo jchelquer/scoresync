@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.24.0"
+  date: "2026-07-31"
+  changes:
+    - type: nuevo
+      text: "Ajuste de barras: nuevo control \"Margen izquierdo de contenido (todos los sistemas)\" — un slider que empuja de un saque el arranque del primer compás de cada sistema de la página (para dejar afuera la clave/armadura), en vez de tener que reubicarlo sistema por sistema. Las correcciones locales de siempre siguen funcionando después, sistema por sistema."
 - version: "1.23.1"
   date: "2026-07-31"
   changes:
