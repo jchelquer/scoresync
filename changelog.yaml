@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.28.0"
+  date: "2026-08-01"
+  changes:
+    - type: mejorado
+      text: "Reforma del \"modo compás\" (Practicar sin partitura, pensado sobre todo para el celular): botones y controles bastante más grandes para tocar con el dedo, y el cuadro central (metrónomo/número de compás/indicaciones) más chico para dejarles lugar."
+    - type: mejorado
+      text: "Los números de compás y \"vez\" (desde/hasta) ahora se ven centrados y en negrita, con la caja de \"vez\" resaltada en verde claro — vale tanto en modo compás como en modo partitura."
+    - type: mejorado
+      text: "El desplegable de parte (\"Score\") se ve en negrita en las dos pantallas."
 - version: "1.27.0"
   date: "2026-07-31"
   changes:

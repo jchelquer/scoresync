@@ -150,6 +150,130 @@
     vertical-align: -1px;
     cursor: default;
   }
+
+  /* Reforma "modo compás" (uso previsto sobre todo en el celular, con el
+     instrumento en la mano — ver #panel-controles más abajo, NO afecta
+     #barra-compacta que ya tiene su propio tamaño reducido para modo
+     partitura): controles ~60% más grandes para tocar con el dedo, cuadro
+     central (metrónomo/compás/indicaciones) más chico para dejarles
+     lugar. .fila-botones ya tenía flex-wrap, así que agrandar no saca
+     nada de pantalla — sólo pasan más controles a la fila siguiente. */
+  #panel-controles .card.text-center .card-body {
+    padding-top: 1.5rem;
+    padding-bottom: 1.5rem;
+  }
+  #panel-controles #nav-metronomo-caja {
+    width: 8rem;
+    height: 1.5rem;
+  }
+  #panel-controles #nav-metronomo-punto {
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-top: -0.55rem;
+    margin-left: -0.55rem;
+  }
+  #panel-controles #nav-compas {
+    font-size: 2.75rem;
+    font-weight: 600;
+  }
+  #panel-controles .info-extra {
+    margin-top: 0.75rem !important;
+    font-size: 0.9rem;
+  }
+  #panel-controles #nav-descripcion-wrap {
+    margin-top: 0.5rem !important;
+  }
+
+  #panel-controles .fila-botones .btn {
+    font-size: 1.6rem;
+    padding: 0.55rem 1.1rem;
+    line-height: 1;
+  }
+  #panel-controles .fila-botones .btn.btn-sm {
+    font-size: 1rem;
+    padding: 0.35rem 0.7rem;
+  }
+  #panel-controles .fila-botones .ss-tecla {
+    min-width: 2.9rem;
+    height: 2.7rem;
+    font-size: 1.35rem;
+  }
+  #panel-controles .fila-botones .ss-tecla-inline {
+    min-width: 2.2rem;
+    height: 2.1rem;
+    font-size: 1.2rem;
+  }
+  #panel-controles .fila-botones .form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+    margin-top: 0.15em;
+  }
+  #panel-controles .fila-botones .form-check-label {
+    font-size: 1rem;
+  }
+  #panel-controles .fila-botones input[type="number"],
+  #panel-controles .fila-botones input[type="range"] {
+    height: 2rem;
+  }
+  #panel-controles #velocidad-slider {
+    width: 9rem !important;
+  }
+
+  /* Textos de los controles (rango desde/hasta/vez/Loop, Compases al
+     aire, Velocidad) — mismo criterio que los botones: más legibles
+     para leer/tocar desde el celular. Un solo selector cubre #form-rango
+     y .fila-botones porque ambos usan el mismo patrón "form-label small". */
+  #panel-controles label.form-label.small {
+    font-size: 1.05rem !important;
+  }
+  #panel-controles #form-rango input,
+  #panel-controles .fila-botones input[type="text"],
+  #panel-controles .fila-botones input[type="number"] {
+    font-size: 1.1rem;
+  }
+  #panel-controles #form-rango input[name="desde_compas"],
+  #panel-controles #form-rango input[name="hasta_compas"] {
+    width: 6.5rem;
+  }
+  #panel-controles #form-rango input[name="desde_pasada"],
+  #panel-controles #form-rango input[name="hasta_pasada"] {
+    width: 4.5rem;
+  }
+  #panel-controles #control-compases-aire input {
+    width: 4.5rem;
+  }
+  #panel-controles #velocidad-valor {
+    font-size: 1.05rem;
+    min-width: 3.2rem;
+  }
+
+  /* Números de compás, "vez" y "Compases al aire": centrados en su caja,
+     en negrita, y la caja de "vez" resaltada en verde claro (mismo verde
+     que COLOR_NIVEL_ANOTACION_CLARO.obra, ver más abajo en el script,
+     para no inventar un verde nuevo). Sin scope a #panel-controles:
+     estos inputs se REALOJAN enteros dentro de #score-header-rango en
+     modo partitura (ver alternarModoScore()), y todo esto (centrado,
+     negrita, fondo) vale en los dos modos por igual. */
+  #form-rango input[name="desde_compas"],
+  #form-rango input[name="hasta_compas"],
+  #form-rango input[name="desde_pasada"],
+  #form-rango input[name="hasta_pasada"],
+  #control-compases-aire input {
+    text-align: center;
+    font-weight: 700;
+  }
+  #form-rango input[name="desde_pasada"],
+  #form-rango input[name="hasta_pasada"] {
+    background-color: #a1cdaf;
+  }
+
+  /* Nombre de la parte elegida ("Score", el desplegable): en negrita en
+     las dos pantallas. #score-panel (y por lo tanto este select) no se
+     esconde ni se realoja entre modo compás y modo partitura — está
+     siempre visible, así que una sola regla alcanza para ambas. */
+  #score-header-row select[name="parte"] {
+    font-weight: 700;
+  }
 </style>
 {% endblock %}
 
