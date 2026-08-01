@@ -189,7 +189,8 @@
     padding: 0.55rem 1.1rem;
     line-height: 1;
   }
-  #panel-controles .fila-botones .btn.btn-sm {
+  #panel-controles .fila-botones .btn.btn-sm,
+  #panel-controles #form-rango .btn.btn-sm {
     font-size: 1rem;
     padding: 0.35rem 0.7rem;
   }
@@ -203,16 +204,19 @@
     height: 2.1rem;
     font-size: 1.2rem;
   }
-  #panel-controles .fila-botones .form-switch .form-check-input {
+  #panel-controles .fila-botones .form-switch .form-check-input,
+  #panel-controles #form-rango .form-switch .form-check-input {
     width: 3em;
     height: 1.5em;
     margin-top: 0.15em;
   }
-  #panel-controles .fila-botones .form-check-label {
+  #panel-controles .fila-botones .form-check-label,
+  #panel-controles #form-rango .form-check-label {
     font-size: 1rem;
   }
   #panel-controles .fila-botones input[type="number"],
-  #panel-controles .fila-botones input[type="range"] {
+  #panel-controles .fila-botones input[type="range"],
+  #panel-controles #form-rango input[type="number"] {
     height: 2rem;
   }
   #panel-controles #velocidad-slider {
@@ -332,6 +336,47 @@
       <input type="checkbox" name="loop" id="loop" class="form-check-input" {% if loop %}checked{% endif %}>
     </div>
   </div>
+  <div id="control-compases-aire">
+    <label for="compases-aire" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
+    <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
+  </div>
+  {% if obra.audio %}
+  <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
+    <div class="form-check form-switch d-flex align-items-center mb-0">
+      <input class="form-check-input" type="checkbox" id="toggle-ejecutar-audio" {% if ejecutar_con_audio_guardado %}checked{% endif %}>
+      <label class="form-check-label small ms-1" for="toggle-ejecutar-audio" style="color: var(--ss-text-muted);">🎧 {% translate "Ejecutar con audio" %}</label>
+    </div>
+    <div class="form-check form-switch d-flex align-items-center mb-0" id="control-mute-audio" style="{% if not ejecutar_con_audio_guardado %}display:none;{% endif %}">
+      <input class="form-check-input" type="checkbox" id="toggle-mute-audio">
+      <label class="form-check-label small ms-1" for="toggle-mute-audio" style="color: var(--ss-text-muted);">🔇 {% translate "Silenciar" %}</label>
+    </div>
+  </div>
+  <audio id="nav-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
+  {% endif %}
+  <div class="form-check form-switch d-flex align-items-center" id="switch-metronomo-visual">
+    <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
+    <label class="form-check-label small ms-1" for="metronomo-visual" style="color: var(--ss-text-muted);">{% translate "Metrónomo visual" %}</label>
+  </div>
+  <div class="form-check form-switch d-flex align-items-center" id="switch-metronomo-audio">
+    <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
+    <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
+  </div>
+  {% if tiene_score %}
+  <div class="form-check form-switch d-flex align-items-center" id="control-numeros-compas">
+    <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
+    <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
+  </div>
+  <div class="form-check form-switch d-flex align-items-center" id="control-avisos-cambio">
+    <input class="form-check-input" type="checkbox" id="toggle-avisos-cambio" checked>
+    <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás, rampas de accelerando/rallentando y saltos del itinerario, superpuestos a la partitura' %}">{% translate "avisos" %}</label>
+  </div>
+  <div class="form-check form-switch d-flex align-items-center" id="control-mostrar-anotaciones">
+    <input class="form-check-input" type="checkbox" id="toggle-mostrar-anotaciones" checked>
+    <label class="form-check-label small ms-1" for="toggle-mostrar-anotaciones" style="color: var(--ss-text-muted);">{% translate "anotaciones" %}</label>
+  </div>
+  <button id="btn-anotar" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Anotar — clic sobre la partitura para dejar un cartel de texto en ese compás. Se queda activa hasta que la apagués de nuevo o apretés Esc.' %}">✏️ {% translate "Anotar" %}</button>
+  <button id="btn-exportar-pdf" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Exportar esta parte a PDF, con los números de compás/avisos/rampas/saltos/anotaciones que estén visibles ahora (sin el recuadro del compás en ejecución, eso es sólo de la pantalla).' %}">📄 {% translate "Exportar PDF" %}</button>
+  {% endif %}
 </form>
 
 <div class="card border-0 text-center mb-3" style="background: var(--ss-surface)">
@@ -378,10 +423,6 @@
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "ant" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "sig" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
   {% endif %}
-  <div id="control-compases-aire">
-    <label for="compases-aire" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
-    <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
-  </div>
   <div id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
     <div class="d-flex align-items-center gap-2">
@@ -397,48 +438,11 @@
       <button type="button" id="btn-velocidad-reset" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate 'Volver a 100%' %}">100%</button>
     </div>
   </div>
-  {% if obra.audio %}
-  <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
-    <div class="form-check form-switch d-flex align-items-center mb-0">
-      <input class="form-check-input" type="checkbox" id="toggle-ejecutar-audio" {% if ejecutar_con_audio_guardado %}checked{% endif %}>
-      <label class="form-check-label small ms-1" for="toggle-ejecutar-audio" style="color: var(--ss-text-muted);">🎧 {% translate "Ejecutar con audio" %}</label>
-    </div>
-    <div class="form-check form-switch d-flex align-items-center mb-0" id="control-mute-audio" style="{% if not ejecutar_con_audio_guardado %}display:none;{% endif %}">
-      <input class="form-check-input" type="checkbox" id="toggle-mute-audio">
-      <label class="form-check-label small ms-1" for="toggle-mute-audio" style="color: var(--ss-text-muted);">🔇 {% translate "Silenciar" %}</label>
-    </div>
-  </div>
-  <audio id="nav-audio" src="{{ obra.audio.url }}" preload="metadata"></audio>
-  {% endif %}
   <button id="btn-play" type="button" class="btn btn-ss" title="{% translate 'Ejecutar en tiempo real' %}">▶</button>
   <button id="btn-pause" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Pausar' %}">⏸</button>
   <button id="btn-continuar" type="button" class="btn btn-ss" style="display:none;" title="{% translate 'Continuar' %}">⏯</button>
   <button id="btn-reiniciar" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Reiniciar' %}"><i class="bi bi-arrow-counterclockwise"></i></button>
   <button id="btn-detener" type="button" class="btn btn-outline-light" style="display:none;" title="{% translate 'Detener' %}">⏹</button>
-  <div class="form-check form-switch d-flex align-items-center ms-2" id="switch-metronomo-visual">
-    <input class="form-check-input" type="checkbox" id="metronomo-visual" checked>
-    <label class="form-check-label small ms-1" for="metronomo-visual" style="color: var(--ss-text-muted);">{% translate "Metrónomo visual" %}</label>
-  </div>
-  <div class="form-check form-switch d-flex align-items-center" id="switch-metronomo-audio">
-    <input class="form-check-input" type="checkbox" id="metronomo-audio" checked>
-    <label class="form-check-label small ms-1" for="metronomo-audio" style="color: var(--ss-text-muted);">{% translate "Sonido" %}</label>
-  </div>
-  {% if tiene_score %}
-  <div class="form-check form-switch d-flex align-items-center" id="control-numeros-compas">
-    <input class="form-check-input" type="checkbox" id="toggle-numeros-compas" checked>
-    <label class="form-check-label small ms-1" for="toggle-numeros-compas" style="color: var(--ss-text-muted);">{% translate "n° compás" %}</label>
-  </div>
-  <div class="form-check form-switch d-flex align-items-center" id="control-avisos-cambio">
-    <input class="form-check-input" type="checkbox" id="toggle-avisos-cambio" checked>
-    <label class="form-check-label small ms-1" for="toggle-avisos-cambio" style="color: var(--ss-text-muted);" title="{% translate 'Avisa cambios de tempo, armadura y compás, rampas de accelerando/rallentando y saltos del itinerario, superpuestos a la partitura' %}">{% translate "avisos" %}</label>
-  </div>
-  <div class="form-check form-switch d-flex align-items-center" id="control-mostrar-anotaciones">
-    <input class="form-check-input" type="checkbox" id="toggle-mostrar-anotaciones" checked>
-    <label class="form-check-label small ms-1" for="toggle-mostrar-anotaciones" style="color: var(--ss-text-muted);">{% translate "anotaciones" %}</label>
-  </div>
-  <button id="btn-anotar" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Anotar — clic sobre la partitura para dejar un cartel de texto en ese compás. Se queda activa hasta que la apagués de nuevo o apretés Esc.' %}">✏️ {% translate "Anotar" %}</button>
-  <button id="btn-exportar-pdf" type="button" class="btn btn-sm btn-outline-light" title="{% translate 'Exportar esta parte a PDF, con los números de compás/avisos/rampas/saltos/anotaciones que estén visibles ahora (sin el recuadro del compás en ejecución, eso es sólo de la pantalla).' %}">📄 {% translate "Exportar PDF" %}</button>
-  {% endif %}
 </div>
 </div>
 
