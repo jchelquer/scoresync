@@ -78,6 +78,14 @@ class Obra(models.Model):
         help_text="Grabación de referencia (mp3) para sincronizar el itinerario — ver Segmento.tiempo_inicio "
                    "y la pantalla de sincronización.",
     )
+    version = models.CharField(
+        max_length=200, blank=True, verbose_name='Versión',
+        help_text="Quién toca en la grabación de referencia (texto libre, opcional).",
+    )
+    enlace = models.URLField(
+        max_length=500, blank=True, verbose_name='Enlace',
+        help_text="Link opcional a la fuente de la grabación de referencia (video, página, etc.).",
+    )
     publicada = models.BooleanField(
         default=True,
         help_text="Si está en False, sólo el dueño y los admins la ven (en la biblioteca y entrando "

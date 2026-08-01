@@ -465,7 +465,9 @@ def obra_detalle(request, pk):
     """Ficha de una obra: sus datos y las partes (partituras) que tiene
     adjuntas, más un formulario para adjuntar otra partitura propia todavía
     sin obra. También el alta/reemplazo del audio de referencia (para poder
-    sincronizar itinerario/compases con el tiempo real).
+    sincronizar itinerario/compases con el tiempo real) junto con su versión
+    y enlace de origen (Obra.version/enlace — texto libre, sin validación
+    fuerte de URL porque se guardan a mano, no vía ModelForm).
 
     No hace falta ser dueño de la OBRA para entrar — cualquiera logueado
     puede ver la ficha, elegir qué parte seguir y navegar/ejecutar, SIEMPRE
@@ -481,13 +483,19 @@ def obra_detalle(request, pk):
     es_admin = _es_admin(request.user)
     if not obra.publicada and not es_dueño and not es_admin:
         raise Http404()
-    if request.method == "POST" and request.FILES.get("audio"):
+    if request.method == "POST" and "audio_form" in request.POST:
         if not es_dueño:
             return HttpResponseForbidden()
-        if obra.audio:
-            obra.audio.delete(save=False)
-        obra.audio = request.FILES["audio"]
-        obra.save(update_fields=["audio"])
+        campos = []
+        if request.FILES.get("audio"):
+            if obra.audio:
+                obra.audio.delete(save=False)
+            obra.audio = request.FILES["audio"]
+            campos.append("audio")
+        obra.version = request.POST.get("version", "").strip()
+        obra.enlace = request.POST.get("enlace", "").strip()
+        campos += ["version", "enlace"]
+        obra.save(update_fields=campos)
         messages.success(request, 'Se actualizó el audio de referencia.')
         return redirect("partituras:obra_detalle", pk=pk)
     return render(request, "partituras/obra_detalle.html", {

@@ -749,6 +749,12 @@ msgstr "Choose another file"
 msgid "Elegí una nueva contraseña"
 msgstr "Choose a new password"
 
+msgid "Enlace"
+msgstr "Link"
+
+msgid "Enlace (opcional)"
+msgstr "Link (optional)"
+
 msgid "Enviar"
 msgstr "Send"
 
@@ -1589,6 +1595,9 @@ msgstr ""
 
 msgid "Velocidad"
 msgstr "Speed"
+
+msgid "Versión (quién toca, opcional)"
+msgstr "Version (who's playing, optional)"
 
 msgid "Volver a 100%"
 msgstr "Back to 100%"

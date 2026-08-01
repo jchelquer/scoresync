@@ -32,7 +32,7 @@
 
 #Entender cuándo se recalcula el plan de tiempos: no tengo claro cuándo se reenvía/recalcula el plan de ejecución (plan_obra/construir_plan) — a veces siento que compases bien temporizados "se corren" solos. No necesariamente es un bug, puede ser que sólo falte que se entienda el ciclo.
 
-Compás estirado por salto espacial (sin pausa real): cuando hay un salto espacial dentro de lo que debería ser el mismo sistema, sin que haya un corte real en la ejecución, uno de los dos compases queda dibujado artificialmente largo — sólo afecta dónde se dibujan los pulsos, no es grave. Hace falta un caso concreto (imagen real) para diagnosticarlo bien.
+#Compás estirado por salto espacial (sin pausa real): DECIDIDO 31/07, no vale la pena resolverlo. Mecanismo: el ancho de un compás se define como "hasta donde empieza el siguiente ancla", así que un hueco visual sin corte real de ejecución (p.ej. fin de sistema con espacio antes de que empiece otro trozo) queda adosado al compás anterior y los pulsos se dibujan repartidos en ese hueco — no es grave, sólo se ven en un lugar raro. Se evaluaron: ancla nueva de "corte de contenido" real, handle manual por compás (campo nullable en Compás o tabla aparte), heurística automática de ancho anómalo — todas suman complejidad (modelo o rendering) para un caso raro. Si algún día molesta puntualmente, la salida más barata es recomponer la partitura impresa para evitar el salto.
 
 Plica/ledger-line como falso positivo en detección de barras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
 
@@ -46,5 +46,6 @@ Plica/ledger-line como falso positivo en detección de barras: teoría propia (2
 #Impresión de partes: sería bueno poder convertir en pdf una parte con todos los elementos agregados que estén a la vista (número de compás, avisos, anotaciones...)
 #Margen izquierdo: al marcar compases, poder poner un margen izquierdo para salvar todas las claves de sol y similares. El ajuste después se puede hacer a mano.
 #Saltos coloreados: agregar marcas de saltos con colores por pares. En cada uno, la partida es oscura y la llegada clara.
-Entregar ownership: que el owner (de obra o parte) o el admin puedan entregar el ownership de la obra o parte a otro usuario.
-Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.
+#Entregar ownership: que el owner (de obra o parte) o el admin puedan entregar el ownership de la obra o parte a otro usuario.
+#Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.
+Fuente audio: agregar el origen del audio.

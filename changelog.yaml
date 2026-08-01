@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.27.0"
+  date: "2026-07-31"
+  changes:
+    - type: nuevo
+      text: "En la ficha de una obra, junto al audio de referencia, ahora se puede indicar la versión (quién toca) y un enlace opcional a su origen — el enlace es clickeable y se abre en una pestaña nueva."
 - version: "1.26.1"
   date: "2026-07-31"
   changes:

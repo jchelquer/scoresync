@@ -755,6 +755,12 @@ msgstr "Elegir otro archivo"
 msgid "Elegí una nueva contraseña"
 msgstr "Elegí una nueva contraseña"
 
+msgid "Enlace"
+msgstr "Enlace"
+
+msgid "Enlace (opcional)"
+msgstr "Enlace (opcional)"
+
 msgid "Enviar"
 msgstr "Enviar"
 
@@ -1600,6 +1606,9 @@ msgstr ""
 
 msgid "Velocidad"
 msgstr "Velocidad"
+
+msgid "Versión (quién toca, opcional)"
+msgstr "Versión (quién toca, opcional)"
 
 msgid "Volver a 100%"
 msgstr "Volver a 100%"
