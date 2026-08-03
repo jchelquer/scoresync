@@ -46,6 +46,16 @@
   .input-rango { -moz-appearance: textfield; }
   .input-rango::-webkit-outer-spin-button,
   .input-rango::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  /* Números de compás y "vez" del rango: mismo tratamiento que en
+     Practicar (navegador_obra.html) — centrados y en negrita, y la caja de
+     "vez" con el mismo verde claro (#a1cdaf) que ahí, para que ambas
+     pantallas se vean consistentes. */
+  #sync-rango-desde-compas, #sync-rango-hasta-compas,
+  #sync-rango-desde-vez, #sync-rango-hasta-vez {
+    text-align: center;
+    font-weight: 700;
+  }
+  #sync-rango-desde-vez, #sync-rango-hasta-vez { background-color: #a1cdaf; }
   .tiempo-real { cursor: text; border-bottom: 1px dotted var(--ss-text-muted); color: var(--ss-text-bright); }
   .tiempo-real:hover { border-bottom-color: var(--ss-accent); }
   .tiempo-real input { width: 5rem; padding: 0 0.3rem; }

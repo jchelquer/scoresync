@@ -1607,6 +1607,9 @@ msgstr ""
 msgid "Velocidad"
 msgstr "Velocidad"
 
+msgid "Ver videos explicativos de ScoreSync"
+msgstr "Ver videos explicativos de ScoreSync"
+
 msgid "Versión (quién toca, opcional)"
 msgstr "Versión (quién toca, opcional)"
 

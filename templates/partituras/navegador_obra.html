@@ -1969,6 +1969,15 @@
   const ETIQUETA_NIVEL_ANOTACION = {
     obra: '{% translate "De obra" %}', parte: '{% translate "De parte" %}', privada: '{% translate "Privada" %}',
   };
+  // El violeta de "privada" (COLOR_NIVEL_ANOTACION) se lee bien sobre la
+  // página clara de la partitura, pero casi no contrasta contra el fondo
+  // oscuro del editor de anotaciones (--ss-surface) — para el texto DEL
+  // EDITOR (etiqueta de nivel, radios), privada usa el tono claro en vez
+  // del de identidad. obra/parte no se tocan, no se reportaron ilegibles.
+  function colorNivelEditor(nivel) {
+    if (nivel === 'privada') return COLOR_NIVEL_ANOTACION_CLARO.privada;
+    return COLOR_NIVEL_ANOTACION[nivel] || '#666';
+  }
 
   let anotacionesPorCompas = new Map();
   let nivelesPermitidosAnotacion = [];
@@ -2239,13 +2248,13 @@
     if (existente) {
       const span = document.createElement('span');
       span.textContent = ETIQUETA_NIVEL_ANOTACION[existente.nivel] || existente.nivel;
-      span.style.color = COLOR_NIVEL_ANOTACION[existente.nivel] || '#666';
+      span.style.color = colorNivelEditor(existente.nivel);
       span.style.fontWeight = 'bold';
       anotacionEditorNiveles.appendChild(span);
     } else {
       nivelesPermitidosAnotacion.forEach((nivel, i) => {
         const label = document.createElement('label');
-        label.style.color = COLOR_NIVEL_ANOTACION[nivel] || '#666';
+        label.style.color = colorNivelEditor(nivel);
         label.className = 'me-1';
         const input = document.createElement('input');
         input.type = 'radio';

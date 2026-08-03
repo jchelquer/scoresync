@@ -48,4 +48,4 @@ Plica/ledger-line como falso positivo en detección de barras: teoría propia (2
 #Saltos coloreados: agregar marcas de saltos con colores por pares. En cada uno, la partida es oscura y la llegada clara.
 #Entregar ownership: que el owner (de obra o parte) o el admin puedan entregar el ownership de la obra o parte a otro usuario.
 #Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.
-Fuente audio: agregar el origen del audio.
+#Fuente audio: agregar el origen del audio.
