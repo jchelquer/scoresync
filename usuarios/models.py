@@ -46,6 +46,9 @@ class Usuario(AbstractUser):
 
     idioma = models.CharField(max_length=10, choices=IDIOMAS, default=IDIOMA_ES)
 
+    terminos_aceptados_en = models.DateTimeField(null=True, blank=True)
+    terminos_version = models.CharField(max_length=20, blank=True)
+
     class Meta:
         managed = False
         db_table = 'usuarios_usuario'

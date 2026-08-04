@@ -27,6 +27,14 @@ IS_PRODUCTION = ENVIRONMENT == "production"
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-key-insegura-cambiar")
 SSO_SECRET = os.environ.get("SSO_SECRET", "")
 
+# Versión vigente de los Términos y Condiciones / Política de Privacidad
+# combinados (ver infedu-jch/legal/). Si un usuario logueado tiene una
+# versión distinta (o ninguna) en Usuario.terminos_version, se lo redirige a
+# infedu.com.ar/aceptar-terminos/ antes de poder seguir usando la app (ver
+# usuarios.middleware.TerminosMiddleware). Subir este valor junto con el
+# texto legal fuerza a todas las cuentas a re-aceptar.
+TERMINOS_VERSION = "1.0"
+
 DEBUG = not IS_PRODUCTION
 
 ALLOWED_HOSTS = (
@@ -59,6 +67,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "usuarios.middleware.IdiomaUsuarioMiddleware",
+    "usuarios.middleware.TerminosMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
