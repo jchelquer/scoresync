@@ -466,27 +466,35 @@ def _serializar_anotacion(anotacion, user):
     }
 
 
-def _obra_completa(obra):
-    """Itinerario armado + al menos una parte con los compases confirmados
-    en alguna página (mismo criterio que _partes_disponibles usa para
-    decidir si una parte se puede seguir en la ejecución) + temporización
-    "por compases" completa (ningún compás del rango sin cobertura real —
-    mismo chequeo que bloquea "Ejecutar por compases" en navegador_obra.html/
-    pedirPlan) — una obra que no cumple esto todavía no se puede practicar
-    de verdad, así que no se deja publicar (ver alternar_publicacion_obra)
-    aunque el switch exista: sería confuso para quien la encuentre en la
-    biblioteca y no pueda usarla."""
-    if not obra.segmentos.exists():
-        return False
-    if not Pagina.objects.filter(partitura__obra=obra, compases_confirmados=True).exists():
-        return False
+def _obra_incompleta_motivos(obra):
+    """Motivos concretos (lista, vacía si la obra ya se puede publicar) por
+    los que todavía le falta algo: itinerario armado + al menos una parte
+    con los compases confirmados en alguna página (mismo criterio que
+    _partes_disponibles usa para decidir si una parte se puede seguir en
+    la ejecución) + temporización "por compases" completa (ningún compás
+    del rango sin cobertura real — mismo chequeo que bloquea "Ejecutar por
+    compases" en navegador_obra.html/pedirPlan). Se evalúan los tres
+    chequeos SIEMPRE (no se corta en el primero que falla) para poder
+    mostrar en obra_detalle.html/alternar_publicacion_obra exactamente qué
+    falta, en vez de un texto fijo con los tres requisitos completos."""
+    motivos = []
     navegables = segmentos_navegables(obra)
     if not navegables:
-        return False
-    pulsos, completo, _cambios, _rampas, _saltos = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
-    if not completo or not pulsos:
-        return False
-    return not any(p['duracion_compases'] is None for p in pulsos)
+        motivos.append(_('armar el itinerario de ejecución (hay algún segmento sin "compás desde/hasta", o ninguno cargado)'))
+    if not Pagina.objects.filter(partitura__obra=obra, compases_confirmados=True).exists():
+        motivos.append(_("confirmar los compases de al menos una parte"))
+    if navegables:
+        pulsos, completo, _cambios, _rampas, _saltos = construir_plan(obra, navegables[0].compas_desde, 1, None, None)
+        if not completo or not pulsos:
+            motivos.append(_('completar tempo/compás en "Notación" para algún tramo del itinerario'))
+        elif any(p['duracion_compases'] is None for p in pulsos):
+            motivos.append(_('anclar tiempos reales en "Sincronizar compases" para algún tramo del itinerario'))
+    return motivos
+
+
+def _obra_completa(obra):
+    """True si la obra ya se puede publicar — ver _obra_incompleta_motivos."""
+    return not _obra_incompleta_motivos(obra)
 
 
 ORDENES_BIBLIOTECA = {
@@ -580,16 +588,21 @@ def obra_detalle(request, pk):
         obra.save(update_fields=campos)
         messages.success(request, 'Se actualizó el audio de referencia.')
         return redirect("partituras:obra_detalle", pk=pk)
+    partituras = sorted(
+        (p for p in obra.partituras.all() if _puede_ver_partitura(request.user, p, obra=obra)),
+        key=lambda p: p.nombre_parte.lower(),
+    )
+    for p in partituras:
+        p.preparada = p.paginas.filter(compases_confirmados=True).exists()
+    obra_incompleta_motivos = _obra_incompleta_motivos(obra)
     return render(request, "partituras/obra_detalle.html", {
         "obra": obra,
         "es_dueño": es_dueño,
         "es_admin": es_admin,
         "usuarios_transferibles": _usuarios_transferibles(request.user) if (es_dueño or es_admin) else None,
-        "obra_completa": _obra_completa(obra),
-        "partituras": sorted(
-            (p for p in obra.partituras.all() if _puede_ver_partitura(request.user, p, obra=obra)),
-            key=lambda p: p.nombre_parte.lower(),
-        ),
+        "obra_completa": not obra_incompleta_motivos,
+        "obra_incompleta_motivos": obra_incompleta_motivos,
+        "partituras": partituras,
         "partituras_sin_obra": Partitura.objects.filter(owner=request.user, obra__isnull=True),
     })
 
@@ -702,14 +715,14 @@ def alternar_publicacion_obra(request, pk):
     obra = get_object_or_404(Obra, pk=pk)
     if not (obra.owner_id == request.user.id or _es_admin(request.user)):
         return HttpResponseForbidden()
-    if not obra.publicada and not _obra_completa(obra):
-        messages.warning(
-            request,
-            'Todavía no se puede publicar: hace falta un itinerario armado, al menos una '
-            'parte con los compases confirmados, y la temporización por compases completa '
-            '(sin ningún compás sin marcar) en "Sincronizar compases".',
-        )
-        return redirect("partituras:obra_detalle", pk=pk)
+    if not obra.publicada:
+        motivos = _obra_incompleta_motivos(obra)
+        if motivos:
+            messages.warning(
+                request,
+                _("Todavía no se puede publicar: ") + "; ".join(motivos) + ".",
+            )
+            return redirect("partituras:obra_detalle", pk=pk)
     obra.publicada = not obra.publicada
     obra.save(update_fields=["publicada"])
     return redirect("partituras:obra_detalle", pk=pk)

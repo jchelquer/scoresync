@@ -1968,3 +1968,31 @@ msgstr "— pausa (compás %(n)s) —"
 
 msgid "— seleccioná —"
 msgstr "— seleccioná —"
+
+msgid ""
+"armar el itinerario de ejecución (hay algún segmento sin \"compás desde/"
+"hasta\", o ninguno cargado)"
+msgstr ""
+"armar el itinerario de ejecución (hay algún segmento sin \"compás desde/"
+"hasta\", o ninguno cargado)"
+
+msgid "confirmar los compases de al menos una parte"
+msgstr "confirmar los compases de al menos una parte"
+
+msgid "completar tempo/compás en \"Notación\" para algún tramo del itinerario"
+msgstr "completar tempo/compás en \"Notación\" para algún tramo del itinerario"
+
+msgid "anclar tiempos reales en \"Sincronizar compases\" para algún tramo del itinerario"
+msgstr "anclar tiempos reales en \"Sincronizar compases\" para algún tramo del itinerario"
+
+msgid "Todavía no se puede publicar: "
+msgstr "Todavía no se puede publicar: "
+
+msgid "Todavía no se puede publicar, falta:"
+msgstr "Todavía no se puede publicar, falta:"
+
+msgid "Preparada"
+msgstr "Preparada"
+
+msgid "Compases sin confirmar"
+msgstr "Compases sin confirmar"

@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.2"
+  date: "2026-08-08"
+  changes:
+    - type: corregido
+      text: "En la ficha de una obra, el texto que explica por qué todavía no se puede publicar era invisible (colores por defecto de Bootstrap sobre el fondo oscuro de la pantalla)."
+    - type: mejorado
+      text: "Ese mensaje ahora dice exactamente qué le falta a la obra (itinerario, compases confirmados, tempo en \"Notación\", o anclaje de tiempos en \"Sincronizar compases\") en vez de un texto fijo con los tres requisitos completos."
+    - type: nuevo
+      text: "En la lista de \"Partes\" de una obra, cada una muestra ahora si ya está \"Preparada\" (compases confirmados) o si todavía le falta confirmarlos."
 - version: "1.31.1"
   date: "2026-08-08"
   changes:

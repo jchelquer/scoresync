@@ -44,9 +44,14 @@
              title="{% translate 'Despublicada: sólo vos y los admins la ven (biblioteca y URL directa).' %}">
         {% translate "Publicada (visible para todos)" %}
       </label>
-      {% if not obra.publicada and not obra_completa %}
-      <div class="form-text small">
-        {% translate 'Todavía no se puede publicar: hace falta un itinerario armado, al menos una parte con los compases confirmados, y la temporización por compases completa (sin ningún compás sin marcar) en "Sincronizar compases".' %}
+      {% if not obra.publicada and obra_incompleta_motivos %}
+      <div class="form-text small" style="color: var(--ss-text-muted)">
+        {% translate "Todavía no se puede publicar, falta:" %}
+        <ul class="mb-0 ps-3">
+          {% for motivo in obra_incompleta_motivos %}
+          <li>{{ motivo }}</li>
+          {% endfor %}
+        </ul>
       </div>
       {% endif %}
     </form>
@@ -161,6 +166,7 @@
             <a href="{% url 'partituras:estado' p.pk %}" style="color: var(--ss-text)">
               <i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ p.nombre_parte|default:p.titulo }}
               {% if not p.publicada %}<span class="badge bg-secondary ms-1">{% translate "Despublicada" %}</span>{% endif %}
+              {% if p.preparada %}<span class="badge bg-success ms-1">{% translate "Preparada" %}</span>{% else %}<span class="badge bg-warning text-dark ms-1">{% translate "Compases sin confirmar" %}</span>{% endif %}
             </a>
             {% if p.owner_id == request.user.id or es_admin %}
             <div class="d-flex gap-2">

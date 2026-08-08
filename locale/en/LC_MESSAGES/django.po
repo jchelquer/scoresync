@@ -1959,3 +1959,31 @@ msgstr "— pause (measure %(n)s) —"
 
 msgid "— seleccioná —"
 msgstr "— select —"
+
+msgid ""
+"armar el itinerario de ejecución (hay algún segmento sin \"compás desde/"
+"hasta\", o ninguno cargado)"
+msgstr ""
+"put together the performance itinerary (some segment is missing \"measure "
+"from/to\", or none loaded yet)"
+
+msgid "confirmar los compases de al menos una parte"
+msgstr "confirm the measures of at least one part"
+
+msgid "completar tempo/compás en \"Notación\" para algún tramo del itinerario"
+msgstr "complete tempo/measure in \"Notation\" for some stretch of the itinerary"
+
+msgid "anclar tiempos reales en \"Sincronizar compases\" para algún tramo del itinerario"
+msgstr "anchor real times in \"Sync measures\" for some stretch of the itinerary"
+
+msgid "Todavía no se puede publicar: "
+msgstr "Can't be published yet: "
+
+msgid "Todavía no se puede publicar, falta:"
+msgstr "Can't be published yet, missing:"
+
+msgid "Preparada"
+msgstr "Ready"
+
+msgid "Compases sin confirmar"
+msgstr "Measures not confirmed"
