@@ -1,6 +1,15 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.1"
+  date: "2026-08-08"
+  changes:
+    - type: nuevo
+      text: "La sección \"Repertorios\" ahora también permite crear un repertorio nuevo y renombrar uno existente desde la misma pantalla, no sólo elegir sus grupos visibles."
+    - type: corregido
+      text: "En la pantalla de Visibilidad de una obra, un comentario interno se mostraba como texto en la página en vez de quedar oculto."
+    - type: corregido
+      text: "En \"Repertorios\", la tabla se veía con fondo y letras oscuras difíciles de leer sobre el fondo oscuro de la pantalla."
 - version: "1.31.0"
   date: "2026-08-08"
   changes:

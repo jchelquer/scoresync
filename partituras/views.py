@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 
 from .forms import (
     EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, ObraVisibilidadForm, PartituraEditForm,
-    PartituraForm, RepertorioVisibilidadForm, SegmentoFormSet,
+    PartituraForm, RepertorioForm, SegmentoFormSet,
 )
 from .models import (
     Anotacion, Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
@@ -638,10 +638,11 @@ def editar_visibilidad_obra(request, pk):
 @login_required
 def repertorios_visibilidad(request):
     """Listado admin-only de Repertorios con sus grupos_visibles — punto de
-    entrada en la app misma para lo que hoy sólo se podía tocar desde
-    /admin/ (ver RepertorioVisibilidadForm/editar_visibilidad_repertorio).
-    Un Repertorio no tiene dueño, así que a diferencia de Obra esto es
-    exclusivamente de admin."""
+    entrada en la app misma para gestionarlos (crear/renombrar/visibilidad)
+    sin depender de /admin/ (ver RepertorioForm/crear_repertorio/
+    editar_visibilidad_repertorio). Un Repertorio no tiene dueño, así que a
+    diferencia de Obra esto es exclusivamente de admin — si en algún
+    momento se agrega ese concepto, acá es donde habría que sumarlo."""
     if not _es_admin(request.user):
         return HttpResponseForbidden()
     return render(request, "partituras/repertorios_visibilidad.html", {
@@ -650,19 +651,39 @@ def repertorios_visibilidad(request):
 
 
 @login_required
+def crear_repertorio(request):
+    """Alta de un Repertorio nuevo desde la app — ver repertorios_visibilidad.
+    Reusa el mismo template que editar_visibilidad_repertorio (repertorio=None
+    en el contexto distingue "nuevo" de "editar")."""
+    if not _es_admin(request.user):
+        return HttpResponseForbidden()
+    if request.method == "POST":
+        form = RepertorioForm(request.POST)
+        if form.is_valid():
+            repertorio = form.save()
+            messages.success(request, f'Se creó el repertorio "{repertorio}".')
+            return redirect("partituras:repertorios_visibilidad")
+    else:
+        form = RepertorioForm()
+    return render(request, "partituras/editar_visibilidad_repertorio.html", {
+        "form": form, "repertorio": None,
+    })
+
+
+@login_required
 def editar_visibilidad_repertorio(request, pk):
-    """Editar a qué grupos ve este Repertorio — ver repertorios_visibilidad."""
+    """Editar nombre/grupos_visibles de este Repertorio — ver repertorios_visibilidad."""
     if not _es_admin(request.user):
         return HttpResponseForbidden()
     repertorio = get_object_or_404(Repertorio, pk=pk)
     if request.method == "POST":
-        form = RepertorioVisibilidadForm(request.POST, instance=repertorio)
+        form = RepertorioForm(request.POST, instance=repertorio)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Se guardó la visibilidad de "{repertorio}".')
+            messages.success(request, f'Se guardaron los cambios de "{repertorio}".')
             return redirect("partituras:repertorios_visibilidad")
     else:
-        form = RepertorioVisibilidadForm(instance=repertorio)
+        form = RepertorioForm(instance=repertorio)
     return render(request, "partituras/editar_visibilidad_repertorio.html", {
         "form": form, "repertorio": repertorio,
     })

@@ -1,17 +1,22 @@
 {% extends "base.html" %}
 {% load i18n %}
-{% block title %}Visibilidad de repertorios — ScoreSync{% endblock %}
+{% block title %}Repertorios — ScoreSync{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
-        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">{% translate "Visibilidad de repertorios" %}</h4>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+          <h4 class="card-title mb-0" style="color: var(--ss-text-bright)">{% translate "Repertorios" %}</h4>
+          <a href="{% url 'partituras:crear_repertorio' %}" class="btn btn-ss btn-sm">
+            <i class="bi bi-plus-lg"></i> {% translate "Nuevo repertorio" %}
+          </a>
+        </div>
         <p class="form-text" style="color: var(--ss-text-muted)">
           {% translate "Un repertorio sin grupos es público (lo ve cualquier usuario logueado). Con grupos, sólo esos grupos ven sus obras — además del dueño de cada una y los admins, que siempre ven todo." %}
         </p>
-        <table class="table table-borderless align-middle" style="color: var(--ss-text)">
+        <table class="table table-borderless align-middle" style="--bs-table-bg: transparent; --bs-table-color: var(--ss-text)">
           <thead>
             <tr>
               <th>{% translate "Repertorio" %}</th>
@@ -23,19 +28,19 @@
             {% for repertorio in repertorios %}
             <tr>
               <td>{{ repertorio.nombre }}</td>
-              <td style="color: var(--ss-text-muted)">
+              <td>
                 {% with grupos=repertorio.grupos_visibles.all %}
-                  {% if grupos %}{{ grupos|join:", " }}{% else %}<em>{% translate "(público)" %}</em>{% endif %}
+                  {% if grupos %}{{ grupos|join:", " }}{% else %}<em style="color: var(--ss-text-muted)">{% translate "(público)" %}</em>{% endif %}
                 {% endwith %}
               </td>
               <td class="text-end">
-                <a href="{% url 'partituras:editar_visibilidad_repertorio' repertorio.pk %}" class="btn btn-sm btn-outline-light">
+                <a href="{% url 'partituras:editar_visibilidad_repertorio' repertorio.pk %}" class="btn btn-ss btn-sm">
                   {% translate "Editar" %}
                 </a>
               </td>
             </tr>
             {% empty %}
-            <tr><td colspan="3" style="color: var(--ss-text-muted)">{% translate "No hay repertorios todavía — se crean desde el admin." %}</td></tr>
+            <tr><td colspan="3" style="color: var(--ss-text-muted)">{% translate "No hay repertorios todavía." %}</td></tr>
             {% endfor %}
           </tbody>
         </table>

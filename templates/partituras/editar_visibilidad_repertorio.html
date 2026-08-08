@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 {% load i18n static %}
-{% block title %}Visibilidad de {{ repertorio.nombre }} — ScoreSync{% endblock %}
+{% block title %}{% if repertorio %}Editar {{ repertorio.nombre }}{% else %}Nuevo repertorio{% endif %} — ScoreSync{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
     <div class="card border-0" style="background: var(--ss-surface)">
       <div class="card-body p-4">
-        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">{% translate "Visibilidad de" %} {{ repertorio.nombre }}</h4>
+        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">
+          {% if repertorio %}{% translate "Editar" %} {{ repertorio.nombre }}{% else %}{% translate "Nuevo repertorio" %}{% endif %}
+        </h4>
         <form method="post">
           {% csrf_token %}
           {% for field in form %}
             <div class="mb-3">
               <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
               {{ field }}
+              {% if field.name == 'grupos_visibles' %}
               <div class="form-text" style="color: var(--ss-text-muted)">{% translate "Vacío = público (lo ve cualquier usuario logueado)." %}</div>
+              {% endif %}
               {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
             </div>
           {% endfor %}
@@ -46,6 +50,13 @@
     --button-fg: #fff;
     --button-bg: var(--secondary);
     --button-hover-bg: #205067;
+}
+/* El <select> del widget trae fondo blanco nativo del navegador, pero el
+   texto claro del tema oscuro de la página se hereda igual — texto claro
+   sobre fondo blanco es ilegible. Se fuerza texto oscuro acá adentro. */
+.selector select {
+    background: #fff;
+    color: #333;
 }
 </style>
 <script src="{% url 'admin:jsi18n' %}"></script>

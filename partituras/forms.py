@@ -105,13 +105,18 @@ class ObraVisibilidadForm(forms.ModelForm):
             self.fields['usuarios_visibles'].queryset = self.fields['usuarios_visibles'].queryset
 
 
-class RepertorioVisibilidadForm(forms.ModelForm):
-    """Sólo grupos_visibles — el nombre del Repertorio en sí se sigue
-    editando desde el admin (ver ObraEditForm). Admin-only: un Repertorio
-    no tiene dueño, así que no hay análogo al caso "dueño de la obra"."""
+class RepertorioForm(forms.ModelForm):
+    """Crear/editar un Repertorio (nombre y grupos_visibles) desde la app,
+    no sólo desde /admin — sigue siendo admin-only (ver repertorios_visibilidad/
+    editar_visibilidad_repertorio/crear_repertorio) porque un Repertorio no
+    tiene dueño, no hay análogo al caso "dueño de la obra"; si en algún
+    momento se agrega ese concepto, es acá donde habría que sumarlo."""
     class Meta:
         model = Repertorio
-        fields = ['grupos_visibles']
+        fields = ['nombre', 'grupos_visibles']
+        widgets = {
+            'nombre': forms.TextInput(attrs={'class': 'form-control'}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

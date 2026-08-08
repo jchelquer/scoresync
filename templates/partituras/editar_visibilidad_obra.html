@@ -42,10 +42,12 @@
 
 {% block extra_js %}
 {{ block.super }}
-{# grupos_visibles/usuarios_visibles usan FilteredSelectMultiple, el mismo widget de dos listas
-   del admin de Django — reusa su JS. El CSS de layout se carga aparte (sin el base.css completo
-   del admin) para no pisar los estilos de Bootstrap del resto de la página; las variables son
-   los mismos valores por default que usa el admin, sólo que scopeadas a .selector. #}
+{% comment %}
+grupos_visibles/usuarios_visibles usan FilteredSelectMultiple, el mismo widget de dos listas
+del admin de Django — reusa su JS. El CSS de layout se carga aparte (sin el base.css completo
+del admin) para no pisar los estilos de Bootstrap del resto de la página; las variables son
+los mismos valores por default que usa el admin, sólo que scopeadas a .selector.
+{% endcomment %}
 <link rel="stylesheet" href="{% static 'admin/css/widgets.css' %}">
 <style>
 .selector {
@@ -61,6 +63,13 @@
     --button-fg: #fff;
     --button-bg: var(--secondary);
     --button-hover-bg: #205067;
+}
+/* El <select> del widget trae fondo blanco nativo del navegador, pero el
+   texto claro del tema oscuro de la página se hereda igual — texto claro
+   sobre fondo blanco es ilegible. Se fuerza texto oscuro acá adentro. */
+.selector select {
+    background: #fff;
+    color: #333;
 }
 </style>
 <script src="{% url 'admin:jsi18n' %}"></script>

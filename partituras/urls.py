@@ -20,6 +20,7 @@ urlpatterns = [
     path('obras/', views.obras, name='obras'),
     path('obras/nueva/', views.crear_obra, name='crear_obra'),
     path('repertorios/', views.repertorios_visibilidad, name='repertorios_visibilidad'),
+    path('repertorios/nuevo/', views.crear_repertorio, name='crear_repertorio'),
     path('repertorios/<int:pk>/visibilidad/', views.editar_visibilidad_repertorio, name='editar_visibilidad_repertorio'),
     path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
     path('obras/<int:pk>/editar/', views.editar_obra, name='editar_obra'),
