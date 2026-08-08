@@ -1987,3 +1987,6 @@ msgstr "Ready"
 
 msgid "Compases sin confirmar"
 msgstr "Measures not confirmed"
+
+msgid "mía"
+msgstr "mine"

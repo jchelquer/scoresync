@@ -1,6 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.4"
+  date: "2026-08-08"
+  changes:
+    - type: nuevo
+      text: "En la lista de \"Partes\" de una obra, cada una muestra ahora quién es su dueño (\"mía\" si es tuya)."
+    - type: mejorado
+      text: "En los desplegables de \"Transferir a…\" (obra y parte), cada usuario ahora se ve con su grupo entre paréntesis, y sólo aparecen usuarios que comparten al menos un grupo con vos — antes cualquier dueño podía transferirle a cualquiera que ya tuviera algo propio en ScoreSync, sin relación con los grupos."
 - version: "1.31.3"
   date: "2026-08-08"
   changes:

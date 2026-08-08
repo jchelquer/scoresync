@@ -1996,3 +1996,6 @@ msgstr "Preparada"
 
 msgid "Compases sin confirmar"
 msgstr "Compases sin confirmar"
+
+msgid "mía"
+msgstr "mía"

@@ -388,18 +388,19 @@ def _usuarios_transferibles(user):
     "usa ScoreSync" — un desplegable sin filtro le mostraría a cualquier
     dueño el directorio entero del ecosistema. Un admin sí lo ve sin filtro
     (ya puede reasignar owner sin restricción desde el admin de Django; esto
-    sólo lo formaliza acá); cualquier otro sólo ve usuarios que YA tienen
-    algo propio en ScoreSync (dueños de alguna obra o parte) — alcanza para
-    el caso típico ("se lo paso a otro que ya viene usando la herramienta").
-    Se usa tanto para pintar el desplegable como para VALIDAR el POST del
-    lado del servidor — nunca se confía en el id que mandó el cliente sin
-    filtrarlo de nuevo por este mismo queryset."""
+    sólo lo formaliza acá); cualquier otro sólo ve usuarios que comparten
+    AL MENOS UN grupo con él (mismo criterio de grupo que la visibilidad de
+    obras/repertorios, ver _obra_visible_para) — si no está en ningún grupo,
+    no ve a nadie. Se usa tanto para pintar el desplegable como para VALIDAR
+    el POST del lado del servidor — nunca se confía en el id que mandó el
+    cliente sin filtrarlo de nuevo por este mismo queryset."""
     User = get_user_model()
     if _es_admin(user):
-        return User.objects.order_by('first_name', 'last_name', 'username')
-    return User.objects.filter(
-        Q(obras__isnull=False) | Q(partituras__isnull=False)
-    ).distinct().order_by('first_name', 'last_name', 'username')
+        return User.objects.prefetch_related('grupos').order_by('first_name', 'last_name', 'username')
+    grupos_ids = user.grupos.values_list('pk', flat=True)
+    return User.objects.filter(grupos__in=grupos_ids).distinct().prefetch_related('grupos').order_by(
+        'first_name', 'last_name', 'username',
+    )
 
 
 def _puede_ver_partitura(user, partitura, obra=None):
@@ -589,7 +590,7 @@ def obra_detalle(request, pk):
         messages.success(request, 'Se actualizó el audio de referencia.')
         return redirect("partituras:obra_detalle", pk=pk)
     partituras = sorted(
-        (p for p in obra.partituras.all() if _puede_ver_partitura(request.user, p, obra=obra)),
+        (p for p in obra.partituras.select_related('owner').all() if _puede_ver_partitura(request.user, p, obra=obra)),
         key=lambda p: p.nombre_parte.lower(),
     )
     for p in partituras:

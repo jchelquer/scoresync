@@ -47,7 +47,7 @@
         <option value="" disabled selected>{% translate "Transferir a…" %}</option>
         {% for u in usuarios_transferibles %}
         {% if u.pk != partitura.owner_id %}
-        <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+        <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}{% if u.grupos.all %} ({{ u.grupos.all|join:", " }}){% endif %}</option>
         {% endif %}
         {% endfor %}
       </select>
