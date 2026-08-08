@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.3"
+  date: "2026-08-08"
+  changes:
+    - type: corregido
+      text: "El último pulso de una obra podía quedar sin temporización real por un residuo de redondeo de punto flotante (dos formas de calcular la misma posición que no coincidían en el último bit) — bloqueaba publicar aunque todos los compases tuvieran su tiempo marcado. Se agregó una tolerancia mínima a la comparación."
 - version: "1.31.2"
   date: "2026-08-08"
   changes:

@@ -619,6 +619,16 @@ def _bracket_anclas_invertido(anclas, posicion):
     return False
 
 
+_EPSILON_POSICION = 1e-4  # ver _tiempo_real_en_posicion — ruido de punto flotante
+# acumulado tras cientos de sumas (60/bpm por pulso), NUNCA una duración real:
+# dos sumas matemáticamente iguales pueden diferir en el último bit según el
+# orden en que se hicieron (posiciones_fila acumulado vs. posicion_pulso +
+# duracion_pulso recalculado — ver construir_plan). Sin esta tolerancia, el
+# ÚLTIMO pulso de la obra puede quedar a 1e-14 de su propia ancla de cierre y
+# devolver None (visto en producción, obra "Y ahora soy feliz": el pulso caía
+# a 5.68e-14 de la ancla, y el corte estricto lo descartaba igual).
+
+
 def _tiempo_real_en_posicion(anclas, posicion):
     """Tiempo real interpolado linealmente en una posición calculada
     arbitraria (no necesariamente el arranque de un pulso, puede caer a
@@ -626,9 +636,15 @@ def _tiempo_real_en_posicion(anclas, posicion):
     consecutivas, ver _anclas_globales) cae la posición e interpola.
     None si la posición cae fuera del tramo cubierto (o hay menos de dos
     anclas) — sin inventar una extrapolación. Excepción: si la posición
-    coincide EXACTO con una ancla, se devuelve directo su tiempo real, aunque
-    sea la única que haya — ahí no hace falta una segunda para interpolar
-    nada, ya está marcada."""
+    coincide con una ancla (exacto, o a menos de _EPSILON_POSICION — ver esa
+    constante), se devuelve directo su tiempo real, aunque sea la única que
+    haya — ahí no hace falta una segunda para interpolar nada, ya está
+    marcada."""
+    if anclas:
+        if abs(posicion - anclas[0][0]) < _EPSILON_POSICION:
+            posicion = anclas[0][0]
+        elif abs(posicion - anclas[-1][0]) < _EPSILON_POSICION:
+            posicion = anclas[-1][0]
     for pos_a, t_a in anclas:
         if pos_a == posicion:
             return t_a
