@@ -27,6 +27,14 @@ class Repertorio(models.Model):
     biblioteca misma (ver Obra.ciclo). Se gestiona desde el admin, mismo
     criterio que crear una Obra (ver views.crear_obra)."""
     nombre = models.CharField(max_length=200, unique=True)
+    grupos_visibles = models.ManyToManyField(
+        'usuarios.GrupoUsuario', through='RepertorioGrupoVisible', blank=True,
+        related_name='repertorios_visibles',
+        help_text="Si está vacío, el repertorio es visible para cualquier usuario logueado "
+                   "(comportamiento de siempre). Si tiene grupos, sólo esos grupos ven sus "
+                   "obras (además del dueño de cada una y los admins, que siempre ven todo) "
+                   "— ver Obra.restriccion para excepciones puntuales dentro del repertorio.",
+    )
 
     class Meta:
         ordering = ['nombre']
@@ -35,6 +43,18 @@ class Repertorio(models.Model):
 
     def __str__(self):
         return self.nombre
+
+
+class RepertorioGrupoVisible(models.Model):
+    """Tabla intermedia propia de Repertorio.grupos_visibles, con
+    db_constraint=False hacia GrupoUsuario — mismo criterio que
+    Usuario.instrumento_principal (mirror ajeno de otra app, sin FK real
+    cross-app; ver usuarios/models.py)."""
+    repertorio = models.ForeignKey(Repertorio, on_delete=models.CASCADE)
+    grupousuario = models.ForeignKey('usuarios.GrupoUsuario', on_delete=models.CASCADE, db_constraint=False)
+
+    class Meta:
+        unique_together = [('repertorio', 'grupousuario')]
 
 
 class Ciclo(models.Model):
@@ -91,6 +111,35 @@ class Obra(models.Model):
         help_text="Si está en False, sólo el dueño y los admins la ven (en la biblioteca y entrando "
                    "directo por URL) — el resto de los usuarios logueados no la ve en absoluto.",
     )
+
+    RESTRICCION_HEREDA = 'hereda'
+    RESTRICCION_PUBLICA = 'publica'
+    RESTRICCION_RESTRINGIDA = 'restringida'
+    RESTRICCIONES = [
+        (RESTRICCION_HEREDA, 'Hereda del repertorio'),
+        (RESTRICCION_PUBLICA, 'Pública (todos los usuarios logueados)'),
+        (RESTRICCION_RESTRINGIDA, 'Restringida a grupos/usuarios puntuales'),
+    ]
+    restriccion = models.CharField(
+        max_length=12, choices=RESTRICCIONES, default=RESTRICCION_HEREDA,
+        help_text="Sólo importa si la obra está publicada. 'Hereda' usa los grupos_visibles del "
+                   "Repertorio de su Ciclo (o público si no tiene Ciclo, o si el repertorio no "
+                   "tiene grupos configurados). 'Restringida' sólo puede ACOTAR lo que el "
+                   "repertorio ya permitía, nunca ampliarlo — para el caso contrario (una obra "
+                   "puntual que debe verse igual aunque su repertorio esté restringido) usar "
+                   "'Pública'.",
+    )
+    grupos_visibles = models.ManyToManyField(
+        'usuarios.GrupoUsuario', through='ObraGrupoVisible', blank=True,
+        related_name='obras_restringidas',
+        help_text="Sólo se usa con restriccion='restringida'.",
+    )
+    usuarios_visibles = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name='obras_visibles_individual',
+        help_text="Sólo se usa con restriccion='restringida' — para casos puntuales (p.ej. un "
+                   "invitado que no pertenece a ninguno de los grupos_visibles).",
+    )
+
     creado = models.DateTimeField(auto_now_add=True)
     actualizado = models.DateTimeField(
         auto_now=True,
@@ -108,6 +157,17 @@ class Obra(models.Model):
 
     def __str__(self):
         return f"{self.titulo} ({self.compositor})" if self.compositor else self.titulo
+
+
+class ObraGrupoVisible(models.Model):
+    """Tabla intermedia propia de Obra.grupos_visibles, con
+    db_constraint=False hacia GrupoUsuario — mismo criterio que
+    RepertorioGrupoVisible / Usuario.instrumento_principal."""
+    obra = models.ForeignKey(Obra, on_delete=models.CASCADE)
+    grupousuario = models.ForeignKey('usuarios.GrupoUsuario', on_delete=models.CASCADE, db_constraint=False)
+
+    class Meta:
+        unique_together = [('obra', 'grupousuario')]
 
 
 class Segmento(models.Model):

@@ -18,12 +18,12 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm, PartituraForm,
-    SegmentoFormSet,
+    EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, ObraVisibilidadForm, PartituraEditForm,
+    PartituraForm, RepertorioVisibilidadForm, SegmentoFormSet,
 )
 from .models import (
     Anotacion, Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
-    Partitura, PreferenciaObra, PreferenciaParte, Segmento, Sistema,
+    Partitura, PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema,
 )
 from .normalizacion import detectar_angulo_deskew, detectar_rotacion_90, normalizar_pagina
 from .pdf import armar_pdf_desde_imagenes, contar_paginas, rasterizar_pagina
@@ -298,6 +298,88 @@ def _es_admin(user):
     return user.es_admin or user.is_staff
 
 
+def _repertorio_visible_para(user, repertorio, grupos_usuario_ids=None):
+    """grupos_visibles vacío = público. Admin siempre. No contempla "dueño
+    de una obra dentro" — eso ya lo resuelve _obra_visible_para aparte; este
+    helper es sólo para decidir qué repertorios ofrecer como filtro/categoría
+    (ver _ciclos_visibles_qs) y para la porción "permitido_por_repertorio"
+    de _obra_visible_para."""
+    if _es_admin(user):
+        return True
+    if grupos_usuario_ids is None:
+        grupos_usuario_ids = set(user.grupos.values_list("pk", flat=True))
+    grupos_repertorio_ids = set(repertorio.grupos_visibles.values_list("pk", flat=True))
+    return not grupos_repertorio_ids or bool(grupos_usuario_ids & grupos_repertorio_ids)
+
+
+def _obra_visible_para(user, obra, grupos_usuario_ids=None):
+    """Punto único de verdad de "¿puede ver esta obra?" — dueño y admin
+    siempre, si no tiene que estar publicada Y pasar el filtro de grupo (ver
+    Obra.restriccion / Repertorio.grupos_visibles). 'restringida' sólo puede
+    ACOTAR lo que el repertorio ya permitía, nunca ampliarlo: por eso se
+    exige `permitido_por_repertorio` incluso cuando hay una concesión
+    puntual por grupo/usuario en la propia obra. `grupos_usuario_ids`
+    opcional para no repetir la consulta al recorrer un listado (ver
+    _obras_visibles_qs)."""
+    if _es_admin(user) or obra.owner_id == user.id:
+        return True
+    if not obra.publicada:
+        return False
+    if obra.restriccion == Obra.RESTRICCION_PUBLICA:
+        return True
+
+    if grupos_usuario_ids is None:
+        grupos_usuario_ids = set(user.grupos.values_list("pk", flat=True))
+    repertorio = obra.ciclo.repertorio if obra.ciclo_id else None
+    permitido_por_repertorio = (
+        repertorio is None or _repertorio_visible_para(user, repertorio, grupos_usuario_ids=grupos_usuario_ids)
+    )
+
+    if obra.restriccion == Obra.RESTRICCION_RESTRINGIDA:
+        grupos_obra_ids = set(obra.grupos_visibles.values_list("pk", flat=True))
+        concedido = bool(grupos_usuario_ids & grupos_obra_ids) or obra.usuarios_visibles.filter(pk=user.pk).exists()
+        return concedido and permitido_por_repertorio
+
+    return permitido_por_repertorio
+
+
+def _obras_visibles_qs(user):
+    """Queryset de las obras que `user` puede ver — equivalente en masa a
+    _obra_visible_para, para la biblioteca. Arranca de un candidato amplio
+    en la base (publicada o propia) y filtra en Python el resto de la regla:
+    la biblioteca es chica, no vale la pena una query ORM con varios joins
+    M2M encadenados sólo por eficiencia prematura."""
+    if _es_admin(user):
+        return Obra.objects.all()
+    candidatas = Obra.objects.select_related("owner", "ciclo__repertorio").filter(
+        Q(publicada=True) | Q(owner=user)
+    )
+    grupos_usuario_ids = set(user.grupos.values_list("pk", flat=True))
+    ids_visibles = [
+        o.pk for o in candidatas
+        if _obra_visible_para(user, o, grupos_usuario_ids=grupos_usuario_ids)
+    ]
+    return Obra.objects.filter(pk__in=ids_visibles)
+
+
+def _ciclos_visibles_qs(user):
+    """Ciclos (y por lo tanto Repertorios, ver Ciclo.__str__) para ofrecer
+    como opciones del filtro de la biblioteca — sólo los que `user` puede
+    ver según su grupo (ver _repertorio_visible_para). No tiene que ver con
+    qué obras existen dentro, sólo con si el repertorio en sí está
+    restringido — así el desplegable no revela nombres de repertorios que
+    el usuario no debería ni saber que existen."""
+    if _es_admin(user):
+        return Ciclo.objects.select_related("repertorio").all()
+    grupos_usuario_ids = set(user.grupos.values_list("pk", flat=True))
+    candidatos = Ciclo.objects.select_related("repertorio")
+    ids_visibles = [
+        c.pk for c in candidatos
+        if _repertorio_visible_para(user, c.repertorio, grupos_usuario_ids=grupos_usuario_ids)
+    ]
+    return Ciclo.objects.filter(pk__in=ids_visibles).select_related("repertorio")
+
+
 def _usuarios_transferibles(user):
     """Candidatos para recibir una obra/parte transferida (ver
     transferir_ownership_obra/transferir_ownership_partitura). Usuario es una
@@ -325,12 +407,17 @@ def _puede_ver_partitura(user, partitura, obra=None):
     del dueño de la parte y los admins, el dueño de la OBRA a la que está
     adjunta también la ve siempre — es quien decide si acepta o rechaza una
     parte que subió otro usuario. `obra` opcional: pasarla si ya se tiene a
-    mano (evita una consulta extra) — si no, se usa partitura.obra."""
+    mano (evita una consulta extra) — si no, se usa partitura.obra.
+    Si la parte está adjunta a una obra, la obra tiene que ser visible
+    primero (ver _obra_visible_para) — si no, la restricción por grupo de
+    la obra se podría esquivar entrando directo por la URL de una parte."""
+    obra = obra if obra is not None else partitura.obra
+    if obra is not None and not _obra_visible_para(user, obra):
+        return False
     if partitura.publicada:
         return True
     if partitura.owner_id == user.id:
         return True
-    obra = obra if obra is not None else partitura.obra
     if obra and obra.owner_id == user.id:
         return True
     return _es_admin(user)
@@ -426,12 +513,7 @@ def obras(request):
     el admin (ver Repertorio/Ciclo en models.py) — acá sólo se filtra por
     los que ya existen (no hace falta un filtro de Repertorio aparte: el
     de Ciclo ya lo compone, ver Ciclo.__str__)."""
-    if _es_admin(request.user):
-        lista = Obra.objects.select_related("owner", "ciclo__repertorio")
-    else:
-        lista = Obra.objects.select_related("owner", "ciclo__repertorio").filter(
-            Q(publicada=True) | Q(owner=request.user)
-        )
+    lista = _obras_visibles_qs(request.user).select_related("owner", "ciclo__repertorio")
 
     q = request.GET.get("q", "").strip()
     if q:
@@ -454,7 +536,7 @@ def obras(request):
     return render(request, "partituras/obras.html", {
         "obras": lista,
         "es_admin": _es_admin(request.user),
-        "ciclos": Ciclo.objects.select_related("repertorio").all(),
+        "ciclos": _ciclos_visibles_qs(request.user),
         "filtros": request.GET,
         "orden": orden,
     })
@@ -481,7 +563,7 @@ def obra_detalle(request, pk):
     obra = get_object_or_404(Obra, pk=pk)
     es_dueño = obra.owner_id == request.user.id
     es_admin = _es_admin(request.user)
-    if not obra.publicada and not es_dueño and not es_admin:
+    if not _obra_visible_para(request.user, obra):
         raise Http404()
     if request.method == "POST" and "audio_form" in request.POST:
         if not es_dueño:
@@ -531,6 +613,59 @@ def editar_obra(request, pk):
     else:
         form = ObraEditForm(instance=obra)
     return render(request, "partituras/editar_obra.html", {"form": form, "obra": obra})
+
+
+@login_required
+def editar_visibilidad_obra(request, pk):
+    """Quién puede ver esta obra — pantalla propia, separada de editar_obra
+    (ver ObraVisibilidadForm), con su propio botón en obra_detalle. Mismo
+    criterio de permiso que editar_obra (dueño o admin)."""
+    obra = get_object_or_404(Obra, pk=pk)
+    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
+        return HttpResponseForbidden()
+    usuarios_candidatos = _usuarios_transferibles(request.user)
+    if request.method == "POST":
+        form = ObraVisibilidadForm(request.POST, instance=obra, usuarios_candidatos=usuarios_candidatos)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Se guardó la visibilidad de "{obra}".')
+            return redirect("partituras:obra_detalle", pk=obra.pk)
+    else:
+        form = ObraVisibilidadForm(instance=obra, usuarios_candidatos=usuarios_candidatos)
+    return render(request, "partituras/editar_visibilidad_obra.html", {"form": form, "obra": obra})
+
+
+@login_required
+def repertorios_visibilidad(request):
+    """Listado admin-only de Repertorios con sus grupos_visibles — punto de
+    entrada en la app misma para lo que hoy sólo se podía tocar desde
+    /admin/ (ver RepertorioVisibilidadForm/editar_visibilidad_repertorio).
+    Un Repertorio no tiene dueño, así que a diferencia de Obra esto es
+    exclusivamente de admin."""
+    if not _es_admin(request.user):
+        return HttpResponseForbidden()
+    return render(request, "partituras/repertorios_visibilidad.html", {
+        "repertorios": Repertorio.objects.prefetch_related("grupos_visibles"),
+    })
+
+
+@login_required
+def editar_visibilidad_repertorio(request, pk):
+    """Editar a qué grupos ve este Repertorio — ver repertorios_visibilidad."""
+    if not _es_admin(request.user):
+        return HttpResponseForbidden()
+    repertorio = get_object_or_404(Repertorio, pk=pk)
+    if request.method == "POST":
+        form = RepertorioVisibilidadForm(request.POST, instance=repertorio)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Se guardó la visibilidad de "{repertorio}".')
+            return redirect("partituras:repertorios_visibilidad")
+    else:
+        form = RepertorioVisibilidadForm(instance=repertorio)
+    return render(request, "partituras/editar_visibilidad_repertorio.html", {
+        "form": form, "repertorio": repertorio,
+    })
 
 
 @login_required
@@ -1185,7 +1320,7 @@ def navegador_obra(request, pk):
     navegar/ejecutar cualquier obra publicada (ver obra_detalle); lo único
     que se guarda es PreferenciaObra del propio usuario, no algo de la obra."""
     obra = get_object_or_404(Obra, pk=pk)
-    if not obra.publicada and obra.owner_id != request.user.id and not _es_admin(request.user):
+    if not _obra_visible_para(request.user, obra):
         raise Http404()
     navegables = segmentos_navegables(obra)
     if not navegables:

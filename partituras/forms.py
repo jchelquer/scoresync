@@ -1,6 +1,8 @@
 from django import forms
-from .models import EfectoTempo, MarcaNotacion, Obra, Partitura, Segmento
+from django.contrib.admin.widgets import FilteredSelectMultiple
+from .models import EfectoTempo, MarcaNotacion, Obra, Partitura, Repertorio, Segmento
 from .services import normalizar_armadura, parsear_compas_pulso, validar_indicacion_compas
+from usuarios.models import GrupoUsuario
 
 
 class PartituraForm(forms.ModelForm):
@@ -62,7 +64,10 @@ class ObraEditForm(forms.ModelForm):
     audio (ver obra_detalle, que lo maneja aparte) ni publicada (switch
     propio, ver alternar_publicacion_obra). Repertorio/Ciclo en sí se
     gestionan sólo desde el admin — acá sólo se elige entre los que ya
-    existen."""
+    existen. La VISIBILIDAD (restriccion/grupos_visibles/usuarios_visibles)
+    tiene su propia pantalla aparte — ver ObraVisibilidadForm/
+    editar_visibilidad_obra — para que no quede escondida dentro de un
+    form genérico de título/compositor."""
     class Meta:
         model = Obra
         fields = ['titulo', 'compositor', 'arreglista', 'ciclo']
@@ -72,6 +77,46 @@ class ObraEditForm(forms.ModelForm):
             'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
             'ciclo': forms.Select(attrs={'class': 'form-select'}),
         }
+
+
+class ObraVisibilidadForm(forms.ModelForm):
+    """Quién puede ver esta obra (ver Obra.restriccion) — pantalla propia,
+    separada de ObraEditForm (ver editar_visibilidad_obra), con botón
+    dedicado en obra_detalle en vez de quedar escondida en "Editar".
+
+    `usuarios_candidatos` (opcional): queryset para poblar usuarios_visibles
+    — lo arma la view con el mismo criterio que _usuarios_transferibles (no
+    mostrar el directorio entero del ecosistema compartido)."""
+    class Meta:
+        model = Obra
+        fields = ['restriccion', 'grupos_visibles', 'usuarios_visibles']
+        widgets = {
+            'restriccion': forms.Select(attrs={'class': 'form-select', 'id': 'id_restriccion'}),
+        }
+
+    def __init__(self, *args, usuarios_candidatos=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['grupos_visibles'].widget = FilteredSelectMultiple("grupos", is_stacked=False)
+        self.fields['grupos_visibles'].queryset = GrupoUsuario.objects.all()
+        self.fields['usuarios_visibles'].widget = FilteredSelectMultiple("usuarios", is_stacked=False)
+        if usuarios_candidatos is not None:
+            self.fields['usuarios_visibles'].queryset = usuarios_candidatos
+        else:
+            self.fields['usuarios_visibles'].queryset = self.fields['usuarios_visibles'].queryset
+
+
+class RepertorioVisibilidadForm(forms.ModelForm):
+    """Sólo grupos_visibles — el nombre del Repertorio en sí se sigue
+    editando desde el admin (ver ObraEditForm). Admin-only: un Repertorio
+    no tiene dueño, así que no hay análogo al caso "dueño de la obra"."""
+    class Meta:
+        model = Repertorio
+        fields = ['grupos_visibles']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['grupos_visibles'].widget = FilteredSelectMultiple("grupos", is_stacked=False)
+        self.fields['grupos_visibles'].queryset = GrupoUsuario.objects.all()
 
 
 class SegmentoForm(forms.ModelForm):

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load i18n static %}
+{% block title %}Visibilidad de {{ obra.titulo }} — ScoreSync{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card border-0" style="background: var(--ss-surface)">
+      <div class="card-body p-4">
+        <h4 class="card-title mb-4" style="color: var(--ss-text-bright)">
+          <i class="bi bi-shield-lock"></i> {% translate "Visibilidad de" %} {{ obra.titulo }}
+        </h4>
+        <form method="post">
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3" id="row-{{ field.name }}">
+              <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
+              {{ field }}
+              {% if field.name == 'restriccion' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">
+                {% translate "Hereda: usa los grupos del repertorio de esta obra (o pública si no tiene). Restringida sólo puede acotar lo que el repertorio ya permitía, nunca ampliarlo." %}
+              </div>
+              {% endif %}
+              {% if field.name == 'grupos_visibles' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">
+                {% translate "La ven quienes pertenezcan a alguno de estos grupos, MÁS los usuarios elegidos abajo — se suman (alcanza con cualquiera de las dos condiciones, no hace falta cumplir ambas)." %}
+              </div>
+              {% endif %}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
+            </div>
+          {% endfor %}
+          <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-ss flex-fill">{% translate "Guardar" %}</button>
+            <a href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light">{% translate "Cancelar" %}</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{# grupos_visibles/usuarios_visibles usan FilteredSelectMultiple, el mismo widget de dos listas
+   del admin de Django — reusa su JS. El CSS de layout se carga aparte (sin el base.css completo
+   del admin) para no pisar los estilos de Bootstrap del resto de la página; las variables son
+   los mismos valores por default que usa el admin, sólo que scopeadas a .selector. #}
+<link rel="stylesheet" href="{% static 'admin/css/widgets.css' %}">
+<style>
+.selector {
+    --primary: #79aec8;
+    --primary-fg: #fff;
+    --secondary: #417690;
+    --body-quiet-color: #666;
+    --header-link-color: var(--primary-fg);
+    --breadcrumbs-fg: #c4dce8;
+    --border-color: #ccc;
+    --darkened-bg: #f8f8f8;
+    --selected-bg: #e4e4e4;
+    --button-fg: #fff;
+    --button-bg: var(--secondary);
+    --button-hover-bg: #205067;
+}
+</style>
+<script src="{% url 'admin:jsi18n' %}"></script>
+{{ form.media }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var sel = document.getElementById('id_restriccion');
+    var filas = [document.getElementById('row-grupos_visibles'), document.getElementById('row-usuarios_visibles')];
+    function actualizar() {
+        var mostrar = sel.value === 'restringida';
+        filas.forEach(function (f) { if (f) f.style.display = mostrar ? '' : 'none'; });
+    }
+    sel.addEventListener('change', actualizar);
+    actualizar();
+});
+</script>
+{% endblock %}

@@ -16,11 +16,16 @@
       <h4 style="color: var(--ss-text-bright)">
         {{ obra.titulo }}
         {% if not obra.publicada %}<span class="badge bg-secondary ms-2 align-middle">{% translate "Despublicada" %}</span>{% endif %}
+        {% if obra.restriccion == 'restringida' %}<span class="badge bg-warning text-dark ms-2 align-middle">{% translate "Restringida" %}</span>{% endif %}
+        {% if obra.restriccion == 'publica' %}<span class="badge bg-info text-dark ms-2 align-middle">{% translate "Pública" %}</span>{% endif %}
       </h4>
       <div class="d-flex gap-2">
         {% if es_dueño or es_admin %}
         <a href="{% url 'partituras:editar_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Editar' %}">
           <i class="bi bi-pencil"></i>
+        </a>
+        <a href="{% url 'partituras:editar_visibilidad_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Visibilidad: quién puede ver esta obra' %}">
+          <i class="bi bi-shield-lock"></i> {% translate "Visibilidad" %}
         </a>
         {% endif %}
         {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-obra-detalle" %}

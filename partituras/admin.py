@@ -5,10 +5,25 @@ from .models import (
 )
 
 
+class RepertorioGrupoVisibleInline(admin.TabularInline):
+    """Repertorio.grupos_visibles tiene through explícito (db_constraint=False
+    hacia GrupoUsuario, ver models.py) — Django admin no permite filter_horizontal
+    en ese caso, el inline sobre la tabla intermedia es el patrón estándar."""
+    model = Repertorio.grupos_visibles.through
+    extra = 1
+    verbose_name = "Grupo visible"
+    verbose_name_plural = "Grupos visibles (vacío = público)"
+
+
 @admin.register(Repertorio)
 class RepertorioAdmin(admin.ModelAdmin):
-    list_display = ('nombre',)
+    list_display = ('nombre', 'get_grupos_visibles')
     search_fields = ('nombre',)
+    inlines = [RepertorioGrupoVisibleInline]
+
+    @admin.display(description="Grupos visibles")
+    def get_grupos_visibles(self, obj):
+        return ", ".join(obj.grupos_visibles.values_list("nombre", flat=True)) or "(público)"
 
 
 @admin.register(Ciclo)
@@ -18,11 +33,22 @@ class CicloAdmin(admin.ModelAdmin):
     search_fields = ('nombre', 'repertorio__nombre')
 
 
+class ObraGrupoVisibleInline(admin.TabularInline):
+    """Obra.grupos_visibles tiene through explícito, mismo motivo que
+    RepertorioGrupoVisibleInline — sólo importa con restriccion='restringida'."""
+    model = Obra.grupos_visibles.through
+    extra = 1
+    verbose_name = "Grupo visible"
+    verbose_name_plural = "Grupos visibles (sólo con restricción = Restringida)"
+
+
 @admin.register(Obra)
 class ObraAdmin(admin.ModelAdmin):
-    list_display = ('titulo', 'compositor', 'arreglista', 'ciclo', 'owner', 'publicada', 'creado')
-    list_filter = ('publicada', 'ciclo__repertorio', 'ciclo')
+    list_display = ('titulo', 'compositor', 'arreglista', 'ciclo', 'owner', 'publicada', 'restriccion', 'creado')
+    list_filter = ('publicada', 'restriccion', 'ciclo__repertorio', 'ciclo')
     search_fields = ('titulo', 'compositor', 'arreglista', 'owner__username')
+    filter_horizontal = ('usuarios_visibles',)
+    inlines = [ObraGrupoVisibleInline]
 
 
 @admin.register(Segmento)

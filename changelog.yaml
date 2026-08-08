@@ -1,6 +1,22 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.0"
+  date: "2026-08-08"
+  changes:
+    - type: nuevo
+      text: "Ahora se puede restringir quién ve una obra o un repertorio completo según el grupo del usuario (o usuarios puntuales) — antes cualquier usuario logueado veía todas las obras publicadas."
+    - type: nuevo
+      text: "Nueva pantalla \"Visibilidad\" en la ficha de cada obra (botón con candado, junto al de editar) para elegirla pública, que herede la regla de su repertorio, o restringirla a grupos/usuarios puntuales."
+    - type: nuevo
+      text: "Nueva sección \"Repertorios\" en el menú (sólo para admins) para elegir qué grupos ven cada repertorio — vacío sigue siendo público, como siempre."
+    - type: mejorado
+      text: "El filtro de repertorio en la biblioteca ahora sólo ofrece los repertorios que el usuario puede ver."
+- version: "1.30.0"
+  date: "2026-08-03"
+  changes:
+    - type: nuevo
+      text: "Se agregó la aceptación de Términos y Condiciones y Política de Privacidad. Si tu cuenta todavía no aceptó la versión vigente, te redirige a una página centralizada en infedu.com.ar para leerlos y aceptar — después te trae de vuelta exactamente a donde estabas."
 - version: "1.28.0"
   date: "2026-08-01"
   changes:

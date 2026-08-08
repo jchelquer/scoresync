@@ -3,12 +3,33 @@ from django.contrib.auth.models import AbstractUser
 from django.utils.translation import gettext_lazy as _
 
 
+class GrupoUsuario(models.Model):
+    """
+    Espejo de usuarios_grupousuario, tabla real y gestionada por el proyecto
+    ensayos (misma BD Postgres compartida). managed = False: scoresync sólo
+    lee estos grupos — se crean y se asignan a usuarios desde ensayos (ver
+    usuarios.permisos.puede_asignar_grupos_usuario allá), nunca desde acá.
+    Usado para repartir visibilidad de Repertorio/Obra por grupo.
+    """
+    nombre = models.CharField(max_length=100, unique=True)
+    descripcion = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'usuarios_grupousuario'
+        verbose_name = 'Grupo de usuarios'
+        verbose_name_plural = 'Grupos de usuarios'
+        ordering = ['nombre']
+
+    def __str__(self):
+        return self.nombre
+
+
 class Usuario(AbstractUser):
     """
     Espejo de la tabla usuarios_usuario del proyecto ensayos (misma BD Postgres
     compartida entre afinacion, ensayos, tempo y scoresync).
     managed = False: Django lee la tabla existente sin crearla ni modificarla.
-    No se incluye grupo (FK a app externa que scoresync no necesita).
     """
 
     ROL_PROFESOR = 'profesor'
@@ -49,6 +70,16 @@ class Usuario(AbstractUser):
     terminos_aceptados_en = models.DateTimeField(null=True, blank=True)
     terminos_version = models.CharField(max_length=20, blank=True)
 
+    grupos = models.ManyToManyField(
+        GrupoUsuario,
+        through='UsuarioGrupo',
+        through_fields=('usuario', 'grupousuario'),
+        related_name='usuarios',
+        blank=True,
+        help_text="Grupos a los que pertenece el usuario — de sólo lectura acá, "
+                   "se asignan desde ensayos.",
+    )
+
     class Meta:
         managed = False
         db_table = 'usuarios_usuario'
@@ -61,6 +92,22 @@ class Usuario(AbstractUser):
 
     def __str__(self):
         return f"{self.get_full_name() or self.username} ({self.get_rol_display()})"
+
+
+class UsuarioGrupo(models.Model):
+    """
+    Espejo de usuarios_usuario_grupos, la tabla intermedia que Django generó
+    en ensayos para el M2M Usuario.grupos (V1.4.0 de ensayos). managed = False:
+    no es scoresync quien crea ni altera esta tabla, sólo la lee a través de
+    Usuario.grupos / GrupoUsuario.usuarios.
+    """
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, db_constraint=False)
+    grupousuario = models.ForeignKey(GrupoUsuario, on_delete=models.CASCADE, db_constraint=False)
+
+    class Meta:
+        managed = False
+        db_table = 'usuarios_usuario_grupos'
+        unique_together = [('usuario', 'grupousuario')]
 
 
 class SolicitudAcceso(models.Model):
