@@ -6,11 +6,17 @@
 <div class="row justify-content-center">
   <div class="col-md-7">
     {% if partitura.obra and partitura.obra.segmentos.exists %}
-    <div class="d-grid mb-3">
-      <a href="{% url 'partituras:navegador_obra' partitura.obra_id %}?parte={{ partitura.pk }}" class="btn btn-ss btn-lg">
-        <i class="bi bi-play-fill me-1"></i>{% translate "Practicar" %}
-      </a>
-    </div>
+      {% if preparada %}
+      <div class="d-grid mb-3">
+        <a href="{% url 'partituras:navegador_obra' partitura.obra_id %}?parte={{ partitura.pk }}" class="btn btn-ss btn-lg">
+          <i class="bi bi-play-fill me-1"></i>{% translate "Practicar" %}
+        </a>
+      </div>
+      {% else %}
+      <p class="small mb-3" style="color: var(--ss-text-muted)">
+        {% translate 'Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso "5. Barras y compases").' %}
+      </p>
+      {% endif %}
     {% endif %}
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h4 style="color: var(--ss-text-bright)">

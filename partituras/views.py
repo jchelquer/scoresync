@@ -244,6 +244,7 @@ def _contexto_estado(request, partitura):
         "es_dueño": es_dueño,
         "es_dueño_obra": es_dueño_obra,
         "es_admin": es_admin,
+        "preparada": partitura.paginas.filter(compases_confirmados=True).exists(),
         "usuarios_transferibles": _usuarios_transferibles(request.user) if (es_dueño or es_dueño_obra or es_admin) else None,
         "pagina_margenes": _primera_pendiente(partitura, "margen_confirmado"),
         "pagina_sistemas": _primera_pendiente_sistemas(partitura),

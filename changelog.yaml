@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.5"
+  date: "2026-08-08"
+  changes:
+    - type: corregido
+      text: "En la ficha de una parte sin compases confirmados, el botón \"Practicar\" igual aparecía — al elegirla no pasaba nada (el navegador la descarta en silencio y muestra otra parte, o ninguna). Ahora se oculta y explica qué falta."
 - version: "1.31.4"
   date: "2026-08-08"
   changes:

@@ -1997,5 +1997,5 @@ msgstr "Preparada"
 msgid "Compases sin confirmar"
 msgstr "Compases sin confirmar"
 
-msgid "mía"
-msgstr "mía"
+msgid "Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso \"5. Barras y compases\")."
+msgstr "Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso \"5. Barras y compases\")."
