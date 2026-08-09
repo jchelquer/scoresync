@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.6"
+  date: "2026-08-09"
+  changes:
+    - type: corregido
+      text: "El conteo de compases al aire (antes de arrancar la ejecución) sonaba al tempo teórico marcado en el itinerario/Notación en vez del real — ahora suena a la duración real y medida del primer compás que se va a ejecutar."
 - version: "1.31.5"
   date: "2026-08-08"
   changes:

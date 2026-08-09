@@ -935,17 +935,47 @@
     return Number.isFinite(n) ? Math.max(0, Math.min(4, n)) : 0;
   }
 
+  // Duración REAL (medida contra las marcas de tiempo, no el bpm teórico
+  // de itinerario/notación) de un pulso del compás de referencia: promedio
+  // de duracion_compases entre los pulsos de ESE compás (misma fila+pasada)
+  // que estén cubiertos por marcas reales en el plan actual. Devuelve null
+  // si ninguno tiene dato real — ahí es cuando el count-in cae de vuelta al
+  // bpm nominal (ver generarPulsosCuentaAlAire), no hay otra referencia.
+  function duracionPulsoRealCompas(referencia) {
+    if (!referencia) return null;
+    const delCompas = pulsos.filter(p =>
+      p.segmento_id === referencia.segmento_id &&
+      p.compas === referencia.compas &&
+      p.pasada === referencia.pasada &&
+      p.duracion_compases != null
+    );
+    if (!delCompas.length) return null;
+    const total = delCompas.reduce((acc, p) => acc + p.duracion_compases, 0);
+    return total / delCompas.length;
+  }
+
   // Un compás al aire por cada compás pedido, cada uno con su cuenta
-  // regresiva completa (pulsos_por_compas, pulsos_por_compas-1, ..., 1) —
-  // al tempo/indicación del compás real de referencia, así se establece
-  // ANTES de arrancar el tempo al que realmente se va a tocar.
+  // regresiva completa (pulsos_por_compas, pulsos_por_compas-1, ..., 1).
+  // La duración de cada pulso del count-in es la REAL del compás que se va
+  // a ejecutar (duracionPulsoReal, medida contra las marcas de tiempo) y
+  // NO el tempo teórico del itinerario/notación (referencia.bpm) — el
+  // count-in tiene que preparar para la velocidad a la que realmente va a
+  // sonar el primer compás, que puede diferir bastante del bpm nominal
+  // (ver duracionPulsoRealCompas). Sólo si no hay dato real disponible
+  // (tramo sin marcas) se cae al bpm nominal, único dato que queda.
   function generarPulsosCuentaAlAire(cantidad, referencia) {
     if (!cantidad || !referencia || !referencia.bpm || !referencia.pulsos_por_compas) return [];
     const n = referencia.pulsos_por_compas;
-    const pulsos = [];
+    const duracionPulsoReal = duracionPulsoRealCompas(referencia);
+    const duracionPulso = duracionPulsoReal != null ? duracionPulsoReal : (60 / referencia.bpm);
+    // bpm mostrado en pantalla durante la cuenta: el EFECTIVO (derivado de
+    // duracionPulso), no el nominal — si no, se ve un bpm que no coincide
+    // con la cadencia real de los clicks.
+    const bpmMostrado = duracionPulsoReal != null ? Math.round(60 / duracionPulsoReal) : referencia.bpm;
+    const pulsosCuenta = [];
     for (let c = 0; c < cantidad; c++) {
       for (let p = 1; p <= n; p++) {
-        pulsos.push({
+        pulsosCuenta.push({
           segmento_id: referencia.segmento_id,
           compas: null,
           cuenta_regresiva: n - p + 1,
@@ -954,15 +984,15 @@
           es_primer_pulso_compas: false, // no es una ocurrencia real — no entra en compasInicios
           acento: p === 1,
           indicacion_compas: referencia.indicacion_compas,
-          bpm: referencia.bpm,
+          bpm: bpmMostrado,
           variacion_tempo_display: '',
           bpm_llegada: null,
           descripcion: null,
-          duracion: 60 / referencia.bpm,
+          duracion: duracionPulso,
         });
       }
     }
-    return pulsos;
+    return pulsosCuenta;
   }
 
   // Arma y arranca la cuenta al aire (si corresponde) y llama a `luego`
