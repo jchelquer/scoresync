@@ -1,6 +1,11 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.7"
+  date: "2026-08-09"
+  changes:
+    - type: nuevo
+      text: "En la lista de \"Partes\" de una obra, cada parte tiene ahora un ícono de play para ir directo a Practicar esa parte, sin pasar por su ficha. Si todavía no tiene compases confirmados, el ícono aparece atenuado con una explicación."
 - version: "1.31.6"
   date: "2026-08-09"
   changes:

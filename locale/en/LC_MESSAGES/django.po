@@ -1990,3 +1990,9 @@ msgstr "Measures not confirmed"
 
 msgid "Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso \"5. Barras y compases\")."
 msgstr "This part can't be practiced yet — some page needs its measures confirmed (step \"5. Barlines and measures\")."
+
+msgid "Practicar esta parte"
+msgstr "Practice this part"
+
+msgid "Todavía no se puede practicar — faltan compases confirmados"
+msgstr "Can't be practiced yet — measures not confirmed"

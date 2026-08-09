@@ -1999,3 +1999,9 @@ msgstr "Compases sin confirmar"
 
 msgid "Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso \"5. Barras y compases\")."
 msgstr "Todavía no se puede practicar esta parte — hace falta confirmar los compases de alguna página (paso \"5. Barras y compases\")."
+
+msgid "Practicar esta parte"
+msgstr "Practicar esta parte"
+
+msgid "Todavía no se puede practicar — faltan compases confirmados"
+msgstr "Todavía no se puede practicar — faltan compases confirmados"
