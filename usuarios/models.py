@@ -126,7 +126,14 @@ class SolicitudAcceso(models.Model):
     apellido = models.CharField(max_length=100, verbose_name=_('Apellido'))
     email = models.EmailField(verbose_name=_('Email'))
     celular = models.CharField(max_length=30, blank=True, verbose_name=_('Celular'))
-    instrumento = models.CharField(max_length=100, blank=True, verbose_name=_('Instrumento principal'))
+    instrumento = models.ForeignKey(
+        'actividades.Instrumento',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        db_constraint=False,
+        related_name='+',
+        verbose_name=_('Instrumento principal'),
+    )
     mensaje = models.TextField(blank=True, verbose_name=_('Mensaje'))
     programa = models.CharField(max_length=50, default='scoresync')
     estado = models.CharField(max_length=10, choices=ESTADOS, default=PENDIENTE, verbose_name=_('Estado'))

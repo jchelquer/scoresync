@@ -1,6 +1,13 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.8"
+  date: "2026-08-13"
+  changes:
+    - type: corregido
+      text: "El pedido de instrumento en \"Solicitar acceso\" no se estaba guardando correctamente; ahora se elige de la lista real de instrumentos."
+    - type: mejorado
+      text: "La aceptación de solicitudes de acceso se gestiona ahora únicamente desde Ensayos."
 - version: "1.31.7"
   date: "2026-08-09"
   changes:

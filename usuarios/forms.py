@@ -23,7 +23,11 @@ class SolicitudAccesoForm(forms.ModelForm):
             'apellido':    forms.TextInput(attrs={'class': _INPUT}),
             'email':       forms.EmailInput(attrs={'class': _INPUT}),
             'celular':     forms.TextInput(attrs={'class': _INPUT, 'placeholder': _('Opcional')}),
-            'instrumento': forms.TextInput(attrs={'class': _INPUT, 'placeholder': _('Opcional')}),
+            'instrumento': forms.Select(attrs={'class': _INPUT}),
             'mensaje':     forms.Textarea(attrs={'class': _INPUT, 'rows': 3,
                                                  'placeholder': _('Contanos brevemente para qué lo vas a usar (opcional)')}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['instrumento'].required = False
