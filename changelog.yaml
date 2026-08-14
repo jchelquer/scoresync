@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.9"
+  date: "2026-08-13"
+  changes:
+    - type: mejorado
+      text: "\"Solicitar acceso\" ahora lleva al formulario único de Ensayos (con ScoreSync ya preseleccionado), en vez de tener un formulario propio acá."
+
 - version: "1.31.8"
   date: "2026-08-13"
   changes:

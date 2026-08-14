@@ -1,13 +1,14 @@
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages import success
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.i18n import set_language as django_set_language
 from django.views.decorators.http import require_POST
 
-from .forms import SolicitudAccesoForm, ScoreSyncAuthForm
+from .forms import ScoreSyncAuthForm
 from .models import Usuario
+from . import sso
 
 
 class ScoreSyncLoginView(LoginView):
@@ -46,11 +47,8 @@ def cambiar_idioma(request):
 
 
 def solicitar_acceso(request):
-    if request.method == "POST":
-        form = SolicitudAccesoForm(request.POST)
-        if form.is_valid():
-            form.save()
-            return render(request, "usuarios/solicitar_acceso_ok.html")
-    else:
-        form = SolicitudAccesoForm()
-    return render(request, "usuarios/solicitar_acceso.html", {"form": form})
+    """
+    El pedido de acceso se gestiona en un único lugar (ensayos), para no
+    mantener el mismo formulario duplicado en cada app hermana.
+    """
+    return redirect(f"{sso.APPS['ensayos']}/usuarios/solicitar-acceso/?programa={sso.APP_KEY}")
