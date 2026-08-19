@@ -456,7 +456,7 @@
       <button type="button" id="btn-velocidad-menos5" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '-5%' %}"><i class="bi bi-chevron-double-left"></i></button>
       <button type="button" id="btn-velocidad-menos1" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '-1%' %}"><i class="bi bi-chevron-left"></i></button>
       <div style="position: relative; display: inline-block;">
-        <input type="range" id="velocidad-slider" min="20" max="150" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
+        <input type="range" id="velocidad-slider" min="20" max="150" step="1" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
         <!-- Marca fija en 100% (velocidad original) — posición calculada sobre
              el rango 20-150: (100-20)/(150-20) = 61.54%. No se mueve con el
              valor del slider (a diferencia del thumb), es sólo una referencia
@@ -739,8 +739,12 @@
     });
   }
   // Flechas +-1/+-5 a los extremos del slider: mismo efecto que arrastrar
-  // el thumb, sólo que a paso fijo (el slider en sí sigue moviéndose de a
-  // 5 con las flechas de teclado — este delta es independiente de `step`).
+  // el thumb, sólo que a paso fijo. El slider quedó con step="1" (antes
+  // "5") a propósito: el algoritmo de saneamiento del value de un
+  // input[type=range] redondea CUALQUIER asignación por JS al múltiplo de
+  // step más cercano (a diferencia de type=number, que sólo marca
+  // :invalid) — con step="5" las flechas de +-1 quedaban mudas, el valor
+  // volvía solo al múltiplo de 5 más próximo.
   function ajustarVelocidad(delta) {
     if (!velocidadSlider) return;
     const min = parseInt(velocidadSlider.min, 10);
