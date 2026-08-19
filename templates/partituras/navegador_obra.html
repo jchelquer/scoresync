@@ -452,7 +452,9 @@
   {% endif %}
   <div id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-1">
+      <button type="button" id="btn-velocidad-menos5" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '-5%' %}"><i class="bi bi-chevron-double-left"></i></button>
+      <button type="button" id="btn-velocidad-menos1" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '-1%' %}"><i class="bi bi-chevron-left"></i></button>
       <div style="position: relative; display: inline-block;">
         <input type="range" id="velocidad-slider" min="20" max="150" step="5" value="{{ velocidad_guardada }}" style="width: 6.5rem;">
         <!-- Marca fija en 100% (velocidad original) — posición calculada sobre
@@ -461,6 +463,8 @@
              visual fija para volver rápido al tempo real. -->
         <div style="position: absolute; left: 61.54%; top: 50%; width: 2px; height: 0.6rem; margin-top: -0.3rem; background: var(--ss-accent); pointer-events: none;"></div>
       </div>
+      <button type="button" id="btn-velocidad-mas1" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '+1%' %}"><i class="bi bi-chevron-right"></i></button>
+      <button type="button" id="btn-velocidad-mas5" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate '+5%' %}"><i class="bi bi-chevron-double-right"></i></button>
       <span id="velocidad-valor" class="small" style="color: var(--ss-text-muted); min-width: 2.6rem;">{{ velocidad_guardada }}%</span>
       <button type="button" id="btn-velocidad-reset" class="btn btn-outline-light btn-sm py-0 px-1" style="font-size: 0.7rem; line-height: 1.4;" title="{% translate 'Volver a 100%' %}">100%</button>
     </div>
@@ -734,6 +738,21 @@
       velocidadSlider.dispatchEvent(new Event('input'));
     });
   }
+  // Flechas +-1/+-5 a los extremos del slider: mismo efecto que arrastrar
+  // el thumb, sólo que a paso fijo (el slider en sí sigue moviéndose de a
+  // 5 con las flechas de teclado — este delta es independiente de `step`).
+  function ajustarVelocidad(delta) {
+    if (!velocidadSlider) return;
+    const min = parseInt(velocidadSlider.min, 10);
+    const max = parseInt(velocidadSlider.max, 10);
+    const actual = parseInt(velocidadSlider.value, 10) || 100;
+    velocidadSlider.value = Math.min(max, Math.max(min, actual + delta));
+    velocidadSlider.dispatchEvent(new Event('input'));
+  }
+  document.getElementById('btn-velocidad-menos5')?.addEventListener('click', () => ajustarVelocidad(-5));
+  document.getElementById('btn-velocidad-menos1')?.addEventListener('click', () => ajustarVelocidad(-1));
+  document.getElementById('btn-velocidad-mas1')?.addEventListener('click', () => ajustarVelocidad(1));
+  document.getElementById('btn-velocidad-mas5')?.addEventListener('click', () => ajustarVelocidad(5));
 
   // ── Autoguardado de preferencias (rango, loop, velocidad, compases al
   // aire, zoom, parte) — por usuario y por obra (el zoom además por

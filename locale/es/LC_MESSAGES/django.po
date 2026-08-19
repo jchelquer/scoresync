@@ -13,6 +13,18 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "+1%"
+msgstr "+1%"
+
+msgid "+5%"
+msgstr "+5%"
+
+msgid "-1%"
+msgstr "-1%"
+
+msgid "-5%"
+msgstr "-5%"
+
 msgid "(fin de la obra — no hay un compás puntual que mostrar)"
 msgstr "(fin de la obra — no hay un compás puntual que mostrar)"
 
