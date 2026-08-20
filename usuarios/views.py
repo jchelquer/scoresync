@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.contrib.auth import logout
 from django.contrib.auth.views import LoginView, LogoutView, PasswordChangeView
 from django.contrib.messages import success
 from django.shortcuts import redirect, render
@@ -44,6 +46,17 @@ def cambiar_idioma(request):
             request.user.idioma = idioma
             request.user.save(update_fields=['idioma'])
     return response
+
+
+def rechazar_terminos(request):
+    """
+    Salida para quien no quiere aceptar los Términos y Condiciones vigentes
+    en infedu.com.ar/aceptar-terminos/: cierra la sesión de esta app. Es GET
+    (no ScoreSyncLogoutView, que exige POST) porque infedu-jch la linkea
+    desde otro origen y no comparte cookie de sesión ni CSRF con esta app.
+    """
+    logout(request)
+    return redirect(settings.LOGOUT_REDIRECT_URL)
 
 
 def solicitar_acceso(request):

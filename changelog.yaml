@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.17"
+  date: "2026-08-20"
+  changes:
+    - type: corregido
+      text: "Quien no quiere aceptar los Términos y Condiciones vigentes ahora puede cerrar sesión directamente desde esa página en infedu.com.ar, en vez de quedar dando vueltas entre esta app y esa página."
+
 - version: "1.31.16"
   date: "2026-08-20"
   changes:
