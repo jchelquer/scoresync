@@ -43,6 +43,30 @@ ALLOWED_HOSTS = (
     else ["127.0.0.1", "localhost"]
 )
 
+# Sin esto, un 500 real en producción no deja NINGÚN rastro: con DEBUG=False
+# Django no imprime nada y no hay ADMINS configurado para mandar mail, así
+# que el error queda invisible (pasó de verdad: usuario nuevo con un 500 al
+# loguearse por primera vez, sin nada recuperable en ningún log — ver
+# incidente 2026-08-20). django.request es el logger que Django usa para
+# cualquier excepción no capturada en una vista. StreamHandler por default
+# escribe a stderr, que gunicorn ya redirige a --error-logfile (ver
+# scoresync.service) — mismo patrón que ensayos/afinacion, sin necesidad de
+# un FileHandler ni una ruta de log aparte.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
