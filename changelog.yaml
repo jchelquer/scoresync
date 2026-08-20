@@ -6,6 +6,10 @@
   changes:
     - type: mejorado
       text: "El marcador de una anotación anclada a un punto exacto (candado) pasa de círculo relleno a anillo, para no tapar la nota u otro contenido que esté justo debajo."
+    - type: mejorado
+      text: "Ese anillo ahora también sirve de asa para arrastrar la anotación (antes sólo el texto respondía al arrastre, aunque el anillo pudiera estar lejos)."
+    - type: mejorado
+      text: "Al arrastrar una anotación anclada a un punto exacto, la vista previa (\"fantasma\") ahora muestra el mismo anillo en la posición del puntero, para poder anticipar dónde va a quedar el ancla al soltar."
 
 - version: "1.31.13"
   date: "2026-08-19"
