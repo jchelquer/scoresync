@@ -2183,11 +2183,16 @@
             + a.offset_y * (caja.bottom - caja.top) * img.naturalHeight * escala;
           const colorNivel = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
 
+          // Anillo, no punto relleno: un círculo sólido justo sobre una nota
+          // (el caso de uso típico del candado) tapaba la nota misma —
+          // hueco por dentro deja ver qué hay debajo y sigue marcando el
+          // lugar exacto igual de claro.
           ctx.beginPath();
           ctx.arc(puntoX, puntoY, 4 * f, 0, Math.PI * 2);
           ctx.globalAlpha = 0.9;
-          ctx.fillStyle = colorNivel;
-          ctx.fill();
+          ctx.strokeStyle = colorNivel;
+          ctx.lineWidth = 1.5 * f;
+          ctx.stroke();
           ctx.globalAlpha = 1;
 
           // Mismo acotado a los bordes del canvas que el resto (ver más

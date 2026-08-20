@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.14"
+  date: "2026-08-19"
+  changes:
+    - type: mejorado
+      text: "El marcador de una anotación anclada a un punto exacto (candado) pasa de círculo relleno a anillo, para no tapar la nota u otro contenido que esté justo debajo."
+
 - version: "1.31.13"
   date: "2026-08-19"
   changes:
