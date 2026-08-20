@@ -1,6 +1,16 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.19"
+  date: "2026-08-20"
+  changes:
+    - type: nuevo
+      text: "Nuevo botón, siempre visible arriba de todo en los dos modos, para ocultar y volver a mostrar el nombre de la obra, el compás/metrónomo y la velocidad — útil para ganar espacio de pantalla durante la ejecución. El rango, Loop, Preferencias y los botones de Ejecutar/Pausar/Continuar/Reiniciar quedan siempre visibles."
+    - type: mejorado
+      text: "El zoom de la partitura ahora avanza de a 0.1 en vez de 0.2, para pasos más graduales."
+    - type: mejorado
+      text: "Las notas ancladas a un punto exacto (candado) ya no muestran el anillo alrededor del punto: el cartel de texto es directamente el punto de agarre para arrastrarlas."
+
 - version: "1.31.18"
   date: "2026-08-20"
   changes:

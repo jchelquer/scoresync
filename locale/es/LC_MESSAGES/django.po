@@ -1106,8 +1106,14 @@ msgstr "Modo compás"
 msgid "Modo partitura"
 msgstr "Modo partitura"
 
+msgid "Mostrar nombre, compás/metrónomo y velocidad"
+msgstr "Mostrar nombre, compás/metrónomo y velocidad"
+
 msgid "Mostrar números de compás"
 msgstr "Mostrar números de compás"
+
+msgid "Ocultar nombre, compás/metrónomo y velocidad"
+msgstr "Ocultar nombre, compás/metrónomo y velocidad"
 
 msgid "Márgenes"
 msgstr "Márgenes"

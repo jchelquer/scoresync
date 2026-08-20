@@ -34,6 +34,26 @@
 
   #barra-titulo-partitura { display: none; }
   body.modo-partitura #barra-titulo-partitura { display: block !important; }
+
+  /* Botón "ocultar/mostrar" (ver HTML, arriba de todo): esconde nombre de
+     la obra + compás/metrónomo + velocidad, dejando siempre visibles
+     rango/Loop/Preferencias y los botones de Anterior/Siguiente/Ejecutar/
+     Pausar/Continuar/Reiniciar/Detener — hace falta seguir controlando la
+     ejecución con los paneles ocultos. #control-velocidad es el mismo nodo
+     reubicado en modo partitura (ver script, junto a Ejecutar/Pausar), un
+     solo selector alcanza para los dos modos. Los otros dos combinan con
+     .modo-partitura porque #barra-titulo-partitura/#barra-compacta ya
+     tienen su propia regla que las muestra ahí — más específico (id + 2
+     clases vs. id + 1 clase) para ganarle sin depender del orden.  */
+  body.paneles-titulo-ocultos #header-normal,
+  body.paneles-titulo-ocultos #tarjeta-compas-metronomo,
+  body.paneles-titulo-ocultos #control-velocidad {
+    display: none !important;
+  }
+  body.modo-partitura.paneles-titulo-ocultos #barra-titulo-partitura,
+  body.modo-partitura.paneles-titulo-ocultos #barra-compacta {
+    display: none !important;
+  }
   /* El doble de lo que tenía antes (0.9rem) — fila propia, arriba de
      #barra-compacta, no mezclado con el resto de los controles chicos. */
   #barra-titulo-partitura #titulo-obra { font-size: 1.8rem; margin: 0; }
@@ -295,6 +315,19 @@
 {% endblock %}
 
 {% block content %}
+<!-- Fuera de header-normal/tarjeta-compas/barra-titulo-partitura/barra-compacta
+     a propósito: este botón tiene que seguir visible y clickeable incluso
+     cuando esos paneles están ocultos (ver body.paneles-titulo-ocultos más
+     abajo), en los dos modos por igual. -->
+<div class="d-flex justify-content-end mb-1">
+  <button type="button" id="btn-toggle-paneles-titulo" class="btn btn-outline-light btn-sm"
+    data-title-mostrar="{% translate 'Mostrar nombre, compás/metrónomo y velocidad' %}"
+    data-title-ocultar="{% translate 'Ocultar nombre, compás/metrónomo y velocidad' %}"
+    title="{% translate 'Ocultar nombre, compás/metrónomo y velocidad' %}">
+    <i class="bi bi-chevron-up"></i>
+  </button>
+</div>
+
 <div class="d-flex justify-content-between align-items-center mb-3" id="header-normal">
   <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
     {{ obra.titulo }}
@@ -418,7 +451,7 @@
   </div>
 </div>
 
-<div class="card border-0 text-center mb-3" style="background: var(--ss-surface)">
+<div class="card border-0 text-center mb-3" id="tarjeta-compas-metronomo" style="background: var(--ss-surface)">
   <div class="card-body py-5">
     <div id="nav-metronomo-caja" style="position: relative; width: 12rem; height: 2rem; margin: 0 auto 0.75rem; border: 1px solid var(--ss-text-muted); border-radius: 0.35rem; background: rgba(255,255,255,0.03);">
       <div id="nav-metronomo-marcas" style="position: absolute; inset: 0;"></div>
@@ -600,6 +633,7 @@
   const scoreHeaderExtra = document.getElementById('score-header-extra');
   const btnZoomMas = document.getElementById('btn-zoom-mas');
   const btnZoomMenos = document.getElementById('btn-zoom-menos');
+  const btnTogglePanelesTitulo = document.getElementById('btn-toggle-paneles-titulo');
   const btnSistemaAnterior = document.getElementById('btn-sistema-anterior');
   const btnSistemaSiguiente = document.getElementById('btn-sistema-siguiente');
   const toggleNumerosCompas = document.getElementById('toggle-numeros-compas');
@@ -1353,7 +1387,7 @@
   // deja sobrar ancho sin usar, pero cada sistema ocupa menos alto en
   // pantalla — así entran más sistemas en la ventana (ver
   // calcularVentanaSync), que es justo cómo se gana espacio vertical.
-  const ZOOM_MIN = 0.4, ZOOM_MAX = 3, ZOOM_PASO = 0.2;
+  const ZOOM_MIN = 0.4, ZOOM_MAX = 3, ZOOM_PASO = 0.1;
   // Último estado decidido por actualizarScore (qué resaltar, si hay
   // preview) — el zoom recalcula la ventana con esto mismo como ancla, no
   // vuelve a decidir nada de la ejecución (ver repintarScore).
@@ -2245,22 +2279,9 @@
             + a.offset_x * (caja.right - caja.left) * img.naturalWidth * escala;
           const puntoY = (caja.top - ventana.top) * img.naturalHeight * escala
             + a.offset_y * (caja.bottom - caja.top) * img.naturalHeight * escala;
-          const colorNivel = COLOR_NIVEL_ANOTACION[a.nivel] || '#666666';
-
-          // Anillo, no punto relleno: un círculo sólido justo sobre una nota
-          // (el caso de uso típico del candado) tapaba la nota misma —
-          // hueco por dentro deja ver qué hay debajo y sigue marcando el
-          // lugar exacto igual de claro.
-          ctx.beginPath();
-          ctx.arc(puntoX, puntoY, 4 * f, 0, Math.PI * 2);
-          ctx.globalAlpha = 0.9;
-          ctx.strokeStyle = colorNivel;
-          ctx.lineWidth = 1.5 * f;
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-
-          // Mismo acotado a los bordes del canvas que el resto (ver más
-          // abajo) — el texto arranca pegado al marcador, hacia la derecha.
+          // Sin anillo: la nota misma (su cartel de texto) es el único
+          // marcador y también el punto de agarre para arrastrarla — nada
+          // de un círculo aparte sobre el punto exacto.
           const pxTexto = Math.max(2 * f, Math.min(puntoX + 6 * f, canvas.width - anchoTexto - 2 * f));
           const pyTexto = Math.max(0, Math.min(puntoY - alto / 2, canvas.height - alto));
           ctx.globalAlpha = 0.55;
@@ -2272,12 +2293,6 @@
           ctx.globalAlpha = 1;
           if (esPantalla) {
             ultimasCajasAnotaciones.push({ x: pxTexto - 2 * f, y: pyTexto, w: anchoTexto + 4 * f, h: alto, anotacion: a });
-            // El anillo también agarra/abre — si no, se ve como un asa para
-            // mover el punto exacto pero sólo el texto (que puede estar
-            // lejos, ver pxTexto) respondería al arrastre. Área más generosa
-            // que el trazo dibujado (8*f de radio vs. 4*f visual) para que
-            // sea un blanco cómodo, sobre todo táctil.
-            ultimasCajasAnotaciones.push({ x: puntoX - 8 * f, y: puntoY - 8 * f, w: 16 * f, h: 16 * f, anotacion: a });
           }
           return;
         }
@@ -2350,18 +2365,9 @@
     if (ghostAnotacion.esPunto) {
       // Ancla de punto exacto (candado): el pixel que importa es el del
       // puntero mismo (ahí va a quedar el offset_x/offset_y al soltar, ver
-      // pointerup) — sin un anillo acá no había forma de anticipar dónde
-      // caía, porque el cartel de texto centrado en la mano lo tapaba. Se
-      // dibuja igual que el marcador real (mismo anillo, mismo desplazado
-      // del texto hacia la derecha) para que el preview sea el resultado.
-      const colorNivel = COLOR_NIVEL_ANOTACION[ghostAnotacion.nivel] || '#666666';
-      ctx.beginPath();
-      ctx.arc(ghostAnotacion.x, ghostAnotacion.y, 4 * f, 0, Math.PI * 2);
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = colorNivel;
-      ctx.lineWidth = 1.5 * f;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      // pointerup). Sin anillo: se dibuja igual que el marcador real (mismo
+      // desplazado del texto hacia la derecha) para que el preview sea el
+      // resultado.
       const pxTexto = Math.max(2 * f, Math.min(ghostAnotacion.x + 6 * f, canvas.width - anchoTexto - 2 * f));
       const pyTexto = Math.max(0, Math.min(ghostAnotacion.y - alto / 2, canvas.height - alto));
       ctx.globalAlpha = 0.55;
@@ -3170,8 +3176,10 @@
     repintarScore();
     programarGuardadoPreferencias();
   }
-  if (btnZoomMas) btnZoomMas.addEventListener('click', () => reajustarZoom(Math.min(ZOOM_MAX, nivelZoom + ZOOM_PASO)));
-  if (btnZoomMenos) btnZoomMenos.addEventListener('click', () => reajustarZoom(Math.max(ZOOM_MIN, nivelZoom - ZOOM_PASO)));
+  // Redondeado a 1 decimal: sumar/restar ZOOM_PASO en punto flotante deja
+  // valores como 0.7999999999999999 (ej. 0.4 + 0.1*4), feos al guardarse.
+  if (btnZoomMas) btnZoomMas.addEventListener('click', () => reajustarZoom(Math.round(Math.min(ZOOM_MAX, nivelZoom + ZOOM_PASO) * 10) / 10));
+  if (btnZoomMenos) btnZoomMenos.addEventListener('click', () => reajustarZoom(Math.round(Math.max(ZOOM_MIN, nivelZoom - ZOOM_PASO) * 10) / 10));
 
   // Click en cualquier compás visible de la partitura → posicionarse ahí
   // directo, sin tener que llegar por Anterior/Siguiente uno a uno. Pausa
@@ -3240,10 +3248,6 @@
           const { px, py } = pixelesCanvasDesdeEvento(e);
           const esPunto = arrastrandoAnotacion.offset_x != null;
           ghostAnotacion = { texto: arrastrandoAnotacion.texto, nivel: arrastrandoAnotacion.nivel, x: px, y: py, esPunto };
-          // La mano del cursor ('grabbing') tapa justo el anillo que
-          // debería mostrar dónde va a quedar el punto — sin ella, el
-          // anillo queda como única referencia, sin nada encima.
-          if (esPunto) scoreVentanaCanvas.style.cursor = 'none';
           repintarScore();
           dibujarGhostAnotacion();
         }
@@ -3828,6 +3832,24 @@
   if (btnModoScore) btnModoScore.addEventListener('click', () => {
     alternarModoScore();
     programarGuardadoPreferencias();
+  });
+
+  // Ocultar/mostrar nombre + compás/metrónomo + velocidad (ver CSS,
+  // body.paneles-titulo-ocultos) — no se guarda como preferencia a
+  // propósito, es un ajuste de pantalla momentáneo mientras se ejecuta, no
+  // algo que deba recordarse entre sesiones. Igual que alternarModoScore,
+  // hay que remedir y reajustar la ventana del score: el espacio vertical
+  // disponible para el canvas cambió.
+  if (btnTogglePanelesTitulo) btnTogglePanelesTitulo.addEventListener('click', () => {
+    const oculto = document.body.classList.toggle('paneles-titulo-ocultos');
+    btnTogglePanelesTitulo.querySelector('i').className = oculto ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+    btnTogglePanelesTitulo.title = oculto ? btnTogglePanelesTitulo.dataset.titleMostrar : btnTogglePanelesTitulo.dataset.titleOcultar;
+    ajustarAltoContenedorScore();
+    if (!scoreGeometria) return;
+    const numero = (idxMostrado >= 0 && pulsos[idxMostrado]) ? pulsos[idxMostrado].compas : {{ compas_actual }};
+    const entrada = scoreGeometria.porCompas[numero];
+    if (!entrada) return;
+    activarVentana(entrada).then(() => { if (ventanaActiva) repintarScore(); }).catch(() => {});
   });
 
   btnPlay.addEventListener('click', cargarPlanYArrancar);

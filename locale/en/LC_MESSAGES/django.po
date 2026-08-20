@@ -1096,8 +1096,14 @@ msgstr "Measure mode"
 msgid "Modo partitura"
 msgstr "Score mode"
 
+msgid "Mostrar nombre, compás/metrónomo y velocidad"
+msgstr "Show title, measure/metronome and speed"
+
 msgid "Mostrar números de compás"
 msgstr "Show measure numbers"
+
+msgid "Ocultar nombre, compás/metrónomo y velocidad"
+msgstr "Hide title, measure/metronome and speed"
 
 msgid "Márgenes"
 msgstr "Margins"
