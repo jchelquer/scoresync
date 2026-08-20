@@ -357,6 +357,16 @@ msgstr "Measures"
 msgid "Compases al aire"
 msgstr "Lead-in count"
 
+msgid "Compases al aire en cada vuelta del loop"
+msgstr "Lead-in count on every loop repeat"
+
+msgid ""
+"Con Loop activo: repite la cuenta de entrada en cada vuelta, no sólo al "
+"arrancar. Apagado, el loop vuelve directo al principio sin cuenta."
+msgstr ""
+"With Loop on: repeats the lead-in count on every repeat, not just when "
+"starting. Off, the loop goes straight back to the start with no count-in."
+
 msgid ""
 "Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes "
 "de ejecutar."

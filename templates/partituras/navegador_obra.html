@@ -372,6 +372,10 @@
           <label for="compases-aire" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Compases al aire" %}</label>
           <input type="number" id="compases-aire" min="0" max="4" step="1" value="{{ compases_al_aire_guardado }}" class="form-control form-control-sm" style="width: 3.5rem;">
         </div>
+        <div class="form-check form-switch d-flex align-items-center" id="control-compases-aire-en-loop">
+          <input class="form-check-input" type="checkbox" id="compases-aire-en-loop" {% if compases_al_aire_en_loop_guardado %}checked{% endif %}>
+          <label class="form-check-label small ms-1" for="compases-aire-en-loop" style="color: var(--ss-text-muted);" title="{% translate 'Con Loop activo: repite la cuenta de entrada en cada vuelta, no sólo al arrancar. Apagado, el loop vuelve directo al principio sin cuenta.' %}">{% translate "Compases al aire en cada vuelta del loop" %}</label>
+        </div>
         {% if obra.audio %}
         <div class="d-flex align-items-center gap-2" id="control-ejecutar-audio">
           <div class="form-check form-switch d-flex align-items-center mb-0">
@@ -606,6 +610,8 @@
   const velocidadValor = document.getElementById('velocidad-valor');
   const controlCompasesAire = document.getElementById('control-compases-aire');
   const compasesAireInput = document.getElementById('compases-aire');
+  const controlCompasesAireEnLoop = document.getElementById('control-compases-aire-en-loop');
+  const compasesAireEnLoopToggle = document.getElementById('compases-aire-en-loop');
   const controlEjecutarAudio = document.getElementById('control-ejecutar-audio');
   const toggleEjecutarAudio = document.getElementById('toggle-ejecutar-audio');
   const controlMuteAudio = document.getElementById('control-mute-audio');
@@ -666,6 +672,7 @@
     // a la izquierda de la fila — no al grupo de la derecha.
     { el: formRango, destino: scoreHeaderRango },
     { el: controlCompasesAire, destino: scoreHeaderRango },
+    { el: controlCompasesAireEnLoop, destino: scoreHeaderRango },
     // Ejecutar/Pausar/Continuar/Reiniciar van en #score-header-extra (a la
     // derecha), siempre insertados ANTES de Anterior/Siguiente (fijos, ver
     // arriba) — el orden acá determina el orden final entre ellos. Sólo
@@ -834,6 +841,7 @@
     params.set('loop', (loopEl && loopEl.checked) ? 'on' : '');
     params.set('velocidad', velocidadSlider ? velocidadSlider.value : '100');
     params.set('compases_al_aire', compasesAireInput ? compasesAireInput.value : '1');
+    params.set('compases_al_aire_en_loop', (compasesAireEnLoopToggle && compasesAireEnLoopToggle.checked) ? 'on' : '');
     params.set('ejecutar_con_audio', ejecutarConAudio ? 'on' : '');
     params.set('zoom', String(nivelZoom));
     params.set('modo_score', document.body.classList.contains('modo-partitura') ? 'partitura' : 'compas');
@@ -851,6 +859,7 @@
   // engancharse a cada campo por separado.
   if (formRango) formRango.addEventListener('input', programarGuardadoPreferencias);
   if (compasesAireInput) compasesAireInput.addEventListener('input', programarGuardadoPreferencias);
+  if (compasesAireEnLoopToggle) compasesAireEnLoopToggle.addEventListener('change', programarGuardadoPreferencias);
 
   // ── Ejecutar con audio ──────────────────────────────────────────────
   // Se recuerda como el resto de las preferencias (ver guardarPreferencias
@@ -1193,10 +1202,11 @@
       flashVisual(p.acento);
       flashCursorScore(p.acento);
     }
-    // El sonido sí respeta el mismo switch que el resto del metrónomo —
-    // si está encendido, la cuenta al aire suena; si está apagado, queda
-    // muda (sólo el aviso visual).
-    if (metronomoAudioToggle.checked) click(p.acento);
+    // El sonido de la cuenta al aire NO respeta el switch "Sonido" del
+    // metrónomo — suena siempre, apagado o no, porque es la referencia
+    // para entrar a tiempo (silenciarla la vuelve inútil). El resto del
+    // metrónomo (durante la ejecución real) sí sigue ese switch.
+    if (esCuentaAlAire || metronomoAudioToggle.checked) click(p.acento);
   }
 
   // Cobertura real del número de compás que cae en pulsos[idx], fusionando
@@ -3416,6 +3426,29 @@
     const acumuladosUsados = acumuladosReales;
     if (elapsed >= total) {
       if (loopEl && loopEl.checked) {
+        // Cuenta al aire también en cada vuelta (opcional, ver
+        // compasesAireEnLoopToggle) — mismo mecanismo que al arrancar o
+        // al continuar de una pausa (construirCuenta), sólo que acá el
+        // "luego" retoma el reloj principal (avanzar) en vez de arrancarlo
+        // por primera vez. Corta la ejecución de este frame de avanzar():
+        // mientras la cuenta corre, es avanzarCuenta quien pide el próximo
+        // rAF, no avanzar.
+        if (compasesAireEnLoopToggle && compasesAireEnLoopToggle.checked && leerCompasesAlAire() > 0) {
+          if (conAudio) audioNav.pause();
+          detenerAnimacion();
+          construirCuenta(pulsos[0], pulsos[0].compas, () => {
+            if (audioDebeSonar()) {
+              audioNav.currentTime = primerPulsoTiempoReal;
+              audioNav.play().catch(() => {});
+            } else {
+              startTs = performance.now();
+            }
+            idxMostrado = -1;
+            detenerAnimacion();
+            rafId = requestAnimationFrame(avanzar);
+          });
+          return;
+        }
         if (conAudio) {
           audioNav.currentTime = primerPulsoTiempoReal;
         } else {

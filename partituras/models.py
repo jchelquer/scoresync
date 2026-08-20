@@ -745,6 +745,12 @@ class PreferenciaObra(models.Model):
     loop = models.BooleanField(default=False)
     velocidad = models.PositiveIntegerField(default=100)
     compases_al_aire = models.PositiveIntegerField(default=1)
+    compases_al_aire_en_loop = models.BooleanField(
+        default=False,
+        help_text="Si el loop está activo y hay compases_al_aire configurados, repetir la cuenta de "
+                   "entrada en cada vuelta (no sólo al arrancar) — apagado por default: en un pasaje que "
+                   "ya se domina, la cuenta en cada vuelta interrumpe más de lo que ayuda.",
+    )
     ejecutar_con_audio = models.BooleanField(
         default=False,
         help_text="Si la ejecución sigue el audio de referencia (tiempos reales, velocidad fija) en vez "

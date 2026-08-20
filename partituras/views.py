@@ -1482,6 +1482,7 @@ def navegador_obra(request, pk):
         "partes_disponibles": partes_disponibles,
         "velocidad_guardada": pref.velocidad if pref else 100,
         "compases_al_aire_guardado": pref.compases_al_aire if pref else 1,
+        "compases_al_aire_en_loop_guardado": pref.compases_al_aire_en_loop if pref else False,
         "nivel_zoom_guardado": pref_parte.nivel_zoom if pref_parte else 1,
         "ejecutar_con_audio_guardado": pref.ejecutar_con_audio if pref else bool(obra.audio),
         "modo_guardado": pref.modo_score if pref else "",
@@ -1508,6 +1509,7 @@ def guardar_preferencias_obra(request, pk):
         "loop": request.POST.get("loop") == "on",
         "velocidad": max(20, min(150, _leer_entero(request.POST.get("velocidad"), 100))),
         "compases_al_aire": max(0, min(4, _leer_entero(request.POST.get("compases_al_aire"), 1))),
+        "compases_al_aire_en_loop": request.POST.get("compases_al_aire_en_loop") == "on",
         "ejecutar_con_audio": request.POST.get("ejecutar_con_audio") == "on",
         "modo_score": (
             request.POST.get("modo_score")

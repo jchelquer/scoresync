@@ -360,6 +360,16 @@ msgstr "Compases"
 msgid "Compases al aire"
 msgstr "Compases al aire"
 
+msgid "Compases al aire en cada vuelta del loop"
+msgstr "Compases al aire en cada vuelta del loop"
+
+msgid ""
+"Con Loop activo: repite la cuenta de entrada en cada vuelta, no sólo al "
+"arrancar. Apagado, el loop vuelve directo al principio sin cuenta."
+msgstr ""
+"Con Loop activo: repite la cuenta de entrada en cada vuelta, no sólo al "
+"arrancar. Apagado, el loop vuelve directo al principio sin cuenta."
+
 msgid ""
 "Completalos en \"Sincronizar compases\" (por ejemplo con Interpolar) antes "
 "de ejecutar."
