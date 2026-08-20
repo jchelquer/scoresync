@@ -3107,10 +3107,12 @@
         // a partir de que se cruza el umbral, no en cada micro-temblor.
         if (huboArrastreAnotacion && ventanaActiva) {
           const { px, py } = pixelesCanvasDesdeEvento(e);
-          ghostAnotacion = {
-            texto: arrastrandoAnotacion.texto, nivel: arrastrandoAnotacion.nivel, x: px, y: py,
-            esPunto: arrastrandoAnotacion.offset_x != null,
-          };
+          const esPunto = arrastrandoAnotacion.offset_x != null;
+          ghostAnotacion = { texto: arrastrandoAnotacion.texto, nivel: arrastrandoAnotacion.nivel, x: px, y: py, esPunto };
+          // La mano del cursor ('grabbing') tapa justo el anillo que
+          // debería mostrar dónde va a quedar el punto — sin ella, el
+          // anillo queda como única referencia, sin nada encima.
+          if (esPunto) scoreVentanaCanvas.style.cursor = 'none';
           repintarScore();
           dibujarGhostAnotacion();
         }

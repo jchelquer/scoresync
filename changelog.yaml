@@ -10,6 +10,8 @@
       text: "Ese anillo ahora también sirve de asa para arrastrar la anotación (antes sólo el texto respondía al arrastre, aunque el anillo pudiera estar lejos)."
     - type: mejorado
       text: "Al arrastrar una anotación anclada a un punto exacto, la vista previa (\"fantasma\") ahora muestra el mismo anillo en la posición del puntero, para poder anticipar dónde va a quedar el ancla al soltar."
+    - type: corregido
+      text: "Ese mismo arrastre ocultaba el anillo detrás del cursor de \"mano\" del sistema operativo, que quedaba justo encima tapándolo. Ahora se oculta el cursor mientras se arrastra una anotación de punto exacto, dejando el anillo como única referencia."
 
 - version: "1.31.13"
   date: "2026-08-19"
