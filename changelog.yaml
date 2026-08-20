@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.18"
+  date: "2026-08-20"
+  changes:
+    - type: mejorado
+      text: "En Preferencias, la opción de repetir la cuenta de entrada en cada vuelta del loop pasa a llamarse \"Con pausa\" (antes un texto largo que obligaba a dos líneas en pantallas chicas) y se ubica junto a Loop, antes de Compases al aire."
+
 - version: "1.31.17"
   date: "2026-08-20"
   changes:

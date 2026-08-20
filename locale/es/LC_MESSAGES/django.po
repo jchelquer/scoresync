@@ -360,8 +360,8 @@ msgstr "Compases"
 msgid "Compases al aire"
 msgstr "Compases al aire"
 
-msgid "Compases al aire en cada vuelta del loop"
-msgstr "Compases al aire en cada vuelta del loop"
+msgid "Con pausa"
+msgstr "Con pausa"
 
 msgid ""
 "Con Loop activo: repite la cuenta de entrada en cada vuelta, no sólo al "
