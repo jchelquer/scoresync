@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 {% block title %}Biblioteca — ScoreSync{% endblock %}
 
 {% block content %}
@@ -8,30 +8,50 @@
   <div class="d-flex gap-2">
     {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-obras" %}
     <a href="{% url 'partituras:partes_sueltas' %}" class="btn btn-outline-light btn-sm">{% translate "Partes sueltas" %}</a>
+    {% if form_crear_obra %}
+    <button type="button" class="btn btn-ss btn-sm" data-bs-toggle="modal" data-bs-target="#modal-crear-obra">{% translate "+ Crear obra" %}</button>
+    {% endif %}
   </div>
 </div>
 {% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-obras" contenido="partituras/_ayuda/obras.html" %}
 
-{% if user.es_admin or user.is_staff %}
-<div class="row justify-content-center mb-4">
-  <div class="col-md-7">
-    <div class="card border-0" style="background: var(--ss-surface)">
-      <div class="card-body p-4">
-        <h6 style="color: var(--ss-text-bright)">{% translate "Crear una obra nueva" %}</h6>
-        <form method="post" action="{% url 'partituras:crear_obra' %}" class="d-flex flex-wrap gap-2 mt-2">
-          {% csrf_token %}
-          <input type="text" name="titulo" class="form-control" style="max-width: 16rem;" placeholder="{% translate 'Título de la obra' %}" required>
-          <input type="text" name="compositor" class="form-control" style="max-width: 12rem;" placeholder="{% translate 'Compositor (opcional)' %}">
-          <input type="text" name="arreglista" class="form-control" style="max-width: 12rem;" placeholder="{% translate 'Arreglista (opcional)' %}">
-          <select name="ciclo" class="form-select" style="max-width: 14rem;">
-            <option value="">{% translate "Repertorio-ciclo (opcional)" %}</option>
-            {% for c in ciclos %}
-            <option value="{{ c.pk }}">{{ c }}</option>
-            {% endfor %}
-          </select>
-          <button type="submit" class="btn btn-ss">{% translate "Crear" %}</button>
-        </form>
+{% if form_crear_obra %}
+<div class="modal fade" id="modal-crear-obra" tabindex="-1" aria-labelledby="modal-crear-obra-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content" style="background: var(--ss-surface); color: var(--ss-text-muted); border: 1px solid #2a4a47;">
+      <div class="modal-header" style="border-color: #2a4a47;">
+        <h5 class="modal-title" id="modal-crear-obra-titulo" style="color: var(--ss-text-bright)">{% translate "Crear una obra nueva" %}</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="{% translate 'Cerrar' %}"></button>
       </div>
+      <form method="post" action="{% url 'partituras:crear_obra' %}">
+        {% csrf_token %}
+        <div class="modal-body">
+          {% for field in form_crear_obra %}
+            <div class="mb-3" id="row-{{ field.name }}">
+              <label class="form-label" style="color: var(--ss-text)">{{ field.label }}</label>
+              {{ field }}
+              {% if field.name == 'ciclo' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">{% translate "Organización de biblioteca (opcional) — repertorios y ciclos se crean desde el admin." %}</div>
+              {% endif %}
+              {% if field.name == 'restriccion' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">
+                {% translate "Hereda: usa los grupos del repertorio de esta obra (o pública si no tiene). Restringida sólo puede acotar lo que el repertorio ya permitía, nunca ampliarlo." %}
+              </div>
+              {% endif %}
+              {% if field.name == 'grupos_visibles' %}
+              <div class="form-text" style="color: var(--ss-text-muted)">
+                {% translate "La ven quienes pertenezcan a alguno de estos grupos, MÁS los usuarios elegidos abajo — se suman (alcanza con cualquiera de las dos condiciones, no hace falta cumplir ambas)." %}
+              </div>
+              {% endif %}
+              {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors.0 }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+        <div class="modal-footer" style="border-color: #2a4a47;">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">{% translate "Cancelar" %}</button>
+          <button type="submit" class="btn btn-ss">{% translate "Crear" %}</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -107,5 +127,54 @@
 </div>
 {% else %}
 <p style="color: var(--ss-text-muted)">{% translate "Todavía no hay ninguna obra creada." %}</p>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% if form_crear_obra %}
+{% comment %}
+grupos_visibles/usuarios_visibles usan FilteredSelectMultiple, el mismo widget de dos listas
+del admin de Django — reusa su JS. Funciona igual adentro de un modal Bootstrap oculto (no
+mide el ancho del contenedor al armarse, usa CSS fijo) — no hace falta esperar a que se abra.
+El CSS de layout se carga aparte (sin el base.css completo del admin) para no pisar los
+estilos de Bootstrap del resto de la página; las variables son los mismos valores por default
+que usa el admin, sólo que scopeadas a .selector.
+{% endcomment %}
+<link rel="stylesheet" href="{% static 'admin/css/widgets.css' %}">
+<style>
+.selector {
+    --primary: #79aec8;
+    --primary-fg: #fff;
+    --secondary: #417690;
+    --body-quiet-color: #666;
+    --header-link-color: var(--primary-fg);
+    --breadcrumbs-fg: #c4dce8;
+    --border-color: #ccc;
+    --darkened-bg: #f8f8f8;
+    --selected-bg: #e4e4e4;
+    --button-fg: #fff;
+    --button-bg: var(--secondary);
+    --button-hover-bg: #205067;
+}
+.selector select {
+    background: #fff;
+    color: #333;
+}
+</style>
+<script src="{% url 'admin:jsi18n' %}"></script>
+{{ form_crear_obra.media }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var sel = document.getElementById('id_restriccion');
+    var filas = [document.getElementById('row-grupos_visibles'), document.getElementById('row-usuarios_visibles')];
+    function actualizar() {
+        var mostrar = sel.value === 'restringida';
+        filas.forEach(function (f) { if (f) f.style.display = mostrar ? '' : 'none'; });
+    }
+    sel.addEventListener('change', actualizar);
+    actualizar();
+});
+</script>
 {% endif %}
 {% endblock %}

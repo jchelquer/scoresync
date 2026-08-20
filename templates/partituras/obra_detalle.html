@@ -21,11 +21,8 @@
       </h4>
       <div class="d-flex gap-2">
         {% if es_dueño or es_admin %}
-        <a href="{% url 'partituras:editar_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Editar' %}">
-          <i class="bi bi-pencil"></i>
-        </a>
-        <a href="{% url 'partituras:editar_visibilidad_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Visibilidad: quién puede ver esta obra' %}">
-          <i class="bi bi-shield-lock"></i> {% translate "Visibilidad" %}
+        <a href="{% url 'partituras:editar_obra' obra.pk %}" class="btn btn-outline-light btn-sm" title="{% translate 'Editar — incluye título, compositor, arreglista, ciclo y quién puede ver esta obra' %}">
+          <i class="bi bi-pencil"></i> {% translate "Editar" %}
         </a>
         {% endif %}
         {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-obra-detalle" %}

@@ -18,7 +18,7 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, ObraVisibilidadForm, PartituraEditForm,
+    EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm,
     PartituraForm, RepertorioForm, SegmentoFormSet,
 )
 from .models import (
@@ -549,6 +549,7 @@ def obras(request):
         "ciclos": _ciclos_visibles_qs(request.user),
         "filtros": request.GET,
         "orden": orden,
+        "form_crear_obra": ObraForm(usuarios_candidatos=_usuarios_transferibles(request.user)) if _es_admin(request.user) else None,
     })
 
 
@@ -611,43 +612,25 @@ def obra_detalle(request, pk):
 
 @login_required
 def editar_obra(request, pk):
-    """Corrige título/compositor/arreglista/ciclo de una obra ya creada —
-    del dueño o de un admin (mismo criterio que publicar/despublicar, ver
-    alternar_publicacion_obra). Repertorio/Ciclo en sí (qué existe) se
-    gestiona sólo desde el admin — acá sólo se elige entre los ya
-    creados (ver ObraEditForm)."""
-    obra = get_object_or_404(Obra, pk=pk)
-    if not (obra.owner_id == request.user.id or _es_admin(request.user)):
-        return HttpResponseForbidden()
-    if request.method == "POST":
-        form = ObraEditForm(request.POST, instance=obra)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f'Se guardaron los cambios de "{obra}".')
-            return redirect("partituras:obra_detalle", pk=obra.pk)
-    else:
-        form = ObraEditForm(instance=obra)
-    return render(request, "partituras/editar_obra.html", {"form": form, "obra": obra})
-
-
-@login_required
-def editar_visibilidad_obra(request, pk):
-    """Quién puede ver esta obra — pantalla propia, separada de editar_obra
-    (ver ObraVisibilidadForm), con su propio botón en obra_detalle. Mismo
-    criterio de permiso que editar_obra (dueño o admin)."""
+    """Corrige título/compositor/arreglista/ciclo y visibilidad
+    (restriccion/grupos_visibles/usuarios_visibles, ver ObraEditForm) de una
+    obra ya creada — del dueño o de un admin (mismo criterio que publicar/
+    despublicar, ver alternar_publicacion_obra). Repertorio/Ciclo en sí (qué
+    existe) se gestiona sólo desde el admin — acá sólo se elige entre los
+    ya creados."""
     obra = get_object_or_404(Obra, pk=pk)
     if not (obra.owner_id == request.user.id or _es_admin(request.user)):
         return HttpResponseForbidden()
     usuarios_candidatos = _usuarios_transferibles(request.user)
     if request.method == "POST":
-        form = ObraVisibilidadForm(request.POST, instance=obra, usuarios_candidatos=usuarios_candidatos)
+        form = ObraEditForm(request.POST, instance=obra, usuarios_candidatos=usuarios_candidatos)
         if form.is_valid():
             form.save()
-            messages.success(request, f'Se guardó la visibilidad de "{obra}".')
+            messages.success(request, f'Se guardaron los cambios de "{obra}".')
             return redirect("partituras:obra_detalle", pk=obra.pk)
     else:
-        form = ObraVisibilidadForm(instance=obra, usuarios_candidatos=usuarios_candidatos)
-    return render(request, "partituras/editar_visibilidad_obra.html", {"form": form, "obra": obra})
+        form = ObraEditForm(instance=obra, usuarios_candidatos=usuarios_candidatos)
+    return render(request, "partituras/editar_obra.html", {"form": form, "obra": obra})
 
 
 @login_required
@@ -1826,12 +1809,13 @@ def crear_obra(request):
     if request.method != "POST":
         return redirect("partituras:obras")
     partitura = Partitura.objects.filter(pk=request.POST.get("partitura_pk"), owner=request.user).first()
-    form = ObraForm(request.POST)
+    form = ObraForm(request.POST, usuarios_candidatos=_usuarios_transferibles(request.user))
     if not form.is_valid():
         return redirect("partituras:estado", pk=partitura.pk) if partitura else redirect("partituras:obras")
     obra = form.save(commit=False)
     obra.owner = request.user
     obra.save()
+    form.save_m2m()
     if partitura:
         partitura.obra = obra
         partitura.save(update_fields=["obra"])

@@ -24,7 +24,6 @@ urlpatterns = [
     path('repertorios/<int:pk>/visibilidad/', views.editar_visibilidad_repertorio, name='editar_visibilidad_repertorio'),
     path('obras/<int:pk>/', views.obra_detalle, name='obra_detalle'),
     path('obras/<int:pk>/editar/', views.editar_obra, name='editar_obra'),
-    path('obras/<int:pk>/visibilidad/', views.editar_visibilidad_obra, name='editar_visibilidad_obra'),
     path('obras/<int:pk>/borrar/', views.borrar_obra, name='borrar_obra'),
     path('obras/<int:pk>/publicar/', views.alternar_publicacion_obra, name='alternar_publicacion_obra'),
     path('obras/<int:pk>/transferir/', views.transferir_ownership_obra, name='transferir_ownership_obra'),

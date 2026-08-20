@@ -1,6 +1,14 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.13"
+  date: "2026-08-19"
+  changes:
+    - type: mejorado
+      text: "\"Crear obra\", en la Biblioteca, pasa de un formulario incompleto siempre a la vista (parecía un filtro más) a un botón que abre un formulario completo en un modal."
+    - type: mejorado
+      text: "La visibilidad de una obra (quién puede verla) ya no es una pantalla aparte: se define en el mismo paso que crearla o editarla."
+
 - version: "1.31.12"
   date: "2026-08-19"
   changes:

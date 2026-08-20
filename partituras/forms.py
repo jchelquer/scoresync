@@ -46,54 +46,18 @@ class PartituraEditForm(forms.ModelForm):
         self.fields['instrumento'].required = True
 
 
-class ObraForm(forms.ModelForm):
-    class Meta:
-        model = Obra
-        fields = ['titulo', 'compositor', 'arreglista', 'ciclo']
-        widgets = {
-            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Título de la obra'}),
-            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
-            'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Arreglista (opcional)'}),
-            'ciclo': forms.Select(attrs={'class': 'form-select'}),
-        }
-
-
-class ObraEditForm(forms.ModelForm):
-    """Corrige los datos de una obra ya creada — título/compositor/
-    arreglista/ciclo (organización de biblioteca, ver Obra.ciclo). No el
-    audio (ver obra_detalle, que lo maneja aparte) ni publicada (switch
-    propio, ver alternar_publicacion_obra). Repertorio/Ciclo en sí se
-    gestionan sólo desde el admin — acá sólo se elige entre los que ya
-    existen. La VISIBILIDAD (restriccion/grupos_visibles/usuarios_visibles)
-    tiene su propia pantalla aparte — ver ObraVisibilidadForm/
-    editar_visibilidad_obra — para que no quede escondida dentro de un
-    form genérico de título/compositor."""
-    class Meta:
-        model = Obra
-        fields = ['titulo', 'compositor', 'arreglista', 'ciclo']
-        widgets = {
-            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
-            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
-            'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
-            'ciclo': forms.Select(attrs={'class': 'form-select'}),
-        }
-
-
-class ObraVisibilidadForm(forms.ModelForm):
-    """Quién puede ver esta obra (ver Obra.restriccion) — pantalla propia,
-    separada de ObraEditForm (ver editar_visibilidad_obra), con botón
-    dedicado en obra_detalle en vez de quedar escondida en "Editar".
+class VisibilidadObraMixin:
+    """Arma los widgets de doble lista (FilteredSelectMultiple, el mismo
+    widget de dos columnas del admin de Django) para grupos_visibles/
+    usuarios_visibles — compartido por ObraForm y ObraEditForm, que piden
+    la visibilidad en el mismo paso que el resto de los datos (antes era
+    una pantalla aparte, ObraVisibilidadForm/editar_visibilidad_obra —
+    se sacó porque cargar una obra sin decidir quién la ve todavía no
+    tiene sentido como paso separado).
 
     `usuarios_candidatos` (opcional): queryset para poblar usuarios_visibles
     — lo arma la view con el mismo criterio que _usuarios_transferibles (no
     mostrar el directorio entero del ecosistema compartido)."""
-    class Meta:
-        model = Obra
-        fields = ['restriccion', 'grupos_visibles', 'usuarios_visibles']
-        widgets = {
-            'restriccion': forms.Select(attrs={'class': 'form-select', 'id': 'id_restriccion'}),
-        }
-
     def __init__(self, *args, usuarios_candidatos=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['grupos_visibles'].widget = FilteredSelectMultiple("grupos", is_stacked=False)
@@ -101,8 +65,39 @@ class ObraVisibilidadForm(forms.ModelForm):
         self.fields['usuarios_visibles'].widget = FilteredSelectMultiple("usuarios", is_stacked=False)
         if usuarios_candidatos is not None:
             self.fields['usuarios_visibles'].queryset = usuarios_candidatos
-        else:
-            self.fields['usuarios_visibles'].queryset = self.fields['usuarios_visibles'].queryset
+
+
+class ObraForm(VisibilidadObraMixin, forms.ModelForm):
+    class Meta:
+        model = Obra
+        fields = ['titulo', 'compositor', 'arreglista', 'ciclo', 'restriccion', 'grupos_visibles', 'usuarios_visibles']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Título de la obra'}),
+            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Arreglista (opcional)'}),
+            'ciclo': forms.Select(attrs={'class': 'form-select'}),
+            'restriccion': forms.Select(attrs={'class': 'form-select', 'id': 'id_restriccion'}),
+        }
+
+
+class ObraEditForm(VisibilidadObraMixin, forms.ModelForm):
+    """Corrige los datos de una obra ya creada — título/compositor/
+    arreglista/ciclo (organización de biblioteca, ver Obra.ciclo) y quién
+    puede verla (restriccion/grupos_visibles/usuarios_visibles, ver
+    VisibilidadObraMixin). No el audio (ver obra_detalle, que lo maneja
+    aparte) ni publicada (switch propio, ver alternar_publicacion_obra).
+    Repertorio/Ciclo en sí se gestionan sólo desde el admin — acá sólo se
+    elige entre los que ya existen."""
+    class Meta:
+        model = Obra
+        fields = ['titulo', 'compositor', 'arreglista', 'ciclo', 'restriccion', 'grupos_visibles', 'usuarios_visibles']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control'}),
+            'compositor': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'arreglista': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Opcional'}),
+            'ciclo': forms.Select(attrs={'class': 'form-select'}),
+            'restriccion': forms.Select(attrs={'class': 'form-select', 'id': 'id_restriccion'}),
+        }
 
 
 class RepertorioForm(forms.ModelForm):

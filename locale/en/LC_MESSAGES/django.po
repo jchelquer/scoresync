@@ -19,6 +19,9 @@ msgstr "+1%"
 msgid "+5%"
 msgstr "+5%"
 
+msgid "+ Crear obra"
+msgstr "+ New piece"
+
 msgid "-1%"
 msgstr "-1%"
 
@@ -27,6 +30,9 @@ msgstr "-5%"
 
 msgid "(fin de la obra — no hay un compás puntual que mostrar)"
 msgstr "(end of the piece — no specific measure to show)"
+
+msgid "(opcional)"
+msgstr "(optional)"
 
 msgid ""
 "A diferencia de lo de arriba (un valor vigente hasta la próxima marca), un "
@@ -210,6 +216,9 @@ msgid ""
 "Arrastrá los bordes de una banda para redimensionarla, o el centro para "
 "moverla entera."
 msgstr "Drag a band's edges to resize it, or its center to move it entirely."
+
+msgid "Arreglista"
+msgstr "Arranger"
 
 msgid "Arreglista (opcional)"
 msgstr "Arranger (optional)"
@@ -1166,6 +1175,9 @@ msgstr "Piece"
 
 msgid "Omitir detección automática"
 msgstr "Skip automatic detection"
+
+msgid "Opcional"
+msgstr "Optional"
 
 msgid "Orden"
 msgstr "Order"
