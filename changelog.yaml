@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.12"
+  date: "2026-08-19"
+  changes:
+    - type: mejorado
+      text: "El campo \"vez\" (qué repetición de un compás repetido) del rango desde/hasta ya no se muestra siempre: aparece al enfocar el compás, y se oculta solo si queda en el valor por defecto."
+
 - version: "1.31.10"
   date: "2026-08-19"
   changes:
