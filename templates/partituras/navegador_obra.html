@@ -327,9 +327,12 @@
   <div class="d-flex align-items-end gap-1">
     <div>
       <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "desde c." %}</label>
-      <input type="text" inputmode="decimal" name="desde_compas" value="{{ desde_compas }}" placeholder="{% translate 'ej. 5,1.3' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos). Si ese compás se repite, al enfocar este campo aparece \"vez\" para elegir cuál de las repeticiones.' %}" class="form-control form-control-sm" style="width: 5rem;">
+      <div class="d-flex align-items-center gap-1">
+        <input type="text" inputmode="decimal" name="desde_compas" value="{{ desde_compas }}" placeholder="{% translate 'ej. 5,1.3' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos). Si ese compás se repite, al enfocar este campo aparece \"vez\" para elegir cuál de las repeticiones.' %}" class="form-control form-control-sm" style="width: 5rem;">
+        <span id="desde-vez-indicador" class="small" style="color: var(--ss-text-muted); white-space: nowrap;">{% if desde_pasada != 1 %}({{ desde_pasada }}){% endif %}</span>
+      </div>
     </div>
-    <div class="campo-vez{% if desde_pasada == 1 %} d-none{% endif %}">
+    <div class="campo-vez d-none">
       <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
       <input type="number" name="desde_pasada" value="{{ desde_pasada }}" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
     </div>
@@ -337,9 +340,12 @@
   <div class="d-flex align-items-end gap-1">
     <div>
       <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "hasta c." %}</label>
-      <input type="text" inputmode="decimal" name="hasta_compas" value="{{ hasta_compas }}" placeholder="{% translate 'fin' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos). Si ese compás se repite, al enfocar este campo aparece \"vez\" para elegir cuál de las repeticiones.' %}" class="form-control form-control-sm" style="width: 5rem;">
+      <div class="d-flex align-items-center gap-1">
+        <input type="text" inputmode="decimal" name="hasta_compas" value="{{ hasta_compas }}" placeholder="{% translate 'fin' %}" title="{% translate 'Compás, o compás,pulso (ej. 5,1.3 = compás 5, pulso 1 + 3 décimos). Si ese compás se repite, al enfocar este campo aparece \"vez\" para elegir cuál de las repeticiones.' %}" class="form-control form-control-sm" style="width: 5rem;">
+        <span id="hasta-vez-indicador" class="small" style="color: var(--ss-text-muted); white-space: nowrap;">{% if hasta_pasada != 1 %}({{ hasta_pasada }}){% endif %}</span>
+      </div>
     </div>
-    <div class="campo-vez{% if hasta_pasada == 1 %} d-none{% endif %}">
+    <div class="campo-vez d-none">
       <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "vez" %}</label>
       <input type="number" name="hasta_pasada" value="{{ hasta_pasada }}" min="1" class="form-control form-control-sm" style="width: 3.5rem;">
     </div>
@@ -759,28 +765,46 @@
   document.getElementById('btn-velocidad-mas5')?.addEventListener('click', () => ajustarVelocidad(5));
 
   // "vez" (qué pasada de un compás repetido, ver ayuda) se usa poco y
-  // ocupaba lugar siempre — ahora arranca oculto (salvo que ya tenga un
-  // valor distinto de 1, guardado de una visita anterior) y se arma como
-  // campo doble al enfocar el compás, igual que la numeración de compases
-  // en "Ajustar barras" arma repeticiones+número al hacer click. Se
-  // vuelve a ocultar solo si quedó en 1 (el valor por defecto) al perder
-  // el foco — si el usuario lo cambió, se deja visible para que no
-  // "desaparezca" un rango que sí depende de la vuelta.
-  function armarToggleVez(inputCompas, inputPasada) {
+  // ocupaba lugar siempre — ahora arranca oculto y se arma como campo
+  // doble al enfocar el compás, igual que la numeración de compases en
+  // "Ajustar barras" arma repeticiones+número al hacer click. Se vuelve a
+  // ocultar al perder el foco del grupo (o con Enter, para no obligar a
+  // pasar por "vez" con Tab si no hace falta tocarlo) — si quedó en un
+  // valor distinto de 1 no se pierde de vista: queda un "(N)" al lado del
+  // compás, en vez de dejar el campo abierto permanentemente.
+  function armarToggleVez(inputCompas, inputPasada, indicador) {
     if (!inputCompas || !inputPasada) return;
     const campoVez = inputPasada.closest('.campo-vez');
     if (!campoVez) return;
-    inputCompas.addEventListener('focus', () => campoVez.classList.remove('d-none'));
-    function colapsarSiDefault(e) {
-      if (e.relatedTarget === inputCompas || e.relatedTarget === inputPasada) return;
-      if ((inputPasada.value || '1') === '1') campoVez.classList.add('d-none');
+    function revelar() {
+      campoVez.classList.remove('d-none');
+      if (indicador) indicador.textContent = '';
     }
-    inputCompas.addEventListener('blur', colapsarSiDefault);
-    inputPasada.addEventListener('blur', colapsarSiDefault);
+    function colapsar() {
+      campoVez.classList.add('d-none');
+      if (indicador) {
+        const v = parseInt(inputPasada.value, 10) || 1;
+        indicador.textContent = v !== 1 ? '(' + v + ')' : '';
+      }
+    }
+    inputCompas.addEventListener('focus', revelar);
+    function blurHandler(e) {
+      if (e.relatedTarget === inputCompas || e.relatedTarget === inputPasada) return;
+      colapsar();
+    }
+    inputCompas.addEventListener('blur', blurHandler);
+    inputPasada.addEventListener('blur', blurHandler);
+    [inputCompas, inputPasada].forEach(input => {
+      input.addEventListener('keydown', e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        input.blur();
+      });
+    });
   }
   if (formRango) {
-    armarToggleVez(formRango.elements['desde_compas'], formRango.elements['desde_pasada']);
-    armarToggleVez(formRango.elements['hasta_compas'], formRango.elements['hasta_pasada']);
+    armarToggleVez(formRango.elements['desde_compas'], formRango.elements['desde_pasada'], document.getElementById('desde-vez-indicador'));
+    armarToggleVez(formRango.elements['hasta_compas'], formRango.elements['hasta_pasada'], document.getElementById('hasta-vez-indicador'));
   }
 
   // ── Autoguardado de preferencias (rango, loop, velocidad, compases al
