@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.16"
+  date: "2026-08-20"
+  changes:
+    - type: nuevo
+      text: "En modo partitura, si termina la página y sobra lugar en pantalla, se muestran de una vez los primeros sistemas de la página siguiente debajo (con su propia escala) en vez de dejar ese espacio vacío hasta pasar de página."
+
 - version: "1.31.15"
   date: "2026-08-20"
   changes:

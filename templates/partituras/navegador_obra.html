@@ -542,6 +542,12 @@
            que queda debajo del canvas dentro del contenedor (el canvas se
            dimensiona al contenido real, no al alto completo disponible). -->
       <canvas id="score-preview-abajo" style="display:none; position:absolute; left:0;"></canvas>
+      <!-- Empalme entre páginas: si la ventana principal terminó justo en
+           el último sistema de su página y sobra alto en el contenedor, acá
+           se dibujan los primeros sistemas de la página SIGUIENTE, a
+           continuación — ver calcularContinuacion/renderizarContinuacionAbajo.
+           Sólo visual (no clickeable/arrastrable como el canvas principal). -->
+      <canvas id="score-continuacion-abajo" style="display:none; position:absolute; left:0;"></canvas>
       <!-- Editor inline de anotaciones (ver cargarAnotaciones/abrirEditorAnotacion
            en el script) — se posiciona en píxeles sobre el punto donde se
            clickeó, mismo truco que la vieja edición de números de compás
@@ -1306,6 +1312,7 @@
   const scoreVentanaContenedor = document.getElementById('score-ventana-contenedor');
   const scoreVentanaCanvas = document.getElementById('score-ventana-canvas');
   const scorePreviewAbajo = document.getElementById('score-preview-abajo');
+  const scoreContinuacionAbajo = document.getElementById('score-continuacion-abajo');
   const scoreErrorEl = document.getElementById('score-error');
   const scoreTacetEl = document.getElementById('score-tacet');
   const toggleMostrarAnotaciones = document.getElementById('toggle-mostrar-anotaciones');
@@ -1662,12 +1669,19 @@
   }
 
   function calcularVentanaSync(pagina, sistemaAnclaOrden, img) {
-    const sistemas = pagina.sistemas; // ya vienen ordenados por 'orden'
-    const idxAncla = sistemas.findIndex(s => s.orden === sistemaAnclaOrden);
-
     const contRect = scoreVentanaContenedor.getBoundingClientRect();
     const contW = Math.max(contRect.width, 50);
     const contH = Math.max(contRect.height, 50);
+    return calcularVentanaEnArea(pagina, sistemaAnclaOrden, img, contW, contH);
+  }
+
+  // Núcleo de calcularVentanaSync, generalizado a un área explícita en vez
+  // de leer siempre el contenedor completo — lo reusa la ventana principal
+  // (con el contenedor entero) y calcularContinuacion (con el alto que
+  // sobra debajo de la ventana principal, para el empalme entre páginas).
+  function calcularVentanaEnArea(pagina, sistemaAnclaOrden, img, contW, contH) {
+    const sistemas = pagina.sistemas; // ya vienen ordenados por 'orden'
+    const idxAncla = sistemas.findIndex(s => s.orden === sistemaAnclaOrden);
 
     // La escala (y por lo tanto cuántos sistemas entran) depende del
     // nivelZoom VIGENTE, no de un ancho fijo a zoom=1 — con zoom < 1 cada
@@ -1795,6 +1809,44 @@
     dibujarRampas(ventana);
     dibujarSaltos(ventana);
     dibujarAnotaciones(ventana);
+  }
+
+  // Empalme entre páginas ("como si fueran un contínuo"): si la ventana
+  // principal terminó justo en el ÚLTIMO sistema de su página (la página
+  // se acabó, no el contenedor) y sobra alto real en el contenedor, arma
+  // una segunda ventana chica con los primeros sistemas de la página
+  // SIGUIENTE para ese espacio — con su PROPIA escala (calcularVentanaEnArea
+  // de nuevo, no la misma que la ventana principal), no una unificada entre
+  // las dos páginas — se nota la costura en el borde, a cambio de no tener
+  // que tocar el resto del motor de dibujo (que asume una sola página por
+  // ventana en todos lados). Null si no aplica (no es el final de la
+  // página, no hay página siguiente, o no sobra espacio de verdad).
+  async function calcularContinuacion(ventana) {
+    if (!scoreGeometria || !ventana || !ventana.sistemas.length) return null;
+    const pagina = ventana.pagina;
+    const ultimoIncluido = ventana.sistemas[ventana.sistemas.length - 1];
+    const ultimoDeLaPagina = pagina.sistemas[pagina.sistemas.length - 1];
+    if (!ultimoDeLaPagina || ultimoDeLaPagina.orden !== ultimoIncluido.orden) return null;
+
+    const paginaSiguiente = scoreGeometria.porPagina[pagina.numero + 1];
+    if (!paginaSiguiente || !paginaSiguiente.sistemas.length) return null;
+
+    const contRect = scoreVentanaContenedor.getBoundingClientRect();
+    const contW = Math.max(contRect.width, 50);
+    // canvas.height ya es el alto real en píxeles que ocupó la ventana
+    // principal (ver renderizarVentanaBase) — más directo que recalcularlo
+    // a partir de fracciones de página, y no puede desincronizarse de lo
+    // que en verdad se ve.
+    const alturaDisponiblePx = contRect.height - scoreVentanaCanvas.height;
+    const UMBRAL_MINIMO_PX = 60; // por debajo de esto, una costura no vale la pena
+    if (alturaDisponiblePx < UMBRAL_MINIMO_PX) return null;
+
+    const imgSiguiente = await obtenerImagen(paginaSiguiente);
+    const primerSistema = paginaSiguiente.sistemas[0];
+    const continuacion = calcularVentanaEnArea(paginaSiguiente, primerSistema.orden, imgSiguiente, contW, alturaDisponiblePx);
+    continuacion.img = imgSiguiente;
+    continuacion.pagina = paginaSiguiente;
+    return continuacion;
   }
 
   // Gris, no blanco/negro puro, para el texto de todo lo que se dibuja
@@ -2809,6 +2861,13 @@
   // muestra nada — mejor eso que un recorte ilegible.
   function renderizarPreviewAbajo(ventana, entradaSiguiente) {
     if (!scorePreviewAbajo) return;
+    // El aviso de salto próximo gana el espacio libre de abajo si hace
+    // falta — corre DESPUÉS del empalme entre páginas en repintarScore, así
+    // que si las dos condiciones se dan a la vez (caso raro: un solo
+    // sistema en la ventana Y justo es el final de la página) hay que
+    // apagar la continuación acá, no dejar que las dos compitan por el
+    // mismo lugar.
+    if (scoreContinuacionAbajo) scoreContinuacionAbajo.style.display = 'none';
     const canvas = scoreVentanaCanvas;
     const alturaDisponible = Math.round(scoreVentanaContenedor.clientHeight - canvas.height);
     const UMBRAL_MINIMO = 40;
@@ -2855,6 +2914,55 @@
     else obtenerImagen(paginaSiguiente).then(dibujarRecorte).catch(() => {});
   }
 
+  // Dibuja la ventana de empalme (ver calcularContinuacion) en su propio
+  // canvas, apilado justo debajo del principal — mismo tratamiento que
+  // renderizarVentanaBase (imagen + números/avisos/rampas/saltos/
+  // anotaciones), sólo que apuntando a otro elemento. Las funciones de
+  // dibujo ya aceptan un canvas aparte (las usa también exportar a PDF), así
+  // que no hace falta duplicar nada de esa lógica. Puramente visual — este
+  // canvas no tiene listeners de click/arrastre, a diferencia del
+  // principal (dibujarAnotaciones ya sabe no tocar el hit-test de clicks
+  // cuando el canvas no es el de pantalla, ver esPantalla ahí).
+  function renderizarContinuacionAbajo(continuacion) {
+    if (!scoreContinuacionAbajo) return;
+    // Si el aviso de salto ya se adueñó del espacio de abajo (ver
+    // renderizarPreviewAbajo, corre después en repintarScore) no hay que
+    // pisarlo — puede pasar que esta promesa resuelva después de que ya se
+    // decidió eso, por el await de obtenerImagen.
+    const avisoUsaElEspacio = ultimoMostrarPreview && ventanaActiva && ventanaActiva.sistemas.length < 2;
+    if (!continuacion || avisoUsaElEspacio) {
+      scoreContinuacionAbajo.style.display = 'none';
+      return;
+    }
+    const canvas = scoreContinuacionAbajo;
+    const img = continuacion.img, pagina = continuacion.pagina;
+    const sx = pagina.margen_x0 * img.naturalWidth;
+    const sy = continuacion.top * img.naturalHeight;
+    const sw = Math.max((pagina.margen_x1 - pagina.margen_x0) * img.naturalWidth, 1);
+    const sh = Math.max((continuacion.bottom - continuacion.top) * img.naturalHeight, 1);
+
+    const escala = continuacion.escalaFinal;
+    const w = Math.round(sw * escala);
+    const h = Math.round(sh * escala);
+
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.style.top = scoreVentanaCanvas.height + 'px';
+    canvas.style.display = '';
+
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, w, h);
+    continuacion.escalaRender = escala;
+    dibujarNumerosCompas(continuacion, canvas);
+    dibujarAvisosCambio(continuacion, canvas);
+    dibujarRampas(continuacion, canvas);
+    dibujarSaltos(continuacion, canvas);
+    dibujarAnotaciones(continuacion, canvas);
+  }
+
   // Vuelve a dibujar con el ÚLTIMO estado ya decidido por actualizarScore
   // (qué compás resaltar, si hay preview) — el botón de zoom llama a esto
   // directamente: cambiar el nivel de zoom no cambia nada de la decisión
@@ -2863,6 +2971,17 @@
     if (!ventanaActiva) return;
     renderizarVentanaBase(ventanaActiva);
     if (scorePreviewAbajo) scorePreviewAbajo.style.display = 'none'; // se reactiva sola si hace falta, ver renderizarPreviewSync
+    // Empalme entre páginas — async por la imagen de la página siguiente
+    // (puede no estar cacheada todavía). Se valida que la ventana no haya
+    // cambiado mientras se esperaba (otro repintarScore más nuevo ya pudo
+    // haber corrido) para no pintar una continuación vieja encima de una
+    // ventana principal distinta.
+    if (scoreContinuacionAbajo) scoreContinuacionAbajo.style.display = 'none';
+    const ventanaParaContinuacion = ventanaActiva;
+    calcularContinuacion(ventanaParaContinuacion).then((continuacion) => {
+      if (ventanaActiva !== ventanaParaContinuacion) return;
+      renderizarContinuacionAbajo(continuacion);
+    }).catch(() => {});
     if (ultimoEntradaResaltar && ultimoEntradaResaltar.pagina_numero === ventanaActiva.pagina_numero) {
       renderizarCompasActualSync(ventanaActiva, ultimoEntradaResaltar, ultimoFracIni, ultimoFracFin);
     }
