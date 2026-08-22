@@ -209,12 +209,12 @@ def _extremos_pentagrama(banda):
     return int(filas[0]), int(filas[-1])
 
 
-def _ancho_en_fila(fila_bool, x, ventana=25):
+def _centro_en_fila(fila_bool, x, ventana):
     """
-    Ancho (píxeles) de la corrida de tinta contigua más cercana a `x` en esa
-    fila — sigue el trazo aunque esté corrido unos píxeles hacia un lado
-    (una cabeza de nota pegada a una plica no queda perfectamente centrada
-    en la plica). 0 si no hay tinta cerca.
+    Ancho (píxeles) y columna central de la corrida de tinta contigua más
+    cercana a `x` en esa fila — sigue el trazo aunque esté corrido unos
+    píxeles hacia un lado (una cabeza de nota pegada a una plica no queda
+    perfectamente centrada en la plica). (0, None) si no hay tinta cerca.
     """
     n = len(fila_bool)
     x0, x1 = max(0, x - ventana), min(n, x + ventana)
@@ -223,7 +223,7 @@ def _ancho_en_fila(fila_bool, x, ventana=25):
     if idx >= len(seg) or not seg[idx]:
         tinta = np.where(seg)[0]
         if len(tinta) == 0:
-            return 0
+            return 0, None
         idx = tinta[np.argmin(np.abs(tinta - idx))]
     izq = idx
     while izq > 0 and seg[izq - 1]:
@@ -231,46 +231,110 @@ def _ancho_en_fila(fila_bool, x, ventana=25):
     der = idx
     while der < len(seg) - 1 and seg[der + 1]:
         der += 1
-    return der - izq + 1
+    return der - izq + 1, x0 + (izq + der) / 2
 
 
-def _hay_bulto_de_nota(binaria, x, y_borde, signo, grosor_medio, margen, radio_nota, ventana):
+def _ancho_en_fila(fila_bool, x, ventana=25):
+    """Como _centro_en_fila, pero para el código que solo necesita el ancho."""
+    return _centro_en_fila(fila_bool, x, ventana)[0]
+
+
+def _punta_continuidad(binaria, x, y_inicio, signo, grosor_medio, max_dist):
     """
-    True si lo que ensancha la columna cerca de `y_borde` es una cabeza de
-    nota pegada a una plica: un bulto ACOTADO que se apaga a las pocas filas
-    (~radio_nota) de distancia. Un número de compás o una ligadura que pasa
-    cerca también puede ensanchar la fila justo al lado del pentagrama, pero
-    esa tinta sigue sostenida mucho más lejos que el alto típico de una
-    cabeza de nota — por eso no alcanza con mirar una sola fila, hay que
-    comprobar que el ensanchamiento efectivamente se apague cerca.
-    `signo` es +1 para mirar hacia abajo del borde, -1 hacia arriba.
+    Camina desde `y_inicio` en la dirección `signo` (+1 hacia abajo, -1
+    hacia arriba) siguiendo la tinta CONECTADA, y devuelve la última fila
+    con tinta antes de que se corte — la punta real del trazo. A diferencia
+    de mirar a una distancia fija desde el borde del pentagrama, esto
+    encuentra la cabeza de una nota (o una viga) sin importar cuán lejos
+    esté (una plica larga, de una nota varios espacios fuera del
+    pentagrama, no queda dentro de ninguna ventana fija calibrada contra un
+    solo caso).
 
-    Nota (ver detectar_barras y el historial de commits): se probaron varias
-    variantes — chequeo hacia adentro del segmento (profundo y superficial),
-    combinado con distintos umbrales de longitud mínima — y ninguna superó
-    en neto a esta. Cada una arregla algún caso puntual (una ligadura, una
-    cabeza de nota hueca) pero rompe otro distinto (una barra real con otra
-    ligadura cerca, en otra posición). Esta es la versión con mejor
-    resultado validado hasta ahora; queda un margen de error conocido y
-    aceptado, corregible a mano en la pantalla de ajuste.
+    En cada fila busca en una ventana angosta (medio grosor de trazo a cada
+    lado, no la ventana ancha que usa la detección de candidatas) alrededor
+    de la posición ENCONTRADA en la fila anterior — no la columna original
+    — y sigue desde ahí. Por qué no la ventana ancha (±25px, pensada para
+    tolerar que una barra esté ligeramente inclinada): en un pasaje con
+    notas juntas (~54-59px entre sí en la partitura de prueba usada para
+    validar esto) esa ventana se solapa con la del vecino, y el
+    seguimiento puede "saltar" a la nota de al lado en vez de perder la
+    tinta real. Validado 2026-08-22: con la ventana ancha, una barra real
+    que termina justo en el borde del pentagrama (sin ninguna continuación
+    propia) aparecía con una "punta" varios píxeles más abajo, tomada del
+    borde de la cabeza de la nota del compás siguiente — un bulto que no
+    tenía nada que ver con esa barra. Con la ventana angosta y el
+    seguimiento de la posición real, esa misma barra da punta = borde del
+    pentagrama (0px de continuación), como corresponde.
+
+    `max_dist` acota la búsqueda (en píxeles, ver detectar_barras_
+    candidatas) para no seguir indefinidamente si algo raro pasa (ligadura
+    larga, borde de imagen). Devuelve `y_inicio` si ya no hay tinta ahí
+    mismo (la corrida termina justo en el borde).
     """
     h = binaria.shape[0]
-    cerca = _ancho_en_fila(binaria[int(np.clip(y_borde + signo * margen, 0, h - 1))], x, ventana)
-    if cerca / grosor_medio < 1.5:
-        return False
-    lejos = _ancho_en_fila(binaria[int(np.clip(y_borde + signo * radio_nota, 0, h - 1))], x, ventana)
-    return lejos / grosor_medio < 1.2
+    ventana = max(1, round(grosor_medio / 2))
+    y = y_inicio
+    x_actual = float(x)
+    ultimo_y = y_inicio
+    pasos = 0
+    while 0 <= y < h and pasos < max_dist:
+        ancho, centro = _centro_en_fila(binaria[y], int(round(x_actual)), ventana)
+        if ancho == 0:
+            break
+        ultimo_y = y
+        x_actual = centro
+        y += signo
+        pasos += 1
+    return ultimo_y
 
 
-def _es_barra_limpia(binaria, x, y_ini, y_fin, margen, radio_nota, ventana):
+def _hay_bulto_de_nota(binaria, x, y_borde, signo, grosor_medio, retroceso, ventana, max_dist):
+    """
+    True si el trazo en la columna `x`, más allá de `y_borde` (`signo` +1
+    hacia abajo, -1 hacia arriba), termina en una cabeza de nota (o una
+    viga) pegada a una plica en vez de cortarse limpio como una barra real.
+
+    Sigue la tinta hasta su punta real (_punta_continuidad, con seguimiento
+    angosto — ver esa función) y mide el ancho `retroceso` píxeles atrás de
+    esa punta, hacia el cuerpo de la línea — no en la punta misma. `ventana`
+    (la ancha, ±25px aprox.) se usa solo para esta medición puntual, donde
+    tolerar que el trazo esté un poco inclinado no genera el problema de
+    "saltar de objeto" que sí generaba en el seguimiento paso a paso.
+
+    Por qué `retroceso` = medio radio de cabeza de nota (ver
+    detectar_barras_candidatas) y no la punta misma ni un radio entero: con
+    el seguimiento de tinta ya corregido (ver _punta_continuidad), una
+    barra real da punta = borde del pentagrama siempre — no hay ningún
+    engrosamiento de punta que evitar, así que no hace falta alejarse
+    mucho. El límite ahora es el otro lado: una viga (el trazo grueso que
+    une corcheas) sostiene su ancho solo un tramo corto desde su propio
+    borde — en la muestra validada 2026-08-22, hasta ~0.7 radio, ya
+    angostándose en 1 radio y perdida del todo en 1.3 radios. Medio radio
+    queda cómodo en el medio: lejos de la punta misma (ruido de
+    antialiasing) pero bien adentro incluso de una viga angosta.
+
+    Umbral de ratio en 2.0, no 1.2: con `grosor_medio` tan fino (3-4px en
+    la muestra de validación), una barra real sin ninguna continuación
+    (punta = borde, caso normal) igual puede medir 1px más ancha por puro
+    redondeo de antialiasing en algún punto de su propio trazo — ratio
+    hasta 1.33 sin que haya nada raro ahí. Las plicas/vigas reales de la
+    misma muestra dieron ratio 3.25 como mínimo. 2.0 separa ambos grupos
+    con margen de sobra de los dos lados.
+    """
+    h = binaria.shape[0]
+    tip = _punta_continuidad(binaria, x, y_borde, signo, grosor_medio, max_dist)
+    y_medida = int(np.clip(round(tip - signo * retroceso), 0, h - 1))
+    ancho = _ancho_en_fila(binaria[y_medida], x, ventana)
+    return ancho / grosor_medio >= 2.0
+
+
+def _es_barra_limpia(binaria, x, y_ini, y_fin, retroceso, ventana, max_dist):
     """
     True si el segmento [y_ini, y_fin] en la columna `x` mantiene un grosor
     ~constante de punta a punta — una barra de compás real. False si algún
-    extremo tiene una cabeza de nota pegada (ver _hay_bulto_de_nota).
-    Validado contra una muestra real: barras limpias dan ratio ~0-0.2,
-    plicas con cabeza de nota dan ratio 3+ — sin casos ambiguos en el medio.
+    extremo tiene una cabeza de nota (o viga) pegada (ver _hay_bulto_de_nota).
 
-    `margen`, `radio_nota` y `ventana` se pasan en píxeles ya calculados a
+    `retroceso`, `ventana` y `max_dist` se pasan en píxeles ya calculados a
     partir de una referencia de escala del documento (ver detectar_barras) —
     no van hardcodeados acá porque el tamaño de pentagrama en píxeles varía
     de una partitura a otra (distinta resolución de escaneo, distinto tamaño
@@ -281,9 +345,9 @@ def _es_barra_limpia(binaria, x, y_ini, y_fin, margen, radio_nota, ventana):
     grosor_medio = np.median([_ancho_en_fila(binaria[y], x, ventana) for y in medio])
     if grosor_medio == 0:
         return False
-    if _hay_bulto_de_nota(binaria, x, y_ini, -1, grosor_medio, margen, radio_nota, ventana):
+    if _hay_bulto_de_nota(binaria, x, y_ini, -1, grosor_medio, retroceso, ventana, max_dist):
         return False
-    if _hay_bulto_de_nota(binaria, x, y_fin, 1, grosor_medio, margen, radio_nota, ventana):
+    if _hay_bulto_de_nota(binaria, x, y_fin, 1, grosor_medio, retroceso, ventana, max_dist):
         return False
     return True
 
@@ -354,10 +418,21 @@ def detectar_barras_candidatas(img_bgr, sistema_px, alto_referencia=None):
     # una barra real en este documento, con poco margen.
     escala = alto_referencia if alto_referencia else span
     largo_min = escala * 0.95 if alto_referencia else escala * 0.8
-    margen = max(2, round(escala * 0.06))
-    radio_nota = max(margen + 1, round(escala * 0.17))
+    # radio de una cabeza de nota ≈ mitad de la separación entre líneas del
+    # pentagrama (5 líneas → 4 espacios entre ellas, de ahí /4 para la
+    # separación y /2 más para el radio) — una relación real de grabado
+    # musical (diámetro de cabeza ≈ separación entre líneas), no un
+    # porcentaje ajustado a ojo contra un caso (ver _hay_bulto_de_nota).
+    # retroceso (medio radio): ver _hay_bulto_de_nota para por qué medio y
+    # no un radio entero.
+    radio = escala / 8
+    retroceso = radio * 0.5
     ventana = max(10, round(escala * 0.3))
     separacion_min = max(2, round(escala * 0.05))
+    # tope de la búsqueda de "hasta dónde sigue la tinta" (_punta_
+    # continuidad) — generoso a propósito: una plica de una nota muy lejos
+    # del pentagrama (varios espacios) tiene que entrar completa.
+    max_dist = int(escala * 4)
 
     largos = np.array([
         _largo_max_en_rango(banda[:, x], linea_top, linea_bottom)
@@ -380,7 +455,7 @@ def detectar_barras_candidatas(img_bgr, sistema_px, alto_referencia=None):
     for x_local in barras:
         _, ini_rel, fin_rel = _mejor_corrida(banda[:, x_local], linea_top, linea_bottom)
         y_ini, y_fin = y0 + linea_top + ini_rel, y0 + linea_top + fin_rel
-        limpia = _es_barra_limpia(binaria, x_local + margen_x, y_ini, y_fin, margen, radio_nota, ventana)
+        limpia = _es_barra_limpia(binaria, x_local + margen_x, y_ini, y_fin, retroceso, ventana, max_dist)
         candidatas.append({'x': x_local + margen_x, 'aceptada': limpia})
     return _fusionar_barras_dobles(candidatas)
 
@@ -645,9 +720,9 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1, sistema_px=None):
         return None
 
     escala = r1 - r0
-    margen = max(2, round(escala * 0.06))
-    radio_nota = max(margen + 1, round(escala * 0.17))
+    retroceso = (escala / 8) * 0.5
     ventana = max(10, round(escala * 0.3))
+    max_dist = int(escala * 4)
 
     orden = np.argsort(-largos)
     umbral_largo = largos.max() * 0.85
@@ -657,7 +732,7 @@ def buscar_barra_en_rectangulo(img_bgr, x0, y0, x1, y1, sistema_px=None):
             break
         _, ini_rel, fin_rel = _corrida_en_ventana(recorte, x_local, r0, r1)
         y_ini_abs, y_fin_abs = y0 + r0 + ini_rel, y0 + r0 + fin_rel
-        if _es_barra_limpia(binaria, x0 + x_local, y_ini_abs, y_fin_abs, margen, radio_nota, ventana):
+        if _es_barra_limpia(binaria, x0 + x_local, y_ini_abs, y_fin_abs, retroceso, ventana, max_dist):
             mejor_x, mejor_ini, mejor_fin = int(x_local), ini_rel, fin_rel
             break
     if mejor_x is None:

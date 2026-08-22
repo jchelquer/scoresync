@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.21"
+  date: "2026-08-22"
+  changes:
+    - type: corregido
+      text: "La detección automática de barras de compás tomaba por error algunas plicas largas (notas con el palito muy extendido, cuando la cabeza queda lejos del pentagrama, frecuente en partes de un solo instrumento) como si fueran barras de compás reales — quedaban aceptadas de una sin pasar por tu revisión, y terminaban partiendo un compás real en varios falsos. Se corrigió el criterio para que esos casos queden marcados como dudosos (a confirmar) en vez de aceptados automáticamente."
+
 - version: "1.31.20"
   date: "2026-08-20"
   changes:

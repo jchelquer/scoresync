@@ -567,10 +567,20 @@ function render() {
     const s = sistemaDe(b.sistema_id);
     if (!s) return;
     const linea = document.createElement('div');
-    linea.className = 'linea-barra ' + (b.estado === 'aceptada' ? 'aceptada' : 'dudosa') + (seleccionBarras.has(b._key) ? ' seleccionada' : '');
+    const aceptada = b.estado === 'aceptada';
+    linea.className = 'linea-barra ' + (aceptada ? 'aceptada' : 'dudosa') + (seleccionBarras.has(b._key) ? ' seleccionada' : '');
     linea.style.left = (b.x * 100) + '%';
-    linea.style.top = (s.y * 100) + '%';
-    linea.style.height = (s.height * 100) + '%';
+    // Las dudosas se dibujan a mitad de altura, centradas en la banda del
+    // sistema — no necesitan tu atención salvo que sean una barra real, y
+    // el mismo peso visual que una aceptada invitaba a "limpiarlas" a todas
+    // por costumbre en vez de solo confirmar las que hacen falta.
+    if (aceptada) {
+      linea.style.top = (s.y * 100) + '%';
+      linea.style.height = (s.height * 100) + '%';
+    } else {
+      linea.style.top = ((s.y + s.height / 4) * 100) + '%';
+      linea.style.height = (s.height * 50) + '%';
+    }
     linea.title = b.estado === 'aceptada'
       ? '{% translate "Aceptada — clic para marcar dudosa, doble clic para borrar" %}'
       : '{% translate "Dudosa — clic para aceptar, doble clic para borrar" %}';
