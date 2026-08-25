@@ -57,7 +57,7 @@
 </div>
 {% endif %}
 
-<form method="get" class="row g-2 align-items-end mb-4">
+<form method="get" class="row g-2 align-items-end mb-4" id="form-filtros-obras">
   <div class="col-auto">
     <label class="form-label small mb-0" style="color: var(--ss-text-muted);">{% translate "Búsqueda libre" %}</label>
     <input type="text" name="q" value="{{ filtros.q }}" class="form-control form-control-sm" style="width: 12rem;" placeholder="{% translate 'título, compositor...' %}">
@@ -89,9 +89,31 @@
   </div>
   <div class="col-auto">
     <button type="submit" class="btn btn-ss btn-sm">{% translate "Filtrar" %}</button>
-    <a href="{% url 'partituras:obras' %}" class="btn btn-outline-light btn-sm">{% translate "Limpiar" %}</a>
+    <a href="{% url 'partituras:obras' %}?limpiar=1" class="btn btn-outline-light btn-sm">{% translate "Limpiar" %}</a>
   </div>
 </form>
+<script>
+(function () {
+  // Auto-filtra al cambiar cualquier campo, sin esperar al botón (que
+  // queda igual, por si falla JS o alguien prefiere apretarlo). Los
+  // <select> mandan solos con 'change'; el texto libre se debounca por
+  // tecla (mismo criterio que otros autoguardados de la app) para no
+  // mandar un GET por cada letra tipeada.
+  var form = document.getElementById('form-filtros-obras');
+  if (!form) return;
+  form.querySelectorAll('select').forEach(function (el) {
+    el.addEventListener('change', function () { form.submit(); });
+  });
+  var q = form.querySelector('input[name="q"]');
+  if (q) {
+    var timeout = null;
+    q.addEventListener('input', function () {
+      clearTimeout(timeout);
+      timeout = setTimeout(function () { form.submit(); }, 500);
+    });
+  }
+})();
+</script>
 
 {% if obras %}
 <div class="row g-3">

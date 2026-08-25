@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.28"
+  date: "2026-08-25"
+  changes:
+    - type: mejorado
+      text: "Los filtros de la Biblioteca (búsqueda, repertorio-ciclo, publicada, orden) ahora se aplican solos al cambiarlos, sin tener que apretar Filtrar. Además se recuerdan durante la sesión — volver a la Biblioteca desde el menú restaura el último filtro usado en vez de mostrar todo sin filtrar de nuevo; Limpiar los borra de verdad."
+
 - version: "1.31.27"
   date: "2026-08-25"
   changes:

@@ -516,14 +516,32 @@ def obras(request):
     para crear una obra sin depender de tener ya una partitura cargada. Un
     admin ve TODO, publicado o no.
 
-    Filtros y orden vienen todos de la querystring (GET simple, sin form
-    de sesión) — "q" es una búsqueda libre entre título/compositor/
-    arreglista/repertorio/ciclo (cubre lo que antes eran filtros de campo
-    separados para compositor/arreglista/título); ciclo y publicada
-    acotan por campo aparte. Repertorio y Ciclo se gestionan sólo desde
-    el admin (ver Repertorio/Ciclo en models.py) — acá sólo se filtra por
-    los que ya existen (no hace falta un filtro de Repertorio aparte: el
-    de Ciclo ya lo compone, ver Ciclo.__str__)."""
+    Filtros y orden vienen todos de la querystring (GET) — "q" es una
+    búsqueda libre entre título/compositor/arreglista/repertorio/ciclo
+    (cubre lo que antes eran filtros de campo separados para compositor/
+    arreglista/título); ciclo y publicada acotan por campo aparte.
+    Repertorio y Ciclo se gestionan sólo desde el admin (ver Repertorio/
+    Ciclo en models.py) — acá sólo se filtra por los que ya existen (no
+    hace falta un filtro de Repertorio aparte: el de Ciclo ya lo compone,
+    ver Ciclo.__str__).
+
+    Se recuerdan durante la SESIÓN del navegador (request.session, no algo
+    ligado al usuario en la base) — pedido explícito 2026-08-25: volver acá
+    por un link sin querystring (el del menú, típicamente) restaura el
+    último filtro guardado con un redirect, en vez de mostrar todo sin
+    filtrar de nuevo. "Limpiar" (ver obras.html) manda su propia marca
+    (?limpiar=1) para borrar lo guardado — distinto de "sin querystring en
+    absoluto", que es justamente lo que dispara la restauración."""
+    if "limpiar" in request.GET:
+        request.session.pop("obras_filtros_qs", None)
+        return redirect("partituras:obras")
+    if request.META.get("QUERY_STRING"):
+        request.session["obras_filtros_qs"] = request.META["QUERY_STRING"]
+    else:
+        guardado = request.session.get("obras_filtros_qs")
+        if guardado:
+            return redirect(f"{reverse('partituras:obras')}?{guardado}")
+
     lista = _obras_visibles_qs(request.user).select_related("owner", "ciclo__repertorio")
 
     q = request.GET.get("q", "").strip()
