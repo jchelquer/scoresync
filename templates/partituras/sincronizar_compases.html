@@ -1400,6 +1400,10 @@
       partesAviso.push('{% translate "anclas con tiempo real invertido (revisá el tapeo): compás" %} '
         + data.invertidos.map(n => n.compas).join(', '));
     }
+    if ((data.sin_calcular || []).length) {
+      partesAviso.push('{% translate "falta indicación de compás o tempo en el itinerario/notación (no es un problema de anclas): compás" %} '
+        + data.sin_calcular.map(n => n.compas).join(', '));
+    }
     if (partesAviso.length) {
       avisoInterpolar.textContent = '{% translate "No se pudo interpolar" %} — ' + partesAviso.join(' | ');
       avisoInterpolar.style.display = '';

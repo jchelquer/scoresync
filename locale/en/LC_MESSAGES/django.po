@@ -1136,6 +1136,9 @@ msgstr "missing an explicit anchor on one side: measure"
 msgid "anclas con tiempo real invertido (revisá el tapeo): compás"
 msgstr "anchors with reversed real time (check the tapped marks): measure"
 
+msgid "falta indicación de compás o tempo en el itinerario/notación (no es un problema de anclas): compás"
+msgstr "missing time signature or tempo in the itinerary/notation (not an anchor problem): measure"
+
 msgid "Seleccionar todo"
 msgstr "Select all"
 

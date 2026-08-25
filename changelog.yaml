@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.22"
+  date: "2026-08-25"
+  changes:
+    - type: mejorado
+      text: "Interpolar ahora distingue dos motivos distintos por los que un compás puede quedar sin resolver: falta de anclas cerca (como antes) vs. falta de bpm o indicación de compás en el itinerario/notación en esa fila — este segundo caso se avisa aparte, para no llevar a buscar el problema en las anclas cuando en realidad está en el itinerario."
+
 - version: "1.31.21"
   date: "2026-08-22"
   changes:

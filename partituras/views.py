@@ -1024,9 +1024,11 @@ def interpolar_tiempos_compases(request, pk):
     lista "compas:pasada,..." que usa desplazar_tiempos_compases. Devuelve
     los tiempos resueltos (para que el cliente actualice esas filas sin
     recargar la página), los que no se pudieron resolver por falta de
-    ancla, y los que tenían las dos anclas pero en el orden real
-    equivocado (tapeo contradictorio, ver invertidos en
-    interpolar_marcas_compas)."""
+    ancla, los que tenían las dos anclas pero en el orden real equivocado
+    (tapeo contradictorio, ver invertidos en interpolar_marcas_compas), y
+    los que ni siquiera tienen posición calculada (falta bpm/indicación de
+    compás en el itinerario — no es un problema de anclas, ver
+    sin_calcular en interpolar_marcas_compas)."""
     obra = get_object_or_404(Obra, pk=pk)
     if not (obra.owner_id == request.user.id or _es_admin(request.user)):
         return HttpResponseForbidden()
@@ -1035,18 +1037,20 @@ def interpolar_tiempos_compases(request, pk):
     except ValueError:
         return JsonResponse({"ok": False, "error": "compases inválido"}, status=400)
 
-    _resueltos, no_resueltos, invertidos = interpolar_marcas_compas(obra, objetivos)
+    _resueltos, no_resueltos, invertidos, sin_calcular = interpolar_marcas_compas(obra, objetivos)
+    excluidos = set(no_resueltos) | set(sin_calcular)
     marcas = {
         (m.compas, m.pasada): m.tiempo_inicio.total_seconds()
         for m in obra.marcas_tiempo_compas.filter(
             compas__in=[c for c, _p in objetivos]
-        ) if (m.compas, m.pasada) in objetivos and (m.compas, m.pasada) not in no_resueltos
+        ) if (m.compas, m.pasada) in objetivos and (m.compas, m.pasada) not in excluidos
     }
     return JsonResponse({
         "ok": True,
         "resueltos": [{"compas": c, "pasada": p, "tiempo_inicio": marcas[(c, p)]} for c, p in objetivos if (c, p) in marcas],
         "no_resueltos": [{"compas": c, "pasada": p} for c, p in no_resueltos],
         "invertidos": [{"compas": c, "pasada": p} for c, p in invertidos],
+        "sin_calcular": [{"compas": c, "pasada": p} for c, p in sin_calcular],
     })
 
 

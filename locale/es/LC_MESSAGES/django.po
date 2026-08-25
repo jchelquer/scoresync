@@ -1146,6 +1146,9 @@ msgstr "falta ancla explícita de un lado: compás"
 msgid "anclas con tiempo real invertido (revisá el tapeo): compás"
 msgstr "anclas con tiempo real invertido (revisá el tapeo): compás"
 
+msgid "falta indicación de compás o tempo en el itinerario/notación (no es un problema de anclas): compás"
+msgstr "falta indicación de compás o tempo en el itinerario/notación (no es un problema de anclas): compás"
+
 msgid "Seleccionar todo"
 msgstr "Seleccionar todo"
 
