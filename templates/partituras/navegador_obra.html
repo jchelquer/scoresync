@@ -60,7 +60,8 @@
   #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
   #barra-compacta #nav-indicacion-wrap,
   #barra-compacta #nav-armadura-wrap,
-  #barra-compacta #nav-bpm-wrap { font-size: 0.8rem; }
+  #barra-compacta #nav-bpm-wrap,
+  #barra-compacta #nav-debug-tiempo { font-size: 0.8rem; }
   #barra-compacta .btn,
   #score-header-extra .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
   #barra-compacta #switch-metronomo-visual,
@@ -476,13 +477,12 @@
       <span id="nav-tiempo-wrap" style="color: var(--ss-text); {% if not segmento.tiempo_inicio_calculado %}display:none;{% endif %}">
         <i class="bi bi-clock me-1"></i>{{ segmento.tiempo_inicio_calculado }}
       </span>
+      <span id="nav-debug-tiempo" style="color: var(--ss-text-muted); font-family: monospace; display:none;"></span>
     </div>
 
     <p class="mt-3 mb-0" id="nav-descripcion-wrap" style="color: var(--ss-text-muted); {% if not segmento.descripcion %}display:none;{% endif %}">
       <span id="nav-descripcion">{{ segmento.descripcion }}</span>
     </p>
-
-    <p class="mt-2 mb-0 small" id="nav-debug-tiempo" style="color: var(--ss-text-muted); font-family: monospace; display:none;"></p>
 
     {% if en_fin_de_rango %}
     <p class="mt-3 mb-0 text-warning small">{% translate "Fin del tramo." %}</p>
@@ -670,6 +670,7 @@
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
   const navArmaduraWrap = document.getElementById('nav-armadura-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
+  const navDebugTiempo = document.getElementById('nav-debug-tiempo');
 
   // Modo "ensayo con parte" (ver alternarModoScore() más abajo): estos
   // nodos se REUBICAN físicamente (no se clonan — siguen siendo los mismos
@@ -698,6 +699,11 @@
     { el: navIndicacionWrap, destino: barraCompacta },
     { el: navArmaduraWrap, destino: barraCompacta },
     { el: navBpmWrap, destino: barraCompacta },
+    // Sin esto quedaba adentro de #panel-controles, que en modo partitura
+    // (el default en escritorio, ver modoInicialPartitura) tiene
+    // display:none entero — la lectura de diagnóstico nunca se veía ahí,
+    // sólo en modo compás.
+    { el: navDebugTiempo, destino: barraCompacta },
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
     // "Ejecutar con audio" (con "Silenciar" anidado adentro, se mueve con
