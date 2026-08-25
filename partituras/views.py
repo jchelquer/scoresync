@@ -17,6 +17,7 @@ from django.urls import reverse
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
+from .audio import normalizar_audio_referencia
 from .forms import (
     EfectoTempoFormSet, MarcaNotacionFormSet, ObraEditForm, ObraForm, PartituraEditForm,
     PartituraForm, RepertorioForm, SegmentoFormSet,
@@ -580,15 +581,24 @@ def obra_detalle(request, pk):
         if not es_dueño:
             return HttpResponseForbidden()
         campos = []
+        mensaje_conversion_audio = None
         if request.FILES.get("audio"):
             if obra.audio:
                 obra.audio.delete(save=False)
-            obra.audio = request.FILES["audio"]
+            archivo_subido = request.FILES["audio"]
+            # Sólo en la subida (acá) — no toca audios ya guardados, ver
+            # audio.normalizar_audio_referencia. Si no hace falta convertir
+            # (o algo falla y no hay ffmpeg, etc.) devuelve (None, None) y
+            # se sigue con el archivo tal cual llegó, como antes.
+            nuevo_audio, mensaje_conversion_audio = normalizar_audio_referencia(archivo_subido)
+            obra.audio = nuevo_audio if nuevo_audio is not None else archivo_subido
             campos.append("audio")
         obra.version = request.POST.get("version", "").strip()
         obra.enlace = request.POST.get("enlace", "").strip()
         campos += ["version", "enlace"]
         obra.save(update_fields=campos)
+        if mensaje_conversion_audio:
+            messages.info(request, mensaje_conversion_audio)
         messages.success(request, 'Se actualizó el audio de referencia.')
         return redirect("partituras:obra_detalle", pk=pk)
     partituras = sorted(

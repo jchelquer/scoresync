@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.24"
+  date: "2026-08-25"
+  changes:
+    - type: corregido
+      text: "Saltar directo a un compás (en Practicar o en Sincronizar compases) podía sonar hasta medio segundo desalineado del tiempo real guardado, aunque ese tiempo estuviera correctamente tapeado — causado por cómo el navegador busca posición en un audio mp3 codificado en bitrate variable (VBR). Ahora, al subir un audio de referencia nuevo, si está en VBR se convierte automáticamente a bitrate constante (CBR) antes de guardarlo, avisando que se hizo. No afecta a los audios ya subidos."
+
 - version: "1.31.23"
   date: "2026-08-25"
   changes:
