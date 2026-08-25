@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.27"
+  date: "2026-08-25"
+  changes:
+    - type: mejorado
+      text: "Al subir un audio de referencia nuevo, ahora se avisa apenas se aprieta Guardar que se está subiendo y procesando (puede tardar unos segundos si hace falta convertirlo de VBR a CBR) — antes no había ninguna señal hasta que terminaba, y la espera se sentía como que la página estaba trabada."
+
 - version: "1.31.26"
   date: "2026-08-25"
   changes:

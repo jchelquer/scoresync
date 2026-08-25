@@ -2060,3 +2060,6 @@ msgstr "sched."
 
 msgid "t.real"
 msgstr "real"
+
+msgid "Subiendo y procesando el audio — si el archivo está en VBR se convierte automáticamente a CBR (ver aviso al terminar), puede tardar unos segundos."
+msgstr "Uploading and processing the audio — if the file is VBR it gets automatically converted to CBR (see the notice once it's done), it may take a few seconds."

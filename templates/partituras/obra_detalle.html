@@ -124,7 +124,10 @@
               <input type="url" name="enlace" value="{{ obra.enlace }}" maxlength="500" class="form-control form-control-sm" placeholder="{% translate 'Enlace (opcional)' %}">
             </div>
           </div>
-          <button type="submit" class="btn btn-ss btn-sm">{% translate "Guardar" %}</button>
+          <button type="submit" class="btn btn-ss btn-sm" id="btn-guardar-audio">{% translate "Guardar" %}</button>
+          <p id="audio-procesando-aviso" class="small mt-2 mb-0" style="color: var(--ss-text-muted); display:none;">
+            {% translate "Subiendo y procesando el audio — si el archivo está en VBR se convierte automáticamente a CBR (ver aviso al terminar), puede tardar unos segundos." %}
+          </p>
         </form>
         <script>
           (function () {
@@ -133,6 +136,19 @@
             if (input && nombre) {
               input.addEventListener('change', function () {
                 nombre.textContent = input.files.length ? input.files[0].name : '';
+              });
+            }
+            var form = input ? input.closest('form') : null;
+            var boton = document.getElementById('btn-guardar-audio');
+            var aviso = document.getElementById('audio-procesando-aviso');
+            // Sólo cuando de verdad se eligió un archivo nuevo — guardar
+            // sólo versión/enlace es instantáneo, no hay nada que procesar
+            // ni por qué avisar una espera que no va a pasar.
+            if (form && input && boton && aviso) {
+              form.addEventListener('submit', function () {
+                if (!input.files.length) return;
+                boton.disabled = true;
+                aviso.style.display = '';
               });
             }
           })();

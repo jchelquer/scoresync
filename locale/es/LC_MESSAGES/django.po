@@ -2069,3 +2069,6 @@ msgstr "t.prog"
 
 msgid "t.real"
 msgstr "t.real"
+
+msgid "Subiendo y procesando el audio — si el archivo está en VBR se convierte automáticamente a CBR (ver aviso al terminar), puede tardar unos segundos."
+msgstr "Subiendo y procesando el audio — si el archivo está en VBR se convierte automáticamente a CBR (ver aviso al terminar), puede tardar unos segundos."
