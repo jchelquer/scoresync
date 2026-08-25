@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.26"
+  date: "2026-08-25"
+  changes:
+    - type: corregido
+      text: "Un admin no podía cambiar el audio de referencia de una obra ajena (403), a diferencia del resto de las acciones del dueño (borrar la obra, sincronizar tiempos), que ya las puede hacer un admin también. Mismo criterio ahora en los tres casos."
+
 - version: "1.31.25"
   date: "2026-08-25"
   changes:

@@ -568,17 +568,18 @@ def obra_detalle(request, pk):
     QUE la obra esté publicada (si no, sólo el dueño y los admins entran —
     ver Obra.publicada). Cargar una parte nueva o adjuntar una propia suelta
     también está abierto (cada parte tiene su propio dueño, independiente
-    del de la obra — ver Partitura.owner). Lo que sí es exclusivo del dueño
-    de la obra: borrar la obra, el audio de referencia y sincronizar tiempos
-    (ver plantilla y las vistas de sincronización, que sí exigen ser dueño).
-    Publicar/despublicar es del dueño O de un admin (ver alternar_publicacion_obra)."""
+    del de la obra — ver Partitura.owner). Lo que sí es del dueño O de un
+    admin (nunca de cualquier otro logueado): borrar la obra, el audio de
+    referencia y sincronizar tiempos (ver plantilla y las vistas de
+    sincronización/borrar_obra) — mismo criterio en toda la app, lo que
+    puede el dueño lo puede el admin también."""
     obra = get_object_or_404(Obra, pk=pk)
     es_dueño = obra.owner_id == request.user.id
     es_admin = _es_admin(request.user)
     if not _obra_visible_para(request.user, obra):
         raise Http404()
     if request.method == "POST" and "audio_form" in request.POST:
-        if not es_dueño:
+        if not (es_dueño or es_admin):
             return HttpResponseForbidden()
         campos = []
         mensaje_conversion_audio = None
