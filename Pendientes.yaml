@@ -34,7 +34,7 @@
 
 #Compás estirado por salto espacial (sin pausa real): DECIDIDO 31/07, no vale la pena resolverlo. Mecanismo: el ancho de un compás se define como "hasta donde empieza el siguiente ancla", así que un hueco visual sin corte real de ejecución (p.ej. fin de sistema con espacio antes de que empiece otro trozo) queda adosado al compás anterior y los pulsos se dibujan repartidos en ese hueco — no es grave, sólo se ven en un lugar raro. Se evaluaron: ancla nueva de "corte de contenido" real, handle manual por compás (campo nullable en Compás o tabla aparte), heurística automática de ancho anómalo — todas suman complejidad (modelo o rendering) para un caso raro. Si algún día molesta puntualmente, la salida más barata es recomponer la partitura impresa para evitar el salto.
 
-Plica/ledger-line como falso positivo en detección de barras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
+#Plica/ledger-line como falso positivo en detección de barras: teoría propia (22/07) de que una nota muy aguda o grave (con varios ledger lines) puede hacer que un plica se detecte como si fuera una barra real. No verificada todavía contra una imagen real.
 
 #Anacrusis: DECIDIDO 31/07, no hace falta cambiar nada — alcanza con poner un número de compás que no esté impreso en la partitura (p.ej. 0) con la duración que corresponda, directamente en Itinerario y Notación, como cualquier otro compás.
 
@@ -49,3 +49,4 @@ Plica/ledger-line como falso positivo en detección de barras: teoría propia (2
 #Entregar ownership: que el owner (de obra o parte) o el admin puedan entregar el ownership de la obra o parte a otro usuario.
 #Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.
 #Fuente audio: agregar el origen del audio.
+sincronización: se detectan problemas entre lo que se marca y lo que se oye y aparentes inconsistencias entre ejecuciones.
