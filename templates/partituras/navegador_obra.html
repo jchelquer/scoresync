@@ -880,6 +880,12 @@
   function programarGuardadoPreferencias() {
     if (guardarPrefTimeout) clearTimeout(guardarPrefTimeout);
     guardarPrefTimeout = setTimeout(guardarPreferencias, 800);
+    // Mismos disparadores que el guardado (cualquier cambio de desde/hasta,
+    // por tipeo o por click en la partitura) — la vista previa del
+    // "programado" pre-ejecución se cuelga del mismo punto de entrada en
+    // vez de repetir el listado de listeners (ver actualizarPreviewProgramado,
+    // declarada más abajo — está bien invocarla acá por hoisting).
+    programarPreviewProgramado();
   }
   function guardarPreferencias() {
     if (!formRango) return;
@@ -1281,6 +1287,53 @@
     debugEl.textContent = '{% translate "audio" %} ' + real.toFixed(3) + 's · {% translate "programado" %} '
       + programado.toFixed(3) + 's · Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(3) + 's';
     debugEl.style.display = '';
+  }
+
+  // Misma lectura de diagnóstico, pero para ANTES de ejecutar — mientras se
+  // elige "desde c." (tipeando o haciendo click en la partitura) todavía no
+  // hay pulsos/acumuladosReales cargados (eso recién pasa al arrancar, ver
+  // aplicarPlan), así que acá se le pide al servidor sólo el ancla real de
+  // ESE punto puntual (mismo plan_obra que arma pedirPlan, pero descartando
+  // los pulsos — no hace falta el rango completo para un solo número). Se
+  // llama desde programarGuardadoPreferencias (mismos disparadores: por
+  // cualquier medio que cambie desde_compas/desde_pasada) — así no hace
+  // falta estar en reproducción para ver el programado. No toca "audio":
+  // antes de arrancar no hay nada posicionado con qué compararlo.
+  let previewProgramadoToken = 0;
+  async function actualizarPreviewProgramado() {
+    const debugEl = document.getElementById('nav-debug-tiempo');
+    if (!debugEl || planCargado || !formRango) return;
+    const desdeCompasVal = formRango.elements['desde_compas'] ? formRango.elements['desde_compas'].value.trim() : '';
+    if (!desdeCompasVal) {
+      debugEl.style.display = 'none';
+      return;
+    }
+    const params = new URLSearchParams();
+    params.set('desde_compas', desdeCompasVal);
+    if (formRango.elements['desde_pasada']) params.set('desde_pasada', formRango.elements['desde_pasada'].value || '1');
+    const miToken = ++previewProgramadoToken;
+    let data;
+    try {
+      const resp = await fetch(`{% url 'partituras:plan_obra' obra.pk %}?${params.toString()}`);
+      data = await resp.json();
+    } catch (e) {
+      return;
+    }
+    // Puede haber cambiado el campo de nuevo (u otro pedido más nuevo haber
+    // arrancado), o ya haberse apretado Ejecutar, mientras esta respuesta
+    // viajaba — no pisar con un dato viejo.
+    if (miToken !== previewProgramadoToken || planCargado) return;
+    if (data.primer_pulso_tiempo_real == null) {
+      debugEl.style.display = 'none';
+      return;
+    }
+    debugEl.textContent = '{% translate "programado" %} ' + data.primer_pulso_tiempo_real.toFixed(3) + 's';
+    debugEl.style.display = '';
+  }
+  let previewProgramadoTimer = null;
+  function programarPreviewProgramado() {
+    clearTimeout(previewProgramadoTimer);
+    previewProgramadoTimer = setTimeout(actualizarPreviewProgramado, 400);
   }
 
   // Cobertura real del número de compás que cae en pulsos[idx], fusionando
@@ -3443,6 +3496,7 @@
   cargarScoreGeometria();
   cargarAvisosCambioIniciales();
   cargarAnotaciones();
+  programarPreviewProgramado(); // muestra el programado de "desde c." ya al cargar, sin esperar a que se toque el campo
   // Modo partitura es el default en pantallas normales; en pantallas
   // chicas (mobile, mismo breakpoint 768px que usa Bootstrap/el resto de
   // la app) arranca en modo compás — controles completos, más fáciles de
@@ -3500,6 +3554,11 @@
     planCargado = false;
     actualizarBotonesNav();
     mostrarControles('inicial');
+    // Sin esto la lectura de diagnóstico quedaba congelada con la última
+    // comparación en vivo de la ejecución cortada — al volver a 'inicial'
+    // pasa a mostrar el programado de "desde c." vigente, como si acabara
+    // de cambiarse el campo (ver actualizarPreviewProgramado).
+    programarPreviewProgramado();
   }
 
   // Reposicionan el reloj (elapsedAlPausar) para que "Continuar" retome

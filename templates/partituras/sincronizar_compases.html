@@ -241,6 +241,7 @@
           <input type="range" id="sync-scrubber" min="0" max="1000" value="0">
           <span id="sync-tiempo-total" class="small" style="color: var(--ss-text-muted); min-width: 3.5rem;">0:00</span>
         </div>
+        <div id="sync-debug-tiempo" class="small" style="color: var(--ss-text-muted); font-family: monospace; display:none;"></div>
       </div>
     </div>
     <div class="card border-0" style="background: var(--ss-surface)">
@@ -832,12 +833,36 @@
 
   let sonandoFracIni = 0, sonandoFracFin = 1;
 
+  // Misma lectura de diagnóstico que navegador_obra.html (audio real vs.
+  // tiempo REAL programado), pero acá no hay un "pulso marcado" en el
+  // sentido de avanzar() — esta pantalla resalta a nivel de COMPÁS (ver
+  // pulsoEnTiempo/acumuladosRealesGlobal, misma fuente "por compases" que
+  // el navegador), así que alcanza con actualizar al arranque de cada
+  // compás sonando (mismo punto donde ya se decide claveSonando), no en
+  // cada frame.
+  function actualizarDebugTiempoSonando(i) {
+    const debugEl = document.getElementById('sync-debug-tiempo');
+    if (!debugEl) return;
+    const programado = (i >= 0 && primerPulsoTiempoRealGlobal != null && acumuladosRealesGlobal[i] != null)
+      ? primerPulsoTiempoRealGlobal + acumuladosRealesGlobal[i] : null;
+    if (programado == null) {
+      debugEl.style.display = 'none';
+      return;
+    }
+    const real = audio.currentTime;
+    const delta = real - programado;
+    debugEl.textContent = '{% translate "audio" %} ' + real.toFixed(3) + 's · {% translate "programado" %} '
+      + programado.toFixed(3) + 's · Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(3) + 's';
+    debugEl.style.display = '';
+  }
+
   function actualizarSonando() {
     actualizarBarraReferenciaPulsos();
     const i = pulsoEnTiempo(audio.currentTime);
     const nuevaClave = i >= 0 ? `${pulsosGlobal[i].compas}:${pasadaPorPulsoGlobal[i]}` : null;
     if (nuevaClave !== claveSonando) {
       claveSonando = nuevaClave;
+      actualizarDebugTiempoSonando(i);
       compasSonando = i >= 0 ? pulsosGlobal[i].compas : null;
       let filaSonando = null;
       filas.forEach((f) => {
