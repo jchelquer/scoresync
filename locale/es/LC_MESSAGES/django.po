@@ -2063,3 +2063,9 @@ msgstr "programado"
 
 msgid "El audio subido estaba codificado en %(modo)s (bitrate variable) — eso puede desalinear la posición hasta medio segundo al saltar directo a un compás (en Practicar o en Sincronizar compases), aunque los tiempos guardados sean exactos. Se convirtió automáticamente a mp3 CBR (%(bitrate)s kbps) antes de guardarlo."
 msgstr "El audio subido estaba codificado en %(modo)s (bitrate variable) — eso puede desalinear la posición hasta medio segundo al saltar directo a un compás (en Practicar o en Sincronizar compases), aunque los tiempos guardados sean exactos. Se convirtió automáticamente a mp3 CBR (%(bitrate)s kbps) antes de guardarlo."
+
+msgid "t.prog"
+msgstr "t.prog"
+
+msgid "t.real"
+msgstr "t.real"

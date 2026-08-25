@@ -60,15 +60,15 @@
   #barra-compacta #nav-compas { font-size: 1.15rem; line-height: 1; }
   #barra-compacta #nav-indicacion-wrap,
   #barra-compacta #nav-armadura-wrap,
-  #barra-compacta #nav-bpm-wrap,
-  #barra-compacta #nav-debug-tiempo { font-size: 0.8rem; }
+  #barra-compacta #nav-bpm-wrap { font-size: 0.8rem; }
   #barra-compacta .btn,
   #score-header-extra .btn { padding: 0.2rem 0.5rem; font-size: 0.8rem; }
   #barra-compacta #switch-metronomo-visual,
   #barra-compacta #switch-metronomo-audio { font-size: 0.8rem; }
   #score-header-rango #form-rango { margin-bottom: 0 !important; gap: 0.6rem !important; }
   #barra-compacta #control-velocidad,
-  #score-header-extra #control-velocidad { font-size: 0.8rem; }
+  #score-header-extra #control-velocidad,
+  #score-header-extra #control-tiempo-debug { font-size: 0.8rem; }
   #barra-compacta #control-velocidad input[type="range"],
   #score-header-extra #control-velocidad input[type="range"] { width: 4.5rem !important; }
   #barra-compacta #control-compases-aire,
@@ -477,7 +477,6 @@
       <span id="nav-tiempo-wrap" style="color: var(--ss-text); {% if not segmento.tiempo_inicio_calculado %}display:none;{% endif %}">
         <i class="bi bi-clock me-1"></i>{{ segmento.tiempo_inicio_calculado }}
       </span>
-      <span id="nav-debug-tiempo" style="color: var(--ss-text-muted); font-family: monospace; display:none;"></span>
     </div>
 
     <p class="mt-3 mb-0" id="nav-descripcion-wrap" style="color: var(--ss-text-muted); {% if not segmento.descripcion %}display:none;{% endif %}">
@@ -497,6 +496,16 @@
   <button id="btn-anterior" type="button" class="btn btn-outline-light" data-url="{{ url_anterior|default:'' }}" {% if not url_anterior %}disabled{% endif %}><span class="ss-tecla ss-tecla-inline me-1">←</span>{% translate "ant" %}</button>
   <button id="btn-siguiente" type="button" class="btn btn-outline-light" data-url="{{ url_siguiente|default:'' }}" {% if not url_siguiente %}disabled{% endif %}>{% translate "sig" %}<span class="ss-tecla ss-tecla-inline ms-1">→</span></button>
   {% endif %}
+  <div id="control-tiempo-debug" class="d-flex gap-2">
+    <div>
+      <span class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "t.prog" %}</span>
+      <div id="nav-tiempo-programado" class="small" style="font-family: monospace; color: var(--ss-text);">—</div>
+    </div>
+    <div>
+      <span class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "t.real" %}</span>
+      <div id="nav-tiempo-real" class="small" style="font-family: monospace; color: var(--ss-text);">—</div>
+    </div>
+  </div>
   <div id="control-velocidad">
     <label for="velocidad-slider" class="form-label small mb-0 d-block" style="color: var(--ss-text-muted);">{% translate "Velocidad" %}</label>
     <div class="d-flex align-items-center gap-1">
@@ -670,7 +679,7 @@
   const navIndicacionWrap = document.getElementById('nav-indicacion-wrap');
   const navArmaduraWrap = document.getElementById('nav-armadura-wrap');
   const navBpmWrap = document.getElementById('nav-bpm-wrap');
-  const navDebugTiempo = document.getElementById('nav-debug-tiempo');
+  const controlTiempoDebug = document.getElementById('control-tiempo-debug');
 
   // Modo "ensayo con parte" (ver alternarModoScore() más abajo): estos
   // nodos se REUBICAN físicamente (no se clonan — siguen siendo los mismos
@@ -699,11 +708,6 @@
     { el: navIndicacionWrap, destino: barraCompacta },
     { el: navArmaduraWrap, destino: barraCompacta },
     { el: navBpmWrap, destino: barraCompacta },
-    // Sin esto quedaba adentro de #panel-controles, que en modo partitura
-    // (el default en escritorio, ver modoInicialPartitura) tiene
-    // display:none entero — la lectura de diagnóstico nunca se veía ahí,
-    // sólo en modo compás.
-    { el: navDebugTiempo, destino: barraCompacta },
     { el: switchMetronomoVisual, destino: barraCompacta },
     { el: switchMetronomoAudio, destino: barraCompacta },
     // "Ejecutar con audio" (con "Silenciar" anidado adentro, se mueve con
@@ -729,7 +733,12 @@
     // uno de los cuatro está visible a la vez (ver mostrarControles), así
     // que el orden entre ellos casi no se nota — Ejecutar primero porque
     // es el punto de entrada antes de que exista un plan cargado. La
-    // velocidad va justo antes de ese grupo.
+    // velocidad va justo antes de ese grupo. La lectura de diagnóstico
+    // (programado/real) va justo antes de la velocidad, en el mismo lugar
+    // en los dos modos — pedido explícito del usuario 2026-08-25, en vez
+    // de vivir sola dentro de la tarjeta de compás/metrónomo (ahí quedaba
+    // perdida entre indicación/armadura/bpm).
+    { el: controlTiempoDebug, destino: scoreHeaderExtra, antesDe: btnAnterior },
     { el: controlVelocidad, destino: scoreHeaderExtra, antesDe: btnAnterior },
     { el: btnPlay, destino: scoreHeaderExtra, antesDe: btnAnterior },
     { el: btnPause, destino: scoreHeaderExtra, antesDe: btnAnterior },
@@ -1265,47 +1274,48 @@
     if (esCuentaAlAire || metronomoAudioToggle.checked) click(p.acento);
   }
 
-  // Lectura de diagnóstico: tiempo real del audio vs. el tiempo REAL
-  // programado para el pulso que se acaba de marcar (primerPulsoTiempoReal +
-  // acumuladosReales[idxMostrado], la misma cuenta que usa avanzar() para
-  // decidir cuándo saltar de pulso) — para comparar a ojo si el audio y la
-  // temporización se están yendo de acuerdo o divergiendo. Se actualiza en
-  // cada pulso marcado (ver avanzar) y en cada salto manual (ver irAPulso),
-  // no sólo al pausar — así no hace falta pausar para notar un desfasaje.
-  // Sin sentido sin audio de referencia sonando (nada que comparar).
-  function actualizarDebugTiempo() {
-    const debugEl = document.getElementById('nav-debug-tiempo');
-    if (!debugEl) return;
-    const programado = (primerPulsoTiempoReal != null && acumuladosReales[idxMostrado] != null)
-      ? primerPulsoTiempoReal + acumuladosReales[idxMostrado] : null;
-    if (!audioDebeSonar() || programado == null) {
-      debugEl.style.display = 'none';
-      return;
-    }
-    const real = audioNav.currentTime;
-    const delta = real - programado;
-    debugEl.textContent = '{% translate "audio" %} ' + real.toFixed(3) + 's · {% translate "programado" %} '
-      + programado.toFixed(3) + 's · Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(3) + 's';
-    debugEl.style.display = '';
+  // Escribe la lectura de diagnóstico (t.prog/t.real, ver #control-tiempo-debug)
+  // — a diferencia de la primera versión, el bloque siempre está visible
+  // (pedido explícito del usuario: mejor ver "—" que hacerlo aparecer y
+  // desaparecer), acá sólo se decide el CONTENIDO. null en cualquiera de
+  // los dos muestra "—" en ese campo.
+  function mostrarTiempoDebug(programado, real) {
+    const elProg = document.getElementById('nav-tiempo-programado');
+    const elReal = document.getElementById('nav-tiempo-real');
+    if (elProg) elProg.textContent = programado != null ? programado.toFixed(3) : '—';
+    if (elReal) elReal.textContent = real != null ? real.toFixed(3) : '—';
   }
 
-  // Misma lectura de diagnóstico, pero para ANTES de ejecutar — mientras se
-  // elige "desde c." (tipeando o haciendo click en la partitura) todavía no
-  // hay pulsos/acumuladosReales cargados (eso recién pasa al arrancar, ver
+  // Tiempo real del audio vs. el tiempo REAL programado para el pulso que
+  // se acaba de marcar (primerPulsoTiempoReal + acumuladosReales[idxMostrado],
+  // la misma cuenta que usa avanzar() para decidir cuándo saltar de pulso)
+  // — para comparar a ojo si el audio y la temporización se están yendo de
+  // acuerdo o divergiendo. Se actualiza en cada pulso marcado (ver avanzar)
+  // y en cada salto manual (ver irAPulso), no sólo al pausar. "real" queda
+  // en "—" sin audio de referencia sonando (nada que comparar).
+  function actualizarDebugTiempo() {
+    const programado = (primerPulsoTiempoReal != null && acumuladosReales[idxMostrado] != null)
+      ? primerPulsoTiempoReal + acumuladosReales[idxMostrado] : null;
+    const real = audioDebeSonar() ? audioNav.currentTime : null;
+    mostrarTiempoDebug(programado, real);
+  }
+
+  // Mismo "t.prog", pero para ANTES de ejecutar — mientras se elige
+  // "desde c." (tipeando o haciendo click en la partitura) todavía no hay
+  // pulsos/acumuladosReales cargados (eso recién pasa al arrancar, ver
   // aplicarPlan), así que acá se le pide al servidor sólo el ancla real de
   // ESE punto puntual (mismo plan_obra que arma pedirPlan, pero descartando
   // los pulsos — no hace falta el rango completo para un solo número). Se
   // llama desde programarGuardadoPreferencias (mismos disparadores: por
   // cualquier medio que cambie desde_compas/desde_pasada) — así no hace
-  // falta estar en reproducción para ver el programado. No toca "audio":
-  // antes de arrancar no hay nada posicionado con qué compararlo.
+  // falta estar en reproducción para ver el programado. "t.real" queda en
+  // "—": antes de arrancar no hay nada posicionado con qué compararlo.
   let previewProgramadoToken = 0;
   async function actualizarPreviewProgramado() {
-    const debugEl = document.getElementById('nav-debug-tiempo');
-    if (!debugEl || planCargado || !formRango) return;
+    if (planCargado || !formRango) return;
     const desdeCompasVal = formRango.elements['desde_compas'] ? formRango.elements['desde_compas'].value.trim() : '';
     if (!desdeCompasVal) {
-      debugEl.style.display = 'none';
+      mostrarTiempoDebug(null, null);
       return;
     }
     const params = new URLSearchParams();
@@ -1323,12 +1333,7 @@
     // arrancado), o ya haberse apretado Ejecutar, mientras esta respuesta
     // viajaba — no pisar con un dato viejo.
     if (miToken !== previewProgramadoToken || planCargado) return;
-    if (data.primer_pulso_tiempo_real == null) {
-      debugEl.style.display = 'none';
-      return;
-    }
-    debugEl.textContent = '{% translate "programado" %} ' + data.primer_pulso_tiempo_real.toFixed(3) + 's';
-    debugEl.style.display = '';
+    mostrarTiempoDebug(data.primer_pulso_tiempo_real, null);
   }
   let previewProgramadoTimer = null;
   function programarPreviewProgramado() {

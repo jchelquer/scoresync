@@ -2054,3 +2054,9 @@ msgstr "scheduled"
 
 msgid "El audio subido estaba codificado en %(modo)s (bitrate variable) — eso puede desalinear la posición hasta medio segundo al saltar directo a un compás (en Practicar o en Sincronizar compases), aunque los tiempos guardados sean exactos. Se convirtió automáticamente a mp3 CBR (%(bitrate)s kbps) antes de guardarlo."
 msgstr "The uploaded audio was encoded as %(modo)s (variable bitrate) — that can throw off playback position by up to half a second when jumping straight to a measure (in Practice or Sync measures), even though the saved times are exact. It was automatically converted to CBR mp3 (%(bitrate)s kbps) before saving."
+
+msgid "t.prog"
+msgstr "sched."
+
+msgid "t.real"
+msgstr "real"
