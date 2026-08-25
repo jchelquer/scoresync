@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.23"
+  date: "2026-08-25"
+  changes:
+    - type: nuevo
+      text: "En Practicar, con audio de referencia sonando, ahora se ve una lectura chica con el segundo real del audio contra el segundo programado para ese pulso — se actualiza en vivo con cada pulso, sin necesidad de pausar para comparar."
+
 - version: "1.31.22"
   date: "2026-08-25"
   changes:

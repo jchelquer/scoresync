@@ -2054,3 +2054,9 @@ msgstr "Practicar esta parte"
 
 msgid "Todavía no se puede practicar — faltan compases confirmados"
 msgstr "Todavía no se puede practicar — faltan compases confirmados"
+
+msgid "audio"
+msgstr "audio"
+
+msgid "programado"
+msgstr "programado"

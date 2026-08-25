@@ -482,6 +482,8 @@
       <span id="nav-descripcion">{{ segmento.descripcion }}</span>
     </p>
 
+    <p class="mt-2 mb-0 small" id="nav-debug-tiempo" style="color: var(--ss-text-muted); font-family: monospace; display:none;"></p>
+
     {% if en_fin_de_rango %}
     <p class="mt-3 mb-0 text-warning small">{% translate "Fin del tramo." %}</p>
     {% endif %}
@@ -1249,6 +1251,30 @@
     // para entrar a tiempo (silenciarla la vuelve inútil). El resto del
     // metrónomo (durante la ejecución real) sí sigue ese switch.
     if (esCuentaAlAire || metronomoAudioToggle.checked) click(p.acento);
+  }
+
+  // Lectura de diagnóstico: tiempo real del audio vs. el tiempo REAL
+  // programado para el pulso que se acaba de marcar (primerPulsoTiempoReal +
+  // acumuladosReales[idxMostrado], la misma cuenta que usa avanzar() para
+  // decidir cuándo saltar de pulso) — para comparar a ojo si el audio y la
+  // temporización se están yendo de acuerdo o divergiendo. Se actualiza en
+  // cada pulso marcado (ver avanzar) y en cada salto manual (ver irAPulso),
+  // no sólo al pausar — así no hace falta pausar para notar un desfasaje.
+  // Sin sentido sin audio de referencia sonando (nada que comparar).
+  function actualizarDebugTiempo() {
+    const debugEl = document.getElementById('nav-debug-tiempo');
+    if (!debugEl) return;
+    const programado = (primerPulsoTiempoReal != null && acumuladosReales[idxMostrado] != null)
+      ? primerPulsoTiempoReal + acumuladosReales[idxMostrado] : null;
+    if (!audioDebeSonar() || programado == null) {
+      debugEl.style.display = 'none';
+      return;
+    }
+    const real = audioNav.currentTime;
+    const delta = real - programado;
+    debugEl.textContent = '{% translate "audio" %} ' + real.toFixed(3) + 's · {% translate "programado" %} '
+      + programado.toFixed(3) + 's · Δ ' + (delta >= 0 ? '+' : '') + delta.toFixed(3) + 's';
+    debugEl.style.display = '';
   }
 
   // Cobertura real del número de compás que cae en pulsos[idx], fusionando
@@ -3485,6 +3511,7 @@
       audioNav.currentTime = primerPulsoTiempoReal + acumuladosReales[idx];
     }
     actualizarBotonesNav();
+    actualizarDebugTiempo();
   }
 
   function indiceCompasActual() {
@@ -3609,6 +3636,7 @@
       idxMostrado = i;
       mostrarPulso(pulsos[i]);
       actualizarBotonesNav();
+      actualizarDebugTiempo();
     }
     rafId = requestAnimationFrame(avanzar);
   }
