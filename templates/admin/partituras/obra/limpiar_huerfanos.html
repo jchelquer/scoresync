@@ -1,0 +1,52 @@
+{% extends "admin/base_site.html" %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Inicio</a>
+  &rsaquo; <a href="{% url 'admin:partituras_obra_changelist' %}">Obras</a>
+  &rsaquo; Limpiar huérfanos
+</div>
+{% endblock %}
+
+{% block content %}
+<p>
+  Archivos en <code>MEDIA_ROOT</code> que ninguna fila de la base referencia
+  (típicamente por un reemplazo de archivo hecho desde este mismo admin, que
+  Django no limpia solo) y carpetas de <code>cache_paginas/</code> de
+  partituras ya borradas (esas son 100% regenerables).
+</p>
+
+<h2>Audios huérfanos ({{ huerfanos.audios|length }}, {{ huerfanos.kb_audios|floatformat:0 }} KB)</h2>
+{% if huerfanos.audios %}
+<ul>
+  {% for archivo in huerfanos.audios %}<li>{{ archivo }}</li>{% endfor %}
+</ul>
+{% else %}
+<p>Ninguno.</p>
+{% endif %}
+
+<h2>PDFs huérfanos ({{ huerfanos.pdfs|length }}, {{ huerfanos.kb_pdfs|floatformat:0 }} KB)</h2>
+{% if huerfanos.pdfs %}
+<ul>
+  {% for archivo in huerfanos.pdfs %}<li>{{ archivo }}</li>{% endfor %}
+</ul>
+{% else %}
+<p>Ninguno.</p>
+{% endif %}
+
+<h2>Carpetas de cache_paginas huérfanas ({{ huerfanos.cache_paginas|length }}, {{ huerfanos.kb_cache_paginas|floatformat:0 }} KB)</h2>
+{% if huerfanos.cache_paginas %}
+<ul>
+  {% for carpeta in huerfanos.cache_paginas %}<li>{{ carpeta }}</li>{% endfor %}
+</ul>
+{% else %}
+<p>Ninguna.</p>
+{% endif %}
+
+{% if huerfanos.audios or huerfanos.pdfs or huerfanos.cache_paginas %}
+<form method="post">
+  {% csrf_token %}
+  <input type="submit" class="default" value="Borrar todo lo listado arriba ({{ kb_total|floatformat:0 }} KB)">
+</form>
+{% endif %}
+{% endblock %}

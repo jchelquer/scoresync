@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.29"
+  date: "2026-08-27"
+  changes:
+    - type: nuevo
+      text: "Nueva herramienta en el admin (botón \"Limpiar huérfanos\" en Obras) para detectar y borrar audios/PDFs en disco que ya no referencia ninguna obra/partitura, y carpetas de caché de páginas de partituras borradas — hasta ahora no había forma de encontrarlos ni limpiarlos. También disponible por consola con `manage.py limpiar_huerfanos` (agregar `--borrar` para ejecutar, si no sólo lista)."
+
 - version: "1.31.28"
   date: "2026-08-25"
   changes:

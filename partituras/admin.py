@@ -1,4 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.shortcuts import redirect, render
+from django.urls import path
+from .media_cleanup import borrar_huerfanos, encontrar_huerfanos
 from .models import (
     Barra, Ciclo, Compas, EfectoTempo, MarcaNotacion, MarcaTiempoCompas, MarcaTiempoPulso, Obra, Pagina,
     PreferenciaObra, PreferenciaParte, Repertorio, Segmento, Sistema, Partitura,
@@ -49,6 +52,37 @@ class ObraAdmin(admin.ModelAdmin):
     search_fields = ('titulo', 'compositor', 'arreglista', 'owner__username')
     filter_horizontal = ('usuarios_visibles',)
     inlines = [ObraGrupoVisibleInline]
+    change_list_template = "admin/partituras/obra/change_list.html"
+
+    def get_urls(self):
+        urls = [
+            path(
+                "limpiar-huerfanos/",
+                self.admin_site.admin_view(self.limpiar_huerfanos_view),
+                name="partituras_obra_limpiar_huerfanos",
+            ),
+        ]
+        return urls + super().get_urls()
+
+    def limpiar_huerfanos_view(self, request):
+        """GET sólo escanea y muestra; el borrado real recién ocurre en el
+        POST del form de confirmación de la misma pantalla (ver
+        media_cleanup.py -- comparte lógica con el management command
+        limpiar_huerfanos)."""
+        huerfanos = encontrar_huerfanos()
+        if request.method == "POST":
+            total = len(huerfanos["audios"]) + len(huerfanos["pdfs"]) + len(huerfanos["cache_paginas"])
+            borrar_huerfanos(huerfanos)
+            messages.success(request, f"{total} elemento(s) huérfano(s) borrado(s).")
+            return redirect("admin:partituras_obra_changelist")
+        context = {
+            **self.admin_site.each_context(request),
+            "huerfanos": huerfanos,
+            "kb_total": huerfanos["kb_audios"] + huerfanos["kb_pdfs"] + huerfanos["kb_cache_paginas"],
+            "title": "Limpiar archivos huérfanos",
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/partituras/obra/limpiar_huerfanos.html", context)
 
 
 @admin.register(Segmento)
