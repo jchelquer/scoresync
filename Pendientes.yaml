@@ -50,3 +50,4 @@
 #Mostrar ownership: en la ejecución, el selector de partes ya dice "mía" si el usuario es el propietario. Yo agregaría el nombre del propietario si es otro. En cuanto a la obra, al lado del título en chiquito podría decir "Temporizador: " y el nombre del owner de la obra. Así, si hay un problema se sabe con quién hablar.
 #Fuente audio: agregar el origen del audio.
 sincronización: se detectan problemas entre lo que se marca y lo que se oye y aparentes inconsistencias entre ejecuciones.
+vbr cbr: problemas de posicionamiento en archivos con bitrate variable.
