@@ -120,7 +120,7 @@
     {% if partes_disponibles|length > 1 %}
     <form method="get" class="d-flex align-items-center gap-2">
       <span class="small" style="color: var(--ss-text-muted)">{% translate "Parte" %}</span>
-      <select name="parte" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+      <select id="sync-select-parte" name="parte" class="form-select form-select-sm" style="width: auto;">
         {% for p in partes_disponibles %}
         <option value="{{ p.pk }}" {% if partitura_seguida and p.pk == partitura_seguida.pk %}selected{% endif %}>
           {{ p.nombre_parte|default:p.titulo }}{% if p.owner_id == request.user.id %} ({% translate "mía" %}){% endif %}
@@ -196,7 +196,7 @@
          llegar) y se reubica acá, al pie de la columna de la partitura —
          mismo contenido, ver el {% templatetag openblock %} block footer
          {% templatetag closeblock %} vacío más abajo. -->
-    <div class="text-center mt-3" style="color: var(--ss-text-muted); font-size: 0.95rem;">
+    <div id="sync-pie-pagina" class="text-center mt-3" style="color: var(--ss-text-muted); font-size: 0.95rem;">
       <a href="https://infedu.com.ar" target="_blank" rel="noopener" style="display:inline-block; background:#fff; padding:6px 12px; border-radius:8px; line-height:0;">
         <img src="{% static 'images/logoie.png' %}" alt="JCH Informática Educativa" style="height: 45px;">
       </a>
@@ -345,6 +345,8 @@
   const filas = Array.from(document.querySelectorAll('.fila-sync'));
   const scoreCanvas = document.getElementById('sync-score-canvas');
   const scoreMsg = document.getElementById('sync-score-msg');
+  const scoreWrap = document.getElementById('sync-score-wrap');
+  const piePaginaSync = document.getElementById('sync-pie-pagina');
   // Las funciones que dibujan la partitura (mostrarCompas, etc. — ver más
   // abajo) sólo existen cuando hay una parte procesada disponible, así que
   // este flag es lo único seguro de leer desde afuera de ese bloque para
@@ -361,6 +363,42 @@
   const rangoDesdeVez = document.getElementById('sync-rango-desde-vez');
   const rangoHastaCompas = document.getElementById('sync-rango-hasta-compas');
   const rangoHastaVez = document.getElementById('sync-rango-hasta-vez');
+  const selectParte = document.getElementById('sync-select-parte');
+  const CLAVE_ESTADO_PARTE = 'sync-estado-parte-{{ obra.pk }}';
+
+  // Cambiar de parte recarga la página entera (form GET) — sin esto, cada
+  // cambio de parte reseteaba compás armado y selección al compás 1, igual
+  // que abrir la pantalla de cero. Sólo tiene sentido resetear al ABRIR
+  // Sincronizar compases, no al cambiar de parte dentro de la misma sesión
+  // (pedido explícito del usuario) — por eso esto se guarda en
+  // sessionStorage recién antes de este submit puntual, y se consume
+  // (removeItem) apenas se lee al cargar la página nueva (ver más abajo):
+  // así una apertura normal de la pantalla, sin pasar por acá, no encuentra
+  // nada guardado y arranca en compás 1 como siempre.
+  function guardarEstadoParaCambioDeParte() {
+    if (idxArmada < 0 || !filas[idxArmada] || filas[idxArmada].dataset.esCierre === '1') return;
+    const estado = {
+      compas: filas[idxArmada].dataset.compas,
+      pasada: filas[idxArmada].dataset.pasada,
+      rango: null,
+    };
+    const noCierre = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
+    if (noCierre.length) {
+      const ini = filas[Math.min(...noCierre)];
+      const fin = filas[Math.max(...noCierre)];
+      estado.rango = {
+        desdeCompas: ini.dataset.compas, desdeVez: ini.dataset.pasada,
+        hastaCompas: fin.dataset.compas, hastaVez: fin.dataset.pasada,
+      };
+    }
+    try { sessionStorage.setItem(CLAVE_ESTADO_PARTE, JSON.stringify(estado)); } catch (e) {}
+  }
+  if (selectParte) {
+    selectParte.addEventListener('change', () => {
+      guardarEstadoParaCambioDeParte();
+      selectParte.form.submit();
+    });
+  }
 
   function getCookie(nombre) {
     const match = document.cookie.match('(^|;\\s*)' + nombre + '=([^;]*)');
@@ -418,7 +456,12 @@
   // un tap); Continuar (desde pausado) ubica a qué compás corresponde
   // donde se pausó y arranca ahí mismo; Reiniciar (botón aparte, visible
   // sólo en pausa) vuelve al punto de Play.
-  let estadoReproduccion = 'inicial'; // sólo relevante con modo === 'reproduccion'
+  // 'inicial' (detenido, nunca se tocó), 'reproduciendo' o 'pausado' — se
+  // actualiza en los dos modos (ver listeners play/pause de audio más
+  // abajo), aunque el botón Play/Pausar/Continuar de 3 estados sólo se usa
+  // en modo reproducción; en marcado sólo importa para mostrar/ocultar
+  // Reiniciar (ver actualizarBotonesReproduccion).
+  let estadoReproduccion = 'inicial';
 
   // Descripción corta de una fila para los avisos de reposicionamiento de
   // abajo — ya incluye artículo ("el compás 12" / "el fin de la obra") para
@@ -479,12 +522,14 @@
   }
 
   function actualizarBotonesReproduccion() {
-    // En marcado, Reiniciar siempre está disponible (no hay estado de
-    // pausa que lo condicione, a diferencia de reproducción).
+    // Reiniciar sólo tiene sentido en pausa (ya se venía escuchando/tapeando
+    // y se cortó a mitad de camino) — ni en detenido (recién entrando,
+    // todavía no arrancó nada que "reiniciar") ni mientras suena. Mismo
+    // criterio en los dos modos, marcado y reproducción — estadoReproduccion
+    // ahora se actualiza siempre (ver los listeners play/pause de audio),
+    // no sólo en modo reproducción.
     if (btnReiniciar) {
-      btnReiniciar.classList.toggle('d-none', !(
-        modo === 'marcado' || (modo === 'reproduccion' && estadoReproduccion === 'pausado')
-      ));
+      btnReiniciar.classList.toggle('d-none', estadoReproduccion !== 'pausado');
     }
   }
 
@@ -506,26 +551,27 @@
       if (modo === 'reproduccion') {
         iniciarReproduccionDesde(primerIndiceSeleccion());
       } else {
-        // A diferencia de Play en reproducción (que arranca desde el
-        // PRIMER seleccionado, tiene sentido escuchar la selección desde el
-        // principio), acá arma el ÚLTIMO — misma convención que Shift+click
-        // (ver seleccionarFila/ultimoIndiceSeleccion): el compás armado es
-        // el que se marca al tapear, y Shift+click siempre arma el extremo
-        // más alto del rango. Reposiciona el audio 2 compases antes, mismo
-        // contexto que armar un compás por click.
-        armar(ultimoIndiceSeleccion(), { reposicionar: true });
+        // Dos cosas distintas que no hay que confundir: qué compás se GRABA
+        // al tapear (el ÚLTIMO del rango — ver seleccionarFila/
+        // ultimoIndiceSeleccion, eso no cambia acá) vs. desde dónde vuelve a
+        // SONAR Reiniciar (el PRINCIPIO del rango elegido, no el compás a
+        // marcar) — misma idea que Play/Reiniciar en modo Reproducción (ver
+        // iniciarReproduccionDesde). Por eso arma el último sin reposicionar
+        // (reposicionar:false) y aparte manda el audio al primero.
+        armar(ultimoIndiceSeleccion(), { reposicionar: false });
+        iniciarReproduccionDesde(primerIndiceSeleccion());
       }
     });
   }
   audio.addEventListener('play', () => {
     btnPlayPause.textContent = '⏸';
-    if (modo === 'reproduccion') estadoReproduccion = 'reproduciendo';
+    estadoReproduccion = 'reproduciendo';
     actualizarBotonesReproduccion();
     iniciarSeguimientoSonando();
   });
   audio.addEventListener('pause', () => {
     btnPlayPause.textContent = '▶';
-    if (modo === 'reproduccion') estadoReproduccion = 'pausado';
+    estadoReproduccion = 'pausado';
     actualizarBotonesReproduccion();
     detenerSeguimientoSonando();
   });
@@ -594,6 +640,29 @@
   // garantizado con una marca real (ver la vista, que lo auto-completa en
   // 0 si hacía falta).
   let idxArmada = filas.length ? 0 : -1;
+  // Si venimos de un cambio de parte (ver guardarEstadoParaCambioDeParte
+  // más arriba), se restaura acá el compás armado y el rango — se consume
+  // (removeItem) de una: una apertura normal de esta pantalla no debe
+  // heredar nada de una sesión de sync anterior en la misma pestaña.
+  let rangoRestaurado = null;
+  if (filas.length) {
+    try {
+      const guardadoTexto = sessionStorage.getItem(CLAVE_ESTADO_PARTE);
+      if (guardadoTexto) {
+        sessionStorage.removeItem(CLAVE_ESTADO_PARTE);
+        const guardado = JSON.parse(guardadoTexto);
+        const idxRestaurado = filaDeCompas(parseInt(guardado.compas, 10), guardado.pasada);
+        if (idxRestaurado !== -1) {
+          idxArmada = idxRestaurado;
+          if (guardado.rango) {
+            const iniR = filaDeCompas(parseInt(guardado.rango.desdeCompas, 10), guardado.rango.desdeVez);
+            const finR = filaDeCompas(parseInt(guardado.rango.hastaCompas, 10), guardado.rango.hastaVez);
+            if (iniR !== -1 && finR !== -1) rangoRestaurado = { ini: Math.min(iniR, finR), fin: Math.max(iniR, finR) };
+          }
+        }
+      }
+    } catch (e) {}
+  }
   const historialMarcas = []; // índices efectivamente MARCADOS (no salteados) — para poder deshacer
 
   // ── Tiempo real de una fila / "N compases antes" con fallback ────────
@@ -656,10 +725,14 @@
   // Primer compás (no cierre) de la selección, en orden de compás — los
   // índices de fila YA están en ese orden (mismo orden que
   // compases_desenrollados), así que Math.min alcanza sin ordenar nada.
-  // Sin selección, cae en el compás 1 (índice 0).
+  // Sin selección (p.ej. se limpió al tapear, ver limpiarSeleccion), cae en
+  // el compás actualmente armado, NO en el compás 1 — Play desde detenido y
+  // Reiniciar (ver btnReiniciar) tienen que arrancar del "rango elegido" en
+  // el sentido amplio (aunque ya no haya un bloque de filas resaltado), no
+  // saltar al principio de la obra.
   function primerIndiceSeleccion() {
     const candidatos = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
-    return candidatos.length ? Math.min(...candidatos) : 0;
+    return candidatos.length ? Math.min(...candidatos) : Math.max(idxArmada, 0);
   }
 
   // Simétrica a la de arriba — para armar en modo marcado, que arma el
@@ -668,7 +741,7 @@
   // convención en vez de saltar al otro extremo (ver btnReiniciar).
   function ultimoIndiceSeleccion() {
     const candidatos = Array.from(seleccion).filter(i => filas[i].dataset.esCierre !== '1');
-    return candidatos.length ? Math.max(...candidatos) : 0;
+    return candidatos.length ? Math.max(...candidatos) : Math.max(idxArmada, 0);
   }
 
   // Selección múltiple (para el ajuste fino, ver más abajo) — declarada acá
@@ -1300,8 +1373,14 @@
   // hecha por cualquier vía hace que la ventana vuelva a seguirla.
   function seleccionarFila(i, { shift, ctrlOrMeta, reposicionar }) {
     anclaManualSistema = null;
-    if (shift && anclaSeleccion !== null) {
-      const ini = Math.min(anclaSeleccion, i), fin = Math.max(anclaSeleccion, i);
+    if (shift) {
+      // Si no hay ancla propia (p.ej. se venía tapeando y cada marca la
+      // había limpiado, ver limpiarSeleccion), Shift+click extiende igual
+      // el rango desde el compás armado actual — antes, sin esto, un
+      // Shift+click sin ancla previa cayó silenciosamente al comportamiento
+      // de click simple (ver el "else" de abajo), ignorando el Shift.
+      const ancla = anclaSeleccion !== null ? anclaSeleccion : idxArmada;
+      const ini = Math.min(ancla, i), fin = Math.max(ancla, i);
       seleccion = new Set();
       for (let k = ini; k <= fin; k++) seleccion.add(k);
       actualizarClasesSeleccion();
@@ -1486,14 +1565,17 @@
     btnMarcar.disabled = modo !== 'marcado';
     btnSaltear.disabled = modo !== 'marcado';
     btnDeshacer.disabled = modo !== 'marcado';
+    // Marcado arma el ÚLTIMO de la selección, Reproducción el PRIMERO (ver
+    // seleccionarFila/aplicarRango) — sin esto, si la selección se había
+    // armado en el otro modo, idxArmada quedaba en el extremo del modo
+    // VIEJO al cambiar (p.ej. armar un rango en Reproducción y pasar a
+    // Marcado terminaba marcando el primer compás del rango, no el último).
+    if (seleccion.size) idxArmada = modo === 'marcado' ? ultimoIndiceSeleccion() : primerIndiceSeleccion();
     filas.forEach((f, i) => f.classList.toggle('armada', modo === 'marcado' && i === idxArmada));
-    // Al entrar a reproducción, el estado del esquema Play/Continuar/
-    // Reiniciar arranca de cero salvo que el audio ya estuviera sonando
-    // (p.ej. veías/escuchabas en marcado y cambiaste de modo sin pausar) —
-    // "pausado" sólo tiene sentido si ya se pasó por acá antes.
-    if (modo === 'reproduccion') {
-      estadoReproduccion = audio.paused ? 'inicial' : 'reproduciendo';
-    }
+    // estadoReproduccion ya se mantiene al día solo (ver listeners play/
+    // pause de audio) independientemente del modo — nada que resetear acá:
+    // si se venía pausado en Marcado, sigue pausado al pasar a Reproducción
+    // (Continuar retoma desde ahí, no desde el principio de la selección).
     actualizarBotonesReproduccion();
     refrescarPanelScore();
     if (audio.paused) btnPlayPause.click();
@@ -1501,6 +1583,11 @@
   btnModoMarcado.addEventListener('click', () => cambiarModo('marcado'));
   btnModoReproduccion.addEventListener('click', () => cambiarModo('reproduccion'));
   if (toggleNumeros) toggleNumeros.addEventListener('change', refrescarPanelScore);
+  // Cuántos sistemas entran depende del alto real del viewport (ver
+  // alturaDisponibleScoreSync) — sin esto, redimensionar la ventana del
+  // navegador dejaba el recorte con el tamaño de antes hasta el próximo
+  // refresco por otro motivo (tapear, seleccionar, etc).
+  window.addEventListener('resize', () => { if (tieneScore) refrescarPanelScore(); });
 
   btnMarcar.addEventListener('click', marcarActual);
   btnSaltear.addEventListener('click', saltear);
@@ -1555,6 +1642,12 @@
   let ultimoRenderSync = null;
   {% endif %}
 
+  if (rangoRestaurado) {
+    seleccion = new Set();
+    for (let k = rangoRestaurado.ini; k <= rangoRestaurado.fin; k++) seleccion.add(k);
+    anclaSeleccion = rangoRestaurado.ini;
+    actualizarClasesSeleccion();
+  }
   if (filas.length) armar(idxArmada, { reposicionar: true });
 
   // ── Panel de partitura: un recorte de unos pocos sistemas con el compás
@@ -1612,8 +1705,27 @@
     scoreMsg.textContent = texto;
   }
 
+  // Sistemas de contexto hacia atrás (ver limitesFranja) — hacia adelante
+  // ya no es un número fijo: entran todos los que quepan de verdad en el
+  // alto libre hasta el pie de página (ver alturaDisponibleScoreSync).
   const SISTEMAS_ANTES = 1;
-  const SISTEMAS_ADELANTE = 2;
+  const MARGEN_INFERIOR_SCORE_PX = 12;
+
+  // Alto real disponible para el panel de partitura, desde donde arranca
+  // #sync-score-wrap hasta el pie de página de esta misma columna (logo +
+  // links, ver #sync-pie-pagina) — mismo criterio que navegador_obra.html
+  // (ajustarAltoContenedorScore): medido contra el viewport de verdad, no
+  // adivinado con vh/calc(), porque lo que hay arriba varía (parte con o
+  // sin score, ayuda, etc). Se resta el alto del pie en vez de medir contra
+  // su posición actual para evitar circularidad: la posición del pie
+  // depende de cuánto mida el score, que es justo lo que se está por
+  // decidir acá.
+  function alturaDisponibleScoreSync() {
+    if (!scoreWrap) return 300;
+    const top = scoreWrap.getBoundingClientRect().top;
+    const altoPie = piePaginaSync ? piePaginaSync.getBoundingClientRect().height : 0;
+    return Math.max(window.innerHeight - top - altoPie - MARGEN_INFERIOR_SCORE_PX, 150);
+  }
 
   // Cuando no hay sistema anterior/siguiente en la página (el actual es el
   // primero/último), NO conviene caer en el margen de página como borde —
@@ -1639,21 +1751,33 @@
     return { top, bottom };
   }
 
-  function limitesFranja(pagina, sistemaInicial) {
-    // Muestra SISTEMAS_ANTES sistemas antes del actual y SISTEMAS_ADELANTE
-    // después — mientras se marca conviene ver de dónde viene y hacia dónde
-    // va el compás, no sólo lo que sigue (si el sistema anterior queda en
-    // otra página, no hay como mostrarlo: se corta en el margen de esta).
+  // Muestra SISTEMAS_ANTES sistemas antes del actual (contexto de dónde
+  // viene, ver comentario de la constante) y, hacia adelante, tantos como
+  // entren enteros en el alto real disponible (ver alturaDisponibleScoreSync)
+  // — antes era un número fijo (2 más), dejaba sobrar espacio vacío hasta
+  // el pie de página en pantallas grandes. El sistema ACTUAL (idx) siempre
+  // se incluye igual aunque él solo ya exceda el alto disponible (si no, la
+  // ventana se quedaría sin mostrar justo el compás que se está por marcar/
+  // escuchar) — recién a partir de ahí cada sistema adicional es opcional.
+  function limitesFranja(pagina, sistemaInicial, img, contW) {
     const idx = pagina.sistemas.findIndex(s => s.orden === sistemaInicial.orden);
     const idxInicial = Math.max(idx - SISTEMAS_ANTES, 0);
     const sistemaInicialReal = pagina.sistemas[idxInicial];
     const anterior = pagina.sistemas[idxInicial - 1] || null;
     const top = anterior ? (anterior.y + anterior.height + sistemaInicialReal.y) / 2 : extenderArriba(sistemaInicialReal);
 
-    const idxFinal = Math.min(idx + SISTEMAS_ADELANTE, pagina.sistemas.length - 1);
-    const sistemaFinal = pagina.sistemas[idxFinal];
-    const siguiente = pagina.sistemas[idxFinal + 1] || null;
-    const bottom = siguiente ? (sistemaFinal.y + sistemaFinal.height + siguiente.y) / 2 : extenderAbajo(sistemaFinal);
+    const anchoFrac = pagina.margen_x1 - pagina.margen_x0;
+    const escala = contW / (anchoFrac * img.naturalWidth);
+    const altoDisponibleFrac = alturaDisponibleScoreSync() / (escala * img.naturalHeight);
+
+    let bottom = top;
+    for (let i = idxInicial; i < pagina.sistemas.length; i++) {
+      const sistema = pagina.sistemas[i];
+      const siguiente = pagina.sistemas[i + 1] || null;
+      const bottomEste = siguiente ? (sistema.y + sistema.height + siguiente.y) / 2 : extenderAbajo(sistema);
+      if (i > idx && (bottomEste - top) > altoDisponibleFrac) break;
+      bottom = bottomEste;
+    }
     return { top, bottom };
   }
 
@@ -1874,8 +1998,6 @@
       if (!compas) return;
       sistema = pagina.sistemas.find(s => s.orden === compas.sistema_orden);
     }
-    const bordesFranja = limitesFranja(pagina, sistema);
-
     let img;
     try {
       img = await obtenerImagen(pagina);
@@ -1893,6 +2015,11 @@
     scoreMsg.style.display = 'none';
 
     const contW = Math.max(scoreCanvas.parentElement.clientWidth, 50);
+    // Depende de contW/img (recién disponibles acá) para saber cuántos
+    // sistemas entran de verdad en el alto libre hasta el pie de página —
+    // por eso limitesFranja se calcula DESPUÉS de tener la imagen, no antes
+    // como con el crop de un solo sistema de antes.
+    const bordesFranja = limitesFranja(pagina, sistema, img, contW);
     const anchoFrac = pagina.margen_x1 - pagina.margen_x0;
     const escala = contW / (anchoFrac * img.naturalWidth);
     const sx = pagina.margen_x0 * img.naturalWidth;

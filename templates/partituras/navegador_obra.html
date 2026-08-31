@@ -26,6 +26,14 @@
   body.modo-partitura footer {
     display: none !important;
   }
+  /* La fila exterior donde viven título+botón-ocultar en modo compás (ver
+     HTML) queda VACÍA en modo partitura — el título y el botón se reubican
+     afuera de ella (a barra-titulo-partitura, ver reubicables) y
+     #header-normal ya se esconde solo — pero la fila en sí seguía
+     ocupando su margin-bottom, una línea en blanco arriba de todo. */
+  body.modo-partitura #fila-titulo-normal {
+    display: none !important;
+  }
   #barra-compacta { display: none; }
   body.modo-partitura #barra-compacta {
     display: flex !important;
@@ -33,9 +41,13 @@
   }
 
   #barra-titulo-partitura { display: none; }
-  body.modo-partitura #barra-titulo-partitura { display: block !important; }
+  body.modo-partitura #barra-titulo-partitura {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+  }
 
-  /* Botón "ocultar/mostrar" (ver HTML, arriba de todo): esconde nombre de
+  /* Botón "ocultar/mostrar" (ver HTML, junto al título): esconde nombre de
      la obra + compás/metrónomo + velocidad, dejando siempre visibles
      rango/Loop/Preferencias y los botones de Anterior/Siguiente/Ejecutar/
      Pausar/Continuar/Reiniciar/Detener — hace falta seguir controlando la
@@ -50,7 +62,12 @@
   body.paneles-titulo-ocultos #control-velocidad {
     display: none !important;
   }
-  body.modo-partitura.paneles-titulo-ocultos #barra-titulo-partitura,
+  /* Ojo: NO es #barra-titulo-partitura entero (eso incluiría al botón de
+     este mismo toggle, que ahora vive ahí junto al título — ver HTML/JS de
+     reubicables — y se auto-escondería sin forma de volver a mostrarse).
+     Sólo su contenido (el título) se esconde; la fila en sí queda, con el
+     botón como único contenido visible. */
+  body.modo-partitura.paneles-titulo-ocultos #barra-titulo-partitura-contenido,
   body.modo-partitura.paneles-titulo-ocultos #barra-compacta {
     display: none !important;
   }
@@ -316,35 +333,43 @@
 {% endblock %}
 
 {% block content %}
-<!-- Fuera de header-normal/tarjeta-compas/barra-titulo-partitura/barra-compacta
-     a propósito: este botón tiene que seguir visible y clickeable incluso
-     cuando esos paneles están ocultos (ver body.paneles-titulo-ocultos más
-     abajo), en los dos modos por igual. -->
-<div class="d-flex justify-content-end mb-1">
-  <button type="button" id="btn-toggle-paneles-titulo" class="btn btn-outline-light btn-sm"
+<div id="fila-titulo-normal" class="d-flex justify-content-between align-items-center mb-3">
+  <div class="d-flex justify-content-between align-items-center flex-grow-1" id="header-normal">
+    <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
+      {{ obra.titulo }}
+      <small style="font-size: 0.55em; color: var(--ss-text-muted); font-weight: normal;">{% translate "Temporizador" %}: {{ obra.owner.get_full_name|default:obra.owner.username }}</small>
+    </h5>
+    <div class="d-flex gap-2">
+      {% if tiene_score %}
+      <button id="btn-modo-score" type="button" class="btn btn-outline-light btn-sm">🎼 {% translate "Modo partitura" %}</button>
+      {% endif %}
+      {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-navegador" boton_id="btn-ayuda-navegador" %}
+      <a id="link-volver-obra" href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
+    </div>
+  </div>
+  <!-- Fuera de header-normal a propósito (aunque en la misma fila): este
+       botón tiene que seguir visible y clickeable incluso cuando header-normal
+       está oculto (ver body.paneles-titulo-ocultos más abajo), en los dos
+       modos por igual — si viviera adentro, esconder header-normal también
+       se lo llevaría puesto y no habría forma de volver a mostrarlo. -->
+  <button type="button" id="btn-toggle-paneles-titulo" class="btn btn-outline-light btn-sm ms-2"
     data-title-mostrar="{% translate 'Mostrar nombre, compás/metrónomo y velocidad' %}"
     data-title-ocultar="{% translate 'Ocultar nombre, compás/metrónomo y velocidad' %}"
     title="{% translate 'Ocultar nombre, compás/metrónomo y velocidad' %}">
     <i class="bi bi-chevron-up"></i>
   </button>
 </div>
-
-<div class="d-flex justify-content-between align-items-center mb-3" id="header-normal">
-  <h5 id="titulo-obra" style="color: var(--ss-text-bright)">
-    {{ obra.titulo }}
-    <small style="font-size: 0.55em; color: var(--ss-text-muted); font-weight: normal;">{% translate "Temporizador" %}: {{ obra.owner.get_full_name|default:obra.owner.username }}</small>
-  </h5>
-  <div class="d-flex gap-2">
-    {% if tiene_score %}
-    <button id="btn-modo-score" type="button" class="btn btn-outline-light btn-sm">🎼 {% translate "Modo partitura" %}</button>
-    {% endif %}
-    {% include "partituras/_ayuda/_boton.html" with modal_id="modal-ayuda-navegador" boton_id="btn-ayuda-navegador" %}
-    <a id="link-volver-obra" href="{% url 'partituras:obra_detalle' obra.pk %}" class="btn btn-outline-light btn-sm">← {% translate "Volver a la obra" %}</a>
-  </div>
-</div>
 {% include "partituras/_ayuda/_modal.html" with modal_id="modal-ayuda-navegador" contenido="partituras/_ayuda/navegador_obra.html" %}
 
-<div id="barra-titulo-partitura"></div>
+<!-- El título llega acá reubicado (ver reubicables) sólo cuando modo
+     partitura está activo; #barra-titulo-partitura-contenido es lo que
+     paneles-titulo-ocultos esconde — el botón de ocultar/mostrar se reubica
+     junto al título (mismo mecanismo) pero directo a esta fila, afuera de
+     -contenido, para que "ocultar" no se lleve puesto al botón que lo
+     controla (ver CSS de arriba). -->
+<div id="barra-titulo-partitura">
+  <div id="barra-titulo-partitura-contenido"></div>
+</div>
 <div id="barra-compacta" class="d-none flex-wrap align-items-center gap-2 mb-2"></div>
 
 {% if sin_contenido %}
@@ -640,6 +665,7 @@
   const formRango = document.getElementById('form-rango');
   const barraCompacta = document.getElementById('barra-compacta');
   const barraTituloPartitura = document.getElementById('barra-titulo-partitura');
+  const barraTituloPartituraContenido = document.getElementById('barra-titulo-partitura-contenido');
   const scoreHeaderRango = document.getElementById('score-header-rango');
   const scoreHeaderExtra = document.getElementById('score-header-extra');
   const btnZoomMas = document.getElementById('btn-zoom-mas');
@@ -702,8 +728,16 @@
     // Sin esto el título de la obra desaparecía entero en modo partitura
     // (vivía sólo en #header-normal, que se esconde ahí). Va a su propia
     // fila (barra-titulo-partitura), arriba de barra-compacta, con letra
-    // grande — no mezclado con el resto de los controles chicos.
-    { el: tituloObra, destino: barraTituloPartitura },
+    // grande — no mezclado con el resto de los controles chicos. Al
+    // -contenido, no a barra-titulo-partitura directo: eso es lo que
+    // paneles-titulo-ocultos esconde (ver CSS), y el botón de
+    // ocultar/mostrar (ver debajo) tiene que quedar afuera de eso.
+    { el: tituloObra, destino: barraTituloPartituraContenido },
+    // El botón de ocultar/mostrar viaja junto con el título — misma fila en
+    // los dos modos — pero directo a barra-titulo-partitura (no a
+    // -contenido): si se escondiera junto con el título no habría forma de
+    // volver a mostrarlo (ver comentario del botón en el HTML).
+    { el: btnTogglePanelesTitulo, destino: barraTituloPartitura },
     { el: navCompas, destino: barraCompacta },
     { el: navIndicacionWrap, destino: barraCompacta },
     { el: navArmaduraWrap, destino: barraCompacta },

@@ -1,6 +1,20 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.30"
+  date: "2026-08-31"
+  changes:
+    - type: corregido
+      text: "Sincronizar compases: al elegir un rango (Shift+click, Ctrl+click o los campos de Rango), el compás que se graba al Marcar o desde el que arranca a sonar en Reproducción podía terminar siendo el equivocado — por ejemplo si el rango se armó en el otro modo antes de cambiar, o si se usaba Shift+click sin haber hecho antes un click simple. Ahora siempre respeta la convención de cada modo: el último del rango en Marcado, el primero en Reproducción."
+    - type: corregido
+      text: "Sincronizar compases: el botón Reiniciar en modo Marcado no reanudaba el audio (sólo reposicionaba en silencio) y volvía al compás a marcar en vez de al principio del rango elegido. Ahora retoma sonando desde el principio del rango, sin tocar qué compás queda armado para marcar."
+    - type: mejorado
+      text: "Sincronizar compases: cambiar de Parte ya no reinicia el compás armado ni el rango seleccionado — se mantienen, y sólo se resetean a compás 1 al abrir la pantalla de cero."
+    - type: mejorado
+      text: "Sincronizar compases: la partitura ahora aprovecha todo el alto disponible hasta el pie de página, mostrando tantos sistemas como entren en vez de un número fijo."
+    - type: corregido
+      text: "Practicar: en modo partitura, el botón para ocultar nombre/compás/velocidad quedaba en una fila aparte, separada del título. Ahora está en la misma fila que el título, sin dejar un espacio vacío arriba."
+
 - version: "1.31.29"
   date: "2026-08-27"
   changes:
