@@ -1,6 +1,12 @@
 # Changelog de ScoreSync
 # El primero de la lista es la versión actual.
 # Tipos: nuevo | mejorado | corregido
+- version: "1.31.31"
+  date: "2026-10-14"
+  changes:
+    - type: mejorado
+      text: "El link a Tempo del menú pasó a Ritmo (ritmo.infedu.com.ar), que reemplaza a Tempo e incluye la lectura de ritmos."
+
 - version: "1.31.30"
   date: "2026-08-31"
   changes:

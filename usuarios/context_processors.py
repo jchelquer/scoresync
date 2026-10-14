@@ -11,10 +11,10 @@ def solicitudes_pendientes(request):
 
 def sso_links(request):
     if not request.user.is_authenticated:
-        return {'SSO_AFINACION': '', 'SSO_TEMPO': '', 'SSO_ENSAYOS': ''}
+        return {'SSO_AFINACION': '', 'SSO_RITMO': '', 'SSO_ENSAYOS': ''}
     username = request.user.username
     return {
         'SSO_AFINACION': sso_url(username, 'afinacion'),
-        'SSO_TEMPO':     sso_url(username, 'tempo'),
+        'SSO_RITMO':     sso_url(username, 'ritmo'),
         'SSO_ENSAYOS':   sso_url(username, 'ensayos'),
     }

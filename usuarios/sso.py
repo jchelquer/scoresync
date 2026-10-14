@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 
 APPS = {
     'afinacion': 'https://afinacion.infedu.com.ar' if settings.IS_PRODUCTION else 'http://localhost:8001',
-    'tempo':     'https://tempo.infedu.com.ar' if settings.IS_PRODUCTION else 'http://localhost:8002',
+    'ritmo':     'https://ritmo.infedu.com.ar' if settings.IS_PRODUCTION else 'http://localhost:8006',
     'ensayos':   'https://ensayos.infedu.com.ar' if settings.IS_PRODUCTION else 'http://localhost:8004',
 }
 
